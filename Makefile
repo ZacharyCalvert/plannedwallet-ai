@@ -1,4 +1,4 @@
-.PHONY: start stop
+.PHONY: start stop build-api
 
 DATA_DIR := data
 
@@ -8,3 +8,6 @@ start:
 
 stop:
 	docker compose down
+
+build-api:
+	docker build -t plannedwallet:local ./backend-api
