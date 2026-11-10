@@ -18,6 +18,9 @@ tags:
   - name: Accounts
     summary: Financial account management
     description: Endpoints for creating and managing financial accounts stored in PostgreSQL.
+  - name: Checking Records
+    summary: Checking account transaction records
+    description: Endpoints for adding, editing, deleting, and viewing records for checking accounts.
 
 paths:
   /api/v1/users:
@@ -148,6 +151,294 @@ paths:
         '401':
           summary: Unauthorized
           description: Missing, invalid, or expired JWT.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/accounts/{accountId}/checking-records:
+    parameters:
+      - name: accountId
+        in: path
+        required: true
+        description: The unique identifier of the checking account.
+        schema:
+          type: string
+          format: uuid
+          example: "7e954536-4ec8-490b-9304-4b52b217d84b"
+
+    post:
+      tags:
+        - Checking Records
+      summary: Add a checking account record
+      description: |
+        Creates a new transaction record for a checking account with value, date sent, optional date cleared,
+        counterparty entity, and description.
+        Requires a valid JWT Bearer token in the `Authorization` header.
+      operationId: createCheckingRecord
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CheckingRecordCreateRequest'
+      responses:
+        '201':
+          summary: Checking record created
+          description: Checking record successfully added.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CheckingRecordResponse'
+        '400':
+          summary: Bad request
+          description: Invalid transaction values, date formats, or missing required fields.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          summary: Unauthorized
+          description: Missing, invalid, or expired JWT.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          summary: Account not found
+          description: No checking account found matching the provided accountId.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    get:
+      tags:
+        - Checking Records
+      summary: List checking account records
+      description: |
+        Retrieves records for the specified checking account, with optional filtering by clearance status and date range.
+        Requires a valid JWT Bearer token.
+      operationId: listCheckingRecords
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: cleared
+          in: query
+          required: false
+          description: Filter records by cleared status (true for cleared, false for pending).
+          schema:
+            type: boolean
+            example: false
+        - name: start_date
+          in: query
+          required: false
+          description: Filter records with date_sent on or after this date (inclusive).
+          schema:
+            type: string
+            format: date
+            example: "2026-11-01"
+        - name: end_date
+          in: query
+          required: false
+          description: Filter records with date_sent on or before this date (inclusive).
+          schema:
+            type: string
+            format: date
+            example: "2026-11-30"
+      responses:
+        '200':
+          summary: List of checking records
+          description: Returns an array of checking account records.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CheckingRecordResponse'
+        '401':
+          summary: Unauthorized
+          description: Missing, invalid, or expired JWT.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          summary: Account not found
+          description: No checking account found matching the provided accountId.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/accounts/{accountId}/checking-records/{recordId}:
+    parameters:
+      - name: accountId
+        in: path
+        required: true
+        description: The unique identifier of the checking account.
+        schema:
+          type: string
+          format: uuid
+          example: "7e954536-4ec8-490b-9304-4b52b217d84b"
+      - name: recordId
+        in: path
+        required: true
+        description: The unique identifier of the checking record.
+        schema:
+          type: string
+          format: uuid
+          example: "8f7b3a42-9a3b-48d0-8f92-23c2a6be8e14"
+
+    get:
+      tags:
+        - Checking Records
+      summary: Get a checking record
+      description: Retrieves a specific checking record by its ID.
+      operationId: getCheckingRecord
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          summary: Checking record details
+          description: Successfully retrieved checking record.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CheckingRecordResponse'
+        '401':
+          summary: Unauthorized
+          description: Missing, invalid, or expired JWT.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          summary: Record not found
+          description: Record or account not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    put:
+      tags:
+        - Checking Records
+      summary: Update a checking record (full update)
+      description: |
+        Replaces all mutable fields of an existing checking record.
+        Requires a valid JWT Bearer token.
+      operationId: updateCheckingRecord
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CheckingRecordUpdateRequest'
+      responses:
+        '200':
+          summary: Checking record updated
+          description: Record updated successfully.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CheckingRecordResponse'
+        '400':
+          summary: Bad request
+          description: Invalid request payload.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          summary: Unauthorized
+          description: Missing, invalid, or expired JWT.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          summary: Record not found
+          description: Record or account not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    patch:
+      tags:
+        - Checking Records
+      summary: Partially update a checking record
+      description: |
+        Partially updates fields of an existing checking record.
+        Useful for setting `date_cleared` when the bank clears the transaction.
+      operationId: patchCheckingRecord
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CheckingRecordPatchRequest'
+      responses:
+        '200':
+          summary: Checking record updated
+          description: Record updated successfully.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CheckingRecordResponse'
+        '400':
+          summary: Bad request
+          description: Invalid request payload.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          summary: Unauthorized
+          description: Missing, invalid, or expired JWT.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          summary: Record not found
+          description: Record or account not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    delete:
+      tags:
+        - Checking Records
+      summary: Delete a checking record
+      description: |
+        Deletes a specific checking record.
+        Requires a valid JWT Bearer token.
+      operationId: deleteCheckingRecord
+      security:
+        - BearerAuth: []
+      responses:
+        '204':
+          summary: Record deleted
+          description: Record successfully deleted.
+        '401':
+          summary: Unauthorized
+          description: Missing, invalid, or expired JWT.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          summary: Record not found
+          description: Record or account not found.
           content:
             application/json:
               schema:
@@ -333,3 +624,161 @@ components:
           format: date-time
           description: Time when the error occurred.
           example: "2026-11-09T19:15:00Z"
+
+    CheckingRecordCreateRequest:
+      type: object
+      required:
+        - value
+        - date_sent
+        - entity
+      properties:
+        value:
+          type: number
+          format: double
+          description: Amount of the transaction (negative for payments/debits/checks, positive for deposits/credits).
+          example: -125.50
+        date_sent:
+          type: string
+          format: date
+          description: The date the check or payment was issued or sent.
+          example: "2026-11-09"
+        date_cleared:
+          type: string
+          format: date
+          nullable: true
+          description: The date the bank accepted or logged the transaction. Omit or pass null if pending.
+          example: "2026-11-12"
+        entity:
+          type: string
+          minLength: 1
+          maxLength: 255
+          description: Who the money was spent with, check written to, or payment received from.
+          example: "Target"
+        description:
+          type: string
+          maxLength: 500
+          description: Human-readable note or memo describing the transaction.
+          example: "Weekly groceries and household supplies"
+
+    CheckingRecordUpdateRequest:
+      type: object
+      required:
+        - value
+        - date_sent
+        - entity
+      properties:
+        value:
+          type: number
+          format: double
+          description: Amount of the transaction (negative for payments/debits/checks, positive for deposits/credits).
+          example: -125.50
+        date_sent:
+          type: string
+          format: date
+          description: The date the check or payment was issued or sent.
+          example: "2026-11-09"
+        date_cleared:
+          type: string
+          format: date
+          nullable: true
+          description: The date the bank accepted or logged the transaction. Set to null if uncleared.
+          example: "2026-11-12"
+        entity:
+          type: string
+          minLength: 1
+          maxLength: 255
+          description: Who the money was spent with, check written to, or payment received from.
+          example: "Target"
+        description:
+          type: string
+          maxLength: 500
+          description: Human-readable note or memo describing the transaction.
+          example: "Weekly groceries and household supplies"
+
+    CheckingRecordPatchRequest:
+      type: object
+      description: Fields to update on the checking record. Any omitted fields remain unchanged.
+      properties:
+        value:
+          type: number
+          format: double
+          description: Updated transaction amount.
+          example: -125.50
+        date_sent:
+          type: string
+          format: date
+          description: Updated date sent.
+          example: "2026-11-09"
+        date_cleared:
+          type: string
+          format: date
+          nullable: true
+          description: Set to mark the transaction as cleared by the bank, or null to revert to pending.
+          example: "2026-11-12"
+        entity:
+          type: string
+          minLength: 1
+          maxLength: 255
+          description: Updated counterparty entity.
+          example: "Target"
+        description:
+          type: string
+          maxLength: 500
+          description: Updated memo or note.
+          example: "Weekly groceries and household supplies"
+
+    CheckingRecordResponse:
+      type: object
+      required:
+        - id
+        - account_id
+        - value
+        - date_sent
+        - entity
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique identifier for the checking record.
+          example: "8f7b3a42-9a3b-48d0-8f92-23c2a6be8e14"
+        account_id:
+          type: string
+          format: uuid
+          description: Identifier of the checking account this record belongs to.
+          example: "7e954536-4ec8-490b-9304-4b52b217d84b"
+        value:
+          type: number
+          format: double
+          description: Transaction amount (negative for payments/debits/checks, positive for deposits/credits).
+          example: -125.50
+        date_sent:
+          type: string
+          format: date
+          description: Date the check was written or payment was sent.
+          example: "2026-11-09"
+        date_cleared:
+          type: string
+          format: date
+          nullable: true
+          description: Date the bank cleared or logged the transaction. Null if pending.
+          example: "2026-11-12"
+        entity:
+          type: string
+          description: Who the transaction was with (payee, merchant, or payer).
+          example: "Target"
+        description:
+          type: string
+          description: Human-readable note or memo describing the transaction.
+          example: "Weekly groceries and household supplies"
+        created_at:
+          type: string
+          format: date-time
+          description: Timestamp when the record was created.
+          example: "2026-11-09T19:25:00Z"
+        updated_at:
+          type: string
+          format: date-time
+          description: Timestamp when the record was last updated.
+          example: "2026-11-09T19:25:00Z"
