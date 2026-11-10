@@ -230,6 +230,56 @@ func (c *Controller) CreateAccount(ctx context.Context, userID string, req model
 	}, nil
 }
 
+// ListAccounts retrieves all accounts accessible to the specified user.
+func (c *Controller) ListAccounts(ctx context.Context, userID string) ([]*models.AccountResponse, error) {
+	accounts, err := c.repo.ListAccountsByUserID(ctx, userID)
+	if err != nil {
+		return nil, NewAppError(http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to retrieve accounts.")
+	}
+
+	res := make([]*models.AccountResponse, len(accounts))
+	for i, acc := range accounts {
+		res[i] = &models.AccountResponse{
+			ID:          acc.ID,
+			AdminID:     acc.AdminID,
+			Name:        acc.Name,
+			Type:        acc.Type,
+			Description: acc.Description,
+			CreatedAt:   acc.CreatedAt,
+			UpdatedAt:   acc.UpdatedAt,
+		}
+	}
+	return res, nil
+}
+
+// GetAccount retrieves a specific account by ID if accessible by the user.
+func (c *Controller) GetAccount(ctx context.Context, userID, accountID string) (*models.AccountResponse, error) {
+	account, err := c.repo.GetAccountByID(ctx, accountID)
+	if err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			return nil, ErrAccountNotFound
+		}
+		return nil, NewAppError(http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to retrieve account.")
+	}
+
+	if account.AdminID != userID {
+		access, err := c.repo.GetAccountAccess(ctx, accountID, userID)
+		if err != nil || access == nil {
+			return nil, ErrAccountNotFound
+		}
+	}
+
+	return &models.AccountResponse{
+		ID:          account.ID,
+		AdminID:     account.AdminID,
+		Name:        account.Name,
+		Type:        account.Type,
+		Description: account.Description,
+		CreatedAt:   account.CreatedAt,
+		UpdatedAt:   account.UpdatedAt,
+	}, nil
+}
+
 // verifyCheckingAccount verifies that the account exists, belongs to or is accessible by the user, and is of type checking.
 func (c *Controller) verifyCheckingAccount(ctx context.Context, userID, accountID string) (*models.Account, error) {
 	account, err := c.repo.GetAccountByID(ctx, accountID)

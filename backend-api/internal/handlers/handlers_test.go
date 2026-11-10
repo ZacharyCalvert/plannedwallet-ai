@@ -265,6 +265,33 @@ func TestAccountCreation(t *testing.T) {
 	}
 }
 
+func TestListAndGetAccounts(t *testing.T) {
+	r, _ := setupTestRouter()
+	token := registerAndGetToken(t, r, "accuser", "accuser@example.com", "Password123!")
+	accountID := createAccount(t, r, token, "Everyday Checking", "checking", "My Everyday Checking")
+
+	listReq := httptest.NewRequest(http.MethodGet, "/api/v1/accounts", nil)
+	listReq.Header.Set("Authorization", "Bearer "+token)
+	lw := httptest.NewRecorder()
+	r.ServeHTTP(lw, listReq)
+	if lw.Code != http.StatusOK {
+		t.Fatalf("expected 200 on list accounts, got %d: %s", lw.Code, lw.Body.String())
+	}
+	var accounts []*models.AccountResponse
+	_ = json.Unmarshal(lw.Body.Bytes(), &accounts)
+	if len(accounts) != 1 || accounts[0].ID != accountID {
+		t.Fatalf("unexpected accounts list: %+v", accounts)
+	}
+
+	getReq := httptest.NewRequest(http.MethodGet, "/api/v1/accounts/"+accountID, nil)
+	getReq.Header.Set("Authorization", "Bearer "+token)
+	gw := httptest.NewRecorder()
+	r.ServeHTTP(gw, getReq)
+	if gw.Code != http.StatusOK {
+		t.Fatalf("expected 200 on get account, got %d: %s", gw.Code, gw.Body.String())
+	}
+}
+
 func TestCheckingRecordsCRUD(t *testing.T) {
 	r, _ := setupTestRouter()
 	token := registerAndGetToken(t, r, "checkinguser", "checking@example.com", "Password123!")

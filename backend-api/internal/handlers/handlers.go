@@ -132,6 +132,39 @@ func (h *Handler) CreateAccount(c *gin.Context) {
 	c.JSON(http.StatusCreated, res)
 }
 
+// ListAccounts handles GET /api/v1/accounts
+func (h *Handler) ListAccounts(c *gin.Context) {
+	userID, ok := h.getUserID(c)
+	if !ok {
+		return
+	}
+
+	res, err := h.ctrl.ListAccounts(c.Request.Context(), userID)
+	if err != nil {
+		h.handleError(c, err)
+		return
+	}
+
+	c.JSON(http.StatusOK, res)
+}
+
+// GetAccount handles GET /api/v1/accounts/:accountId
+func (h *Handler) GetAccount(c *gin.Context) {
+	userID, ok := h.getUserID(c)
+	if !ok {
+		return
+	}
+
+	accountID := c.Param("accountId")
+	res, err := h.ctrl.GetAccount(c.Request.Context(), userID, accountID)
+	if err != nil {
+		h.handleError(c, err)
+		return
+	}
+
+	c.JSON(http.StatusOK, res)
+}
+
 // CreateCheckingRecord handles POST /api/v1/accounts/{accountId}/checking-records
 func (h *Handler) CreateCheckingRecord(c *gin.Context) {
 	userID, ok := h.getUserID(c)
@@ -333,6 +366,8 @@ func (h *Handler) RegisterRoutes(r *gin.Engine) {
 		protected.Use(h.auth.Middleware())
 		{
 			protected.POST("/accounts", h.CreateAccount)
+			protected.GET("/accounts", h.ListAccounts)
+			protected.GET("/accounts/:accountId", h.GetAccount)
 
 			// Checking Records
 			protected.POST("/accounts/:accountId/checking-records", h.CreateCheckingRecord)
