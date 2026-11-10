@@ -3,7 +3,7 @@ import './globals.css';
 
 export const metadata: Metadata = {
   title: 'Planned Wallet',
-  description: 'Planned Wallet PoC Front-End Application',
+  description: 'Planned Wallet',
 };
 
 export default function RootLayout({

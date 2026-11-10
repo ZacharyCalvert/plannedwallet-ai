@@ -4,7 +4,7 @@ DATA_DIR := data
 
 start:
 	mkdir -p $(DATA_DIR)
-	docker compose up -d
+	docker compose up -d --build
 
 clean:
 	rm -rf ./$(DATA_DIR)
