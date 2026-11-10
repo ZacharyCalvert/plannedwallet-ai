@@ -51,6 +51,20 @@ func Connect(cfg Config) (*sql.DB, error) {
 	return db, nil
 }
 
+// ConnectWithRetry attempts to connect and ping postgres multiple times with delay.
+func ConnectWithRetry(cfg Config, retries int, delay time.Duration) (*sql.DB, error) {
+	var db *sql.DB
+	var err error
+	for i := 0; i < retries; i++ {
+		db, err = Connect(cfg)
+		if err == nil {
+			return db, nil
+		}
+		time.Sleep(delay)
+	}
+	return nil, err
+}
+
 // InitDatabase executes schema initialization from init.sql to ensure all tables and indexes exist.
 func InitDatabase(db *sql.DB) error {
 	if _, err := db.Exec(initSQL); err != nil {

@@ -28,9 +28,9 @@ func isUniqueViolation(err error) bool {
 }
 
 func (p *PostgresRepository) CreateUser(ctx context.Context, user *models.User) error {
-	query := `INSERT INTO users (id, username, email, password_hash, created_at)
-	          VALUES ($1, $2, $3, $4, $5)`
-	_, err := p.db.ExecContext(ctx, query, user.ID, user.Username, user.Email, user.PasswordHash, user.CreatedAt)
+	query := `INSERT INTO users (id, username, email, password_hash, totp_secret, created_at)
+	          VALUES ($1, $2, $3, $4, $5, $6)`
+	_, err := p.db.ExecContext(ctx, query, user.ID, user.Username, user.Email, user.PasswordHash, user.TOTPSecret, user.CreatedAt)
 	if err != nil {
 		if isUniqueViolation(err) {
 			return ErrConflict
@@ -41,12 +41,12 @@ func (p *PostgresRepository) CreateUser(ctx context.Context, user *models.User) 
 }
 
 func (p *PostgresRepository) GetUserByUsername(ctx context.Context, username string) (*models.User, error) {
-	query := `SELECT id, username, email, password_hash, created_at
+	query := `SELECT id, username, email, password_hash, totp_secret, created_at
 	          FROM users
 	          WHERE LOWER(username) = LOWER($1)`
 	row := p.db.QueryRowContext(ctx, query, username)
 	var u models.User
-	if err := row.Scan(&u.ID, &u.Username, &u.Email, &u.PasswordHash, &u.CreatedAt); err != nil {
+	if err := row.Scan(&u.ID, &u.Username, &u.Email, &u.PasswordHash, &u.TOTPSecret, &u.CreatedAt); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrNotFound
 		}
@@ -56,12 +56,12 @@ func (p *PostgresRepository) GetUserByUsername(ctx context.Context, username str
 }
 
 func (p *PostgresRepository) GetUserByEmail(ctx context.Context, email string) (*models.User, error) {
-	query := `SELECT id, username, email, password_hash, created_at
+	query := `SELECT id, username, email, password_hash, totp_secret, created_at
 	          FROM users
 	          WHERE LOWER(email) = LOWER($1)`
 	row := p.db.QueryRowContext(ctx, query, email)
 	var u models.User
-	if err := row.Scan(&u.ID, &u.Username, &u.Email, &u.PasswordHash, &u.CreatedAt); err != nil {
+	if err := row.Scan(&u.ID, &u.Username, &u.Email, &u.PasswordHash, &u.TOTPSecret, &u.CreatedAt); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrNotFound
 		}
@@ -71,12 +71,12 @@ func (p *PostgresRepository) GetUserByEmail(ctx context.Context, email string) (
 }
 
 func (p *PostgresRepository) GetUserByID(ctx context.Context, id string) (*models.User, error) {
-	query := `SELECT id, username, email, password_hash, created_at
+	query := `SELECT id, username, email, password_hash, totp_secret, created_at
 	          FROM users
 	          WHERE id = $1`
 	row := p.db.QueryRowContext(ctx, query, id)
 	var u models.User
-	if err := row.Scan(&u.ID, &u.Username, &u.Email, &u.PasswordHash, &u.CreatedAt); err != nil {
+	if err := row.Scan(&u.ID, &u.Username, &u.Email, &u.PasswordHash, &u.TOTPSecret, &u.CreatedAt); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrNotFound
 		}

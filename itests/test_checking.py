@@ -1,6 +1,7 @@
 import uuid
 import pytest
 from playwright.sync_api import APIRequestContext
+from conftest import compute_totp_code
 
 TEST_PASSWORD = "ComplexPassword123!"
 
@@ -14,10 +15,12 @@ def create_authenticated_user(api_context: APIRequestContext) -> tuple[dict, str
     }
     create_res = api_context.post("/api/v1/users", data=user_data)
     assert create_res.status == 201, f"User creation failed: {create_res.text()}"
+    totp_secret = create_res.json()["totp_secret"]
+    totp_code = compute_totp_code(totp_secret)
 
     token_res = api_context.post(
         f"/api/v1/users/{user_data['username']}/token",
-        data={"password": user_data["password"]},
+        data={"password": user_data["password"], "totp_code": totp_code},
     )
     assert token_res.status == 200, f"Login failed: {token_res.text()}"
     return user_data, token_res.json()["access_token"]

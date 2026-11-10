@@ -1,6 +1,10 @@
 import os
 import base64
+import hashlib
+import hmac
 import json
+import struct
+import time
 import pytest
 from playwright.sync_api import sync_playwright, APIRequestContext
 
@@ -24,9 +28,23 @@ def decode_jwt_unverified(token: str) -> dict:
     if len(parts) != 3:
         raise ValueError("Invalid JWT format: expected 3 dot-separated segments")
     payload_b64 = parts[1]
-    # Handle base64 padding
     padding = len(payload_b64) % 4
     if padding:
         payload_b64 += "=" * (4 - padding)
     decoded_bytes = base64.urlsafe_b64decode(payload_b64)
     return json.loads(decoded_bytes.decode("utf-8"))
+
+def compute_totp_code(secret: str) -> str:
+    """Compute current RFC 6238 TOTP 6-digit code from base32 secret."""
+    clean_secret = secret.strip().upper()
+    padding = len(clean_secret) % 8
+    if padding:
+        clean_secret += "=" * (8 - padding)
+    key = base64.b32decode(clean_secret)
+    counter = int(time.time()) // 30
+    msg = struct.pack(">Q", counter)
+    h = hmac.new(key, msg, hashlib.sha1).digest()
+    offset = h[-1] & 0x0F
+    code = struct.unpack(">I", h[offset : offset + 4])[0] & 0x7FFFFFFF
+    return f"{code % 1000000:06d}"
+

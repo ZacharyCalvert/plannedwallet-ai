@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"testing"
+	"time"
 
 	"github.com/plannedwallet/internal/auth"
 	"github.com/plannedwallet/internal/controller"
@@ -59,6 +60,9 @@ func TestRegisterUser_PreValidationAndRules(t *testing.T) {
 	if userRes.Username != "valid_user" || userRes.Email != "valid@example.com" {
 		t.Errorf("unexpected user response: %+v", userRes)
 	}
+	if userRes.TOTPSecret == "" || userRes.TOTPURL == "" {
+		t.Errorf("expected TOTP secret and URL, got %+v", userRes)
+	}
 
 	// 2. Conflict on existing username
 	_, err = ctrl.RegisterUser(ctx, models.UserRegistrationRequest{
@@ -98,6 +102,29 @@ func TestRegisterUser_PreValidationAndRules(t *testing.T) {
 	}
 	if !errors.As(err, &appErr) || appErr.Status != http.StatusBadRequest {
 		t.Errorf("expected 400 bad request, got %v", err)
+	}
+}
+
+func TestExchangeToken_TOTP(t *testing.T) {
+	ctrl, _ := setupController()
+	ctx := context.Background()
+
+	userRes, _ := ctrl.RegisterUser(ctx, models.UserRegistrationRequest{
+		Username: "totp_user",
+		Email:    "totp@example.com",
+		Password: "ValidPassword123!",
+	})
+
+	validCode, _ := auth.GenerateCode(userRes.TOTPSecret, time.Now().Unix()/30)
+
+	tok, err := ctrl.ExchangeToken(ctx, "totp_user", "ValidPassword123!", validCode)
+	if err != nil || tok.AccessToken == "" {
+		t.Fatalf("expected successful token exchange, got %v", err)
+	}
+
+	_, err = ctrl.ExchangeToken(ctx, "totp_user", "ValidPassword123!", "000000")
+	if err == nil {
+		t.Fatal("expected error with invalid TOTP code")
 	}
 }
 

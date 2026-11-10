@@ -4,6 +4,7 @@ import (
 	"log"
 	"os"
 	"strconv"
+	"time"
 
 	"github.com/gin-gonic/gin"
 
@@ -39,14 +40,14 @@ func initDatabase() repository.Repository {
 	pgDB := getEnv("POSTGRES_DB", "plannedwallet")
 	pgSSLMode := getEnv("POSTGRES_SSLMODE", "disable")
 
-	db, err := database.Connect(database.Config{
+	db, err := database.ConnectWithRetry(database.Config{
 		Host:     pgHost,
 		Port:     pgPort,
 		User:     pgUser,
 		Password: pgPassword,
 		DBName:   pgDB,
 		SSLMode:  pgSSLMode,
-	})
+	}, 5, time.Second)
 	if err != nil {
 		log.Printf("Warning: Failed to connect to PostgreSQL (%v). Falling back to In-Memory repository.", err)
 		return repository.NewMemoryRepository()

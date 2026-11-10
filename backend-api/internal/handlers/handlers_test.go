@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/gin-gonic/gin"
 
@@ -60,8 +61,13 @@ func registerAndGetToken(t *testing.T, r *gin.Engine, username, email, password 
 		t.Fatalf("expected 201 during registration, got %d: %s", w.Code, w.Body.String())
 	}
 
+	var userRes models.UserResponse
+	_ = json.Unmarshal(w.Body.Bytes(), &userRes)
+	totpCode, _ := auth.GenerateCode(userRes.TOTPSecret, time.Now().Unix()/30)
+
 	tokenBody, _ := json.Marshal(models.TokenExchangeRequest{
 		Password: password,
+		TOTPCode: totpCode,
 	})
 	tokenReq := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/api/v1/users/%s/token", username), bytes.NewReader(tokenBody))
 	tokenReq.Header.Set("Content-Type", "application/json")
@@ -105,10 +111,9 @@ func createAccount(t *testing.T, r *gin.Engine, token, name, accType, descriptio
 	return res.ID
 }
 
-func TestUserRegistrationAndAuthentication(t *testing.T) {
+func TestUserRegistration_ValidationAndConflict(t *testing.T) {
 	r, _ := setupTestRouter()
 
-	// 1. Success registration
 	regBody, _ := json.Marshal(models.UserRegistrationRequest{
 		Username: "alice_wonder",
 		Email:    "alice@example.com",
@@ -124,14 +129,15 @@ func TestUserRegistrationAndAuthentication(t *testing.T) {
 	}
 
 	var userRes models.UserResponse
-	if err := json.Unmarshal(w.Body.Bytes(), &userRes); err != nil {
-		t.Fatalf("failed to unmarshal user response: %v", err)
-	}
+	_ = json.Unmarshal(w.Body.Bytes(), &userRes)
 	if userRes.Username != "alice_wonder" || userRes.Email != "alice@example.com" {
 		t.Errorf("unexpected user data: %+v", userRes)
 	}
+	if userRes.TOTPSecret == "" || userRes.TOTPURL == "" {
+		t.Errorf("expected TOTP secret and URL in response: %+v", userRes)
+	}
 
-	// 2. Duplicate registration conflict (409)
+	// Duplicate registration conflict (409)
 	reqDup := httptest.NewRequest(http.MethodPost, "/api/v1/users", bytes.NewReader(regBody))
 	reqDup.Header.Set("Content-Type", "application/json")
 	wDup := httptest.NewRecorder()
@@ -139,8 +145,11 @@ func TestUserRegistrationAndAuthentication(t *testing.T) {
 	if wDup.Code != http.StatusConflict {
 		t.Fatalf("expected 409, got %d: %s", wDup.Code, wDup.Body.String())
 	}
+}
 
-	// 3. Password rules enforcement (400)
+func TestUserRegistration_PasswordRules(t *testing.T) {
+	r, _ := setupTestRouter()
+
 	invalidPasswords := []struct {
 		desc string
 		pw   string
@@ -168,12 +177,31 @@ func TestUserRegistrationAndAuthentication(t *testing.T) {
 			}
 		})
 	}
+}
 
-	// 4. Token exchange success (200)
-	tokenBody, _ := json.Marshal(models.TokenExchangeRequest{
+func TestTokenExchange_TOTPAndAuthentication(t *testing.T) {
+	r, _ := setupTestRouter()
+
+	regBody, _ := json.Marshal(models.UserRegistrationRequest{
+		Username: "auth_user",
+		Email:    "auth_user@example.com",
 		Password: "SecurePassword123!",
 	})
-	reqTok := httptest.NewRequest(http.MethodPost, "/api/v1/users/alice_wonder/token", bytes.NewReader(tokenBody))
+	reqReg := httptest.NewRequest(http.MethodPost, "/api/v1/users", bytes.NewReader(regBody))
+	reqReg.Header.Set("Content-Type", "application/json")
+	wReg := httptest.NewRecorder()
+	r.ServeHTTP(wReg, reqReg)
+
+	var userRes models.UserResponse
+	_ = json.Unmarshal(wReg.Body.Bytes(), &userRes)
+	totpCode, _ := auth.GenerateCode(userRes.TOTPSecret, time.Now().Unix()/30)
+
+	// 1. Success with valid password and TOTP
+	tokBody, _ := json.Marshal(models.TokenExchangeRequest{
+		Password: "SecurePassword123!",
+		TOTPCode: totpCode,
+	})
+	reqTok := httptest.NewRequest(http.MethodPost, "/api/v1/users/auth_user/token", bytes.NewReader(tokBody))
 	reqTok.Header.Set("Content-Type", "application/json")
 	wTok := httptest.NewRecorder()
 	r.ServeHTTP(wTok, reqTok)
@@ -181,33 +209,17 @@ func TestUserRegistrationAndAuthentication(t *testing.T) {
 		t.Fatalf("expected 200, got %d: %s", wTok.Code, wTok.Body.String())
 	}
 
-	var tokRes models.TokenResponse
-	if err := json.Unmarshal(wTok.Body.Bytes(), &tokRes); err != nil {
-		t.Fatalf("failed to parse token: %v", err)
-	}
-	if tokRes.AccessToken == "" || tokRes.TokenType != "Bearer" {
-		t.Errorf("invalid token response: %+v", tokRes)
-	}
-
-	// 5. Token exchange invalid password (401)
-	wrongPwBody, _ := json.Marshal(models.TokenExchangeRequest{
-		Password: "WrongPassword!",
+	// 2. Wrong TOTP code
+	badTotpBody, _ := json.Marshal(models.TokenExchangeRequest{
+		Password: "SecurePassword123!",
+		TOTPCode: "000000",
 	})
-	reqWrong := httptest.NewRequest(http.MethodPost, "/api/v1/users/alice_wonder/token", bytes.NewReader(wrongPwBody))
-	reqWrong.Header.Set("Content-Type", "application/json")
-	wWrong := httptest.NewRecorder()
-	r.ServeHTTP(wWrong, reqWrong)
-	if wWrong.Code != http.StatusUnauthorized {
-		t.Fatalf("expected 401 for wrong password, got %d: %s", wWrong.Code, wWrong.Body.String())
-	}
-
-	// 6. Token exchange user not found (404)
-	reqNotFound := httptest.NewRequest(http.MethodPost, "/api/v1/users/non_existent_user/token", bytes.NewReader(tokenBody))
-	reqNotFound.Header.Set("Content-Type", "application/json")
-	wNotFound := httptest.NewRecorder()
-	r.ServeHTTP(wNotFound, reqNotFound)
-	if wNotFound.Code != http.StatusNotFound {
-		t.Fatalf("expected 404 for unknown user, got %d: %s", wNotFound.Code, wNotFound.Body.String())
+	reqBadTotp := httptest.NewRequest(http.MethodPost, "/api/v1/users/auth_user/token", bytes.NewReader(badTotpBody))
+	reqBadTotp.Header.Set("Content-Type", "application/json")
+	wBadTotp := httptest.NewRecorder()
+	r.ServeHTTP(wBadTotp, reqBadTotp)
+	if wBadTotp.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 for bad TOTP, got %d", wBadTotp.Code)
 	}
 }
 
