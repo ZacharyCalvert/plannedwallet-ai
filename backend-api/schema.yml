@@ -1,0 +1,335 @@
+openapi: 3.2.0
+info:
+  title: Planned Wallet API
+  version: 1.0.0
+  description: |
+    Backend API specification for Planned Wallet PoC.
+    Supports user self-signup, JWT-based authentication, and PostgreSQL-backed financial account management.
+servers:
+  - url: http://localhost:8080
+    description: Local development server
+tags:
+  - name: Users
+    summary: User account creation and management
+    description: Endpoints for user self-signup and profile management.
+  - name: Authentication
+    summary: Token exchange and session handling
+    description: Exchange user credentials for JWT tokens.
+  - name: Accounts
+    summary: Financial account management
+    description: Endpoints for creating and managing financial accounts stored in PostgreSQL.
+
+paths:
+  /api/v1/users:
+    post:
+      tags:
+        - Users
+      summary: Register a new user
+      description: |
+        Creates a new user account with username, email, and password.
+        The username and email are stored in a cleartext table in PostgreSQL.
+        The password is salted and hashed using bcrypt before persistence.
+      operationId: registerUser
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserRegistrationRequest'
+      responses:
+        '201':
+          summary: User registered successfully
+          description: User account created successfully.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponse'
+        '400':
+          summary: Validation error
+          description: Invalid request payload or validation failed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          summary: User conflict
+          description: Username or email already registered.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/users/{username}/token:
+    post:
+      tags:
+        - Authentication
+      summary: Exchange credentials for a JWT token
+      description: |
+        Exchanges a username (provided in the path) and a password (provided in the request body)
+        for a signed JWT access token. The submitted password is verified against the stored bcrypt hash.
+      operationId: exchangeToken
+      parameters:
+        - name: username
+          in: path
+          required: true
+          description: The username of the user requesting an authentication token.
+          schema:
+            type: string
+            example: "johndoe"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TokenExchangeRequest'
+      responses:
+        '200':
+          summary: JWT token issued
+          description: Successfully authenticated; returns the JWT access token.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenResponse'
+        '400':
+          summary: Bad request
+          description: Missing or invalid request parameters.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          summary: Unauthorized
+          description: Invalid username or password.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          summary: User not found
+          description: No user found matching the provided username.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/accounts:
+    post:
+      tags:
+        - Accounts
+      summary: Create a financial account
+      description: |
+        Creates a new financial account of a specified type with a description.
+        Requires a valid JWT Bearer token in the `Authorization` header.
+        Account data is persisted in the PostgreSQL database and associated with the authenticated user.
+      operationId: createAccount
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AccountCreationRequest'
+      responses:
+        '201':
+          summary: Account created
+          description: Account created successfully in PostgreSQL.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountResponse'
+        '400':
+          summary: Bad request
+          description: Invalid account type or missing description.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          summary: Unauthorized
+          description: Missing, invalid, or expired JWT.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        Authenticate using a JWT issued by POST `/api/v1/users/{username}/token`.
+        Provide the token in the HTTP `Authorization` header with the format: `Bearer <token>`.
+
+  schemas:
+    AccountType:
+      type: string
+      description: The type of financial account.
+      enum:
+        - checking
+        - savings
+        - credit card
+        - assets
+        - snapshot
+      example: "checking"
+
+    UserRegistrationRequest:
+      type: object
+      required:
+        - username
+        - email
+        - password
+      properties:
+        username:
+          type: string
+          minLength: 3
+          maxLength: 50
+          pattern: '^[a-zA-Z0-9_-]+$'
+          description: Unique username stored in plaintext in the users table.
+          example: "johndoe"
+        email:
+          type: string
+          format: email
+          maxLength: 255
+          description: User's contact email stored in plaintext in the users table.
+          example: "john.doe@example.com"
+        password:
+          type: string
+          format: password
+          minLength: 8
+          writeOnly: true
+          description: Plaintext password provided during registration; hashed with bcrypt and salted before persistence.
+          example: "P@ssw0rd123!"
+
+    UserResponse:
+      type: object
+      required:
+        - id
+        - username
+        - email
+        - created_at
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique identifier for the user.
+          example: "d3b07384-d113-4e00-9922-b06f9d453b34"
+        username:
+          type: string
+          description: Unique username stored in plaintext.
+          example: "johndoe"
+        email:
+          type: string
+          format: email
+          description: User email stored in plaintext.
+          example: "john.doe@example.com"
+        created_at:
+          type: string
+          format: date-time
+          description: Timestamp when the user was created.
+          example: "2026-11-09T19:00:00Z"
+
+    TokenExchangeRequest:
+      type: object
+      required:
+        - password
+      properties:
+        password:
+          type: string
+          format: password
+          description: The user's plaintext password to verify against the stored bcrypt hash.
+          example: "P@ssw0rd123!"
+
+    TokenResponse:
+      type: object
+      required:
+        - access_token
+        - token_type
+        - expires_in
+      properties:
+        access_token:
+          type: string
+          description: The signed JWT access token.
+          example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+        token_type:
+          type: string
+          description: Type of authorization token.
+          example: "Bearer"
+        expires_in:
+          type: integer
+          description: Token validity duration in seconds.
+          example: 3600
+
+    AccountCreationRequest:
+      type: object
+      required:
+        - type
+        - description
+      properties:
+        type:
+          $ref: '#/components/schemas/AccountType'
+        description:
+          type: string
+          minLength: 1
+          maxLength: 255
+          description: Human-readable description or label for the account.
+          example: "Primary Everyday Checking Account"
+
+    AccountResponse:
+      type: object
+      required:
+        - id
+        - user_id
+        - type
+        - description
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique identifier for the account.
+          example: "7e954536-4ec8-490b-9304-4b52b217d84b"
+        user_id:
+          type: string
+          format: uuid
+          description: Identifier of the user who owns this account.
+          example: "d3b07384-d113-4e00-9922-b06f9d453b34"
+        type:
+          $ref: '#/components/schemas/AccountType'
+        description:
+          type: string
+          description: Human-readable description of the account.
+          example: "Primary Everyday Checking Account"
+        created_at:
+          type: string
+          format: date-time
+          description: Timestamp when the account was created.
+          example: "2026-11-09T19:15:00Z"
+        updated_at:
+          type: string
+          format: date-time
+          description: Timestamp when the account was last updated.
+          example: "2026-11-09T19:15:00Z"
+
+    ErrorResponse:
+      type: object
+      required:
+        - error
+        - message
+      properties:
+        error:
+          type: string
+          description: High-level error classification or code.
+          example: "INVALID_CREDENTIALS"
+        message:
+          type: string
+          description: Detailed human-readable error description.
+          example: "The password provided does not match our records."
+        timestamp:
+          type: string
+          format: date-time
+          description: Time when the error occurred.
+          example: "2026-11-09T19:15:00Z"
