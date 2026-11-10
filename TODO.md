@@ -1,8 +1,5 @@
-negative test on access to accounts
-ensure connectivity between user and account
 UI
 Create use cases
-Create agents.md
 Infrastructure / deployment hosting IaC
 Container build / release cycles
 Nonprod vs prod environment

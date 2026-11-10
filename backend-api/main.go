@@ -61,11 +61,6 @@ func initDatabase() repository.Repository {
 }
 
 func addHandlers(r *gin.Engine, repo repository.Repository, authService *auth.Service) {
-	// Health check / smoke test endpoint
-	r.GET("/hello", func(c *gin.Context) {
-		c.String(200, "world")
-	})
-
 	ctrl := controller.NewController(repo, authService)
 	handler := handlers.NewHandler(ctrl, authService)
 	handler.RegisterRoutes(r)

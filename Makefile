@@ -6,6 +6,9 @@ start:
 	mkdir -p $(DATA_DIR)
 	docker compose up -d
 
+clean:
+	rm -rf ./$(DATA_DIR)
+
 stop:
 	docker compose down
 

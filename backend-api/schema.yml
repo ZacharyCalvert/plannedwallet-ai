@@ -21,8 +21,27 @@ tags:
   - name: Checking Records
     summary: Checking account transaction records
     description: Endpoints for adding, editing, deleting, and viewing records for checking accounts.
+  - name: Health
+    summary: Service health check
+    description: Smoke test and liveness endpoints.
 
 paths:
+  /api/v1/hello:
+    get:
+      tags:
+        - Health
+      summary: Smoke test / health check endpoint
+      description: Simple health check endpoint that returns "world".
+      operationId: getHello
+      responses:
+        '200':
+          description: Service is healthy.
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: "world"
+
   /api/v1/users:
     post:
       tags:

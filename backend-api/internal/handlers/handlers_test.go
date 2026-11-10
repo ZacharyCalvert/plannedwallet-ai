@@ -30,6 +30,20 @@ func setupTestRouter() (*gin.Engine, *handlers.Handler) {
 	return r, h
 }
 
+func TestHelloEndpoint(t *testing.T) {
+	r, _ := setupTestRouter()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/hello", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200 from /api/v1/hello, got %d", w.Code)
+	}
+	if w.Body.String() != "world" {
+		t.Fatalf("expected 'world', got %q", w.Body.String())
+	}
+}
+
 func registerAndGetToken(t *testing.T, r *gin.Engine, username, email, password string) string {
 	t.Helper()
 

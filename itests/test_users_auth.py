@@ -14,6 +14,12 @@ def generate_user_data(prefix: str = "itest"):
         "password": TEST_PASSWORD,
     }
 
+def test_hello_endpoint(api_context: APIRequestContext):
+    """Test health check / smoke test endpoint at /api/v1/hello."""
+    response = api_context.get("/api/v1/hello")
+    assert response.status == 200, f"Expected 200, got {response.status}: {response.text()}"
+    assert response.text() == "world"
+
 def test_create_user(api_context: APIRequestContext):
     """Test 1: Create a user with a username and test email."""
     user_data = generate_user_data()

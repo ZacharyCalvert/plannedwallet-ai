@@ -353,11 +353,17 @@ func (h *Handler) DeleteCheckingRecord(c *gin.Context) {
 	c.Status(http.StatusNoContent)
 }
 
+// Hello handles GET /api/v1/hello
+func (h *Handler) Hello(c *gin.Context) {
+	c.String(http.StatusOK, "world")
+}
+
 // RegisterRoutes registers all API routes according to schema.yml
 func (h *Handler) RegisterRoutes(r *gin.Engine) {
 	api := r.Group("/api/v1")
 	{
 		// Public endpoints
+		api.GET("/hello", h.Hello)
 		api.POST("/users", h.RegisterUser)
 		api.POST("/users/:username/token", h.ExchangeToken)
 

@@ -16,7 +16,7 @@ function ApiStatusCard() {
   const [isOk, setIsOk] = useState<boolean | null>(null);
 
   useEffect(() => {
-    fetch('/hello')
+    fetch('/api/v1/hello')
       .then((res) => (res.ok ? res.text() : Promise.reject(res.statusText)))
       .then((data) => {
         setStatus(`Connected to API (${data})`);
