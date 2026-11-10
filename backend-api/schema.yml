@@ -579,7 +579,7 @@ components:
       type: object
       required:
         - id
-        - user_id
+        - admin_id
         - name
         - type
         - description
@@ -591,10 +591,10 @@ components:
           format: uuid
           description: Unique identifier for the account.
           example: "7e954536-4ec8-490b-9304-4b52b217d84b"
-        user_id:
+        admin_id:
           type: string
           format: uuid
-          description: Identifier of the user who owns this account.
+          description: Identifier of the admin/owner user for this account.
           example: "d3b07384-d113-4e00-9922-b06f9d453b34"
         name:
           type: string
@@ -616,6 +616,53 @@ components:
           format: date-time
           description: Timestamp when the account was last updated.
           example: "2026-11-09T19:15:00Z"
+
+    AccessLevel:
+      type: string
+      description: Level of access granted to a user for an account.
+      enum:
+        - read
+        - edit
+        - admin
+      example: "admin"
+
+    AccountAccessResponse:
+      type: object
+      required:
+        - id
+        - account_id
+        - user_id
+        - access_level
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique identifier of the access grant record.
+          example: "b1f8e21a-4d2b-4e12-85a2-c1f034567890"
+        account_id:
+          type: string
+          format: uuid
+          description: Identifier of the account.
+          example: "7e954536-4ec8-490b-9304-4b52b217d84b"
+        user_id:
+          type: string
+          format: uuid
+          description: Identifier of the user granted access.
+          example: "d3b07384-d113-4e00-9922-b06f9d453b34"
+        access_level:
+          $ref: '#/components/schemas/AccessLevel'
+        created_at:
+          type: string
+          format: date-time
+          description: Timestamp when access was granted.
+          example: "2026-11-10T09:00:00Z"
+        updated_at:
+          type: string
+          format: date-time
+          description: Timestamp when access was last modified.
+          example: "2026-11-10T09:00:00Z"
 
     ErrorResponse:
       type: object
