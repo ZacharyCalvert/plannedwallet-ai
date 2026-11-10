@@ -15,6 +15,7 @@ type MemoryRepository struct {
 	usersByUsername map[string]*models.User           // username -> User
 	usersByEmail    map[string]*models.User           // email -> User
 	accounts        map[string]*models.Account        // id -> Account
+	accountAccess   map[string]*models.AccountAccess  // accountID:userID -> AccountAccess
 	checkingRecords map[string]*models.CheckingRecord // id -> CheckingRecord
 }
 
@@ -24,6 +25,7 @@ func NewMemoryRepository() *MemoryRepository {
 		usersByUsername: make(map[string]*models.User),
 		usersByEmail:    make(map[string]*models.User),
 		accounts:        make(map[string]*models.Account),
+		accountAccess:   make(map[string]*models.AccountAccess),
 		checkingRecords: make(map[string]*models.CheckingRecord),
 	}
 }
@@ -112,12 +114,66 @@ func (m *MemoryRepository) ListAccountsByUserID(_ context.Context, userID string
 
 	var result []*models.Account
 	for _, acc := range m.accounts {
-		if acc.UserID == userID {
+		hasAccess := acc.AdminID == userID
+		if !hasAccess {
+			key := acc.ID + ":" + userID
+			_, hasAccess = m.accountAccess[key]
+		}
+		if hasAccess {
 			copied := *acc
 			result = append(result, &copied)
 		}
 	}
 	return result, nil
+}
+
+func (m *MemoryRepository) GrantAccountAccess(_ context.Context, access *models.AccountAccess) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	copied := *access
+	key := access.AccountID + ":" + access.UserID
+	m.accountAccess[key] = &copied
+	return nil
+}
+
+func (m *MemoryRepository) GetAccountAccess(_ context.Context, accountID, userID string) (*models.AccountAccess, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	key := accountID + ":" + userID
+	acc, ok := m.accountAccess[key]
+	if !ok {
+		return nil, ErrNotFound
+	}
+	copied := *acc
+	return &copied, nil
+}
+
+func (m *MemoryRepository) ListAccountAccess(_ context.Context, accountID string) ([]*models.AccountAccess, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	var result []*models.AccountAccess
+	for _, acc := range m.accountAccess {
+		if acc.AccountID == accountID {
+			copied := *acc
+			result = append(result, &copied)
+		}
+	}
+	return result, nil
+}
+
+func (m *MemoryRepository) RevokeAccountAccess(_ context.Context, accountID, userID string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	key := accountID + ":" + userID
+	if _, ok := m.accountAccess[key]; !ok {
+		return ErrNotFound
+	}
+	delete(m.accountAccess, key)
+	return nil
 }
 
 func (m *MemoryRepository) CreateCheckingRecord(_ context.Context, record *models.CheckingRecord) error {

@@ -47,15 +47,40 @@ type TokenResponse struct {
 	ExpiresIn   int    `json:"expires_in"`
 }
 
+// AccessLevel represents the permission level granted to an account.
+type AccessLevel string
+
+const (
+	AccessLevelRead  AccessLevel = "read"
+	AccessLevelEdit  AccessLevel = "edit"
+	AccessLevelAdmin AccessLevel = "admin"
+)
+
+var ValidAccessLevels = map[AccessLevel]bool{
+	AccessLevelRead:  true,
+	AccessLevelEdit:  true,
+	AccessLevelAdmin: true,
+}
+
 // Account domain model
 type Account struct {
 	ID          string    `json:"id"`
-	UserID      string    `json:"user_id"`
+	AdminID     string    `json:"admin_id"`
 	Name        string    `json:"name"`
 	Type        string    `json:"type"`
 	Description string    `json:"description"`
 	CreatedAt   time.Time `json:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at"`
+}
+
+// AccountAccess domain model representing access granted to an account.
+type AccountAccess struct {
+	ID          string      `json:"id"`
+	AccountID   string      `json:"account_id"`
+	UserID      string      `json:"user_id"`
+	AccessLevel AccessLevel `json:"access_level"`
+	CreatedAt   time.Time   `json:"created_at"`
+	UpdatedAt   time.Time   `json:"updated_at"`
 }
 
 // AccountCreationRequest represents the request to create a financial account.
@@ -68,12 +93,22 @@ type AccountCreationRequest struct {
 // AccountResponse represents the account returned by the API.
 type AccountResponse struct {
 	ID          string    `json:"id"`
-	UserID      string    `json:"user_id"`
+	AdminID     string    `json:"admin_id"`
 	Name        string    `json:"name"`
 	Type        string    `json:"type"`
 	Description string    `json:"description"`
 	CreatedAt   time.Time `json:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at"`
+}
+
+// AccountAccessResponse represents the access grant returned by the API.
+type AccountAccessResponse struct {
+	ID          string      `json:"id"`
+	AccountID   string      `json:"account_id"`
+	UserID      string      `json:"user_id"`
+	AccessLevel AccessLevel `json:"access_level"`
+	CreatedAt   time.Time   `json:"created_at"`
+	UpdatedAt   time.Time   `json:"updated_at"`
 }
 
 // CheckingRecord domain model

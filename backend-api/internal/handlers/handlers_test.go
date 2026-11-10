@@ -221,7 +221,7 @@ func TestAccountCreation(t *testing.T) {
 	if err := json.Unmarshal(w.Body.Bytes(), &accRes); err != nil {
 		t.Fatalf("failed to unmarshal account response: %v", err)
 	}
-	if accRes.Name != "Everyday Checking" || accRes.Type != "checking" {
+	if accRes.Name != "Everyday Checking" || accRes.Type != "checking" || accRes.AdminID == "" {
 		t.Errorf("unexpected account response: %+v", accRes)
 	}
 

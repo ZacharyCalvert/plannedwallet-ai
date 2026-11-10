@@ -123,7 +123,7 @@ func TestAccountAndCheckingRecordWorkflow(t *testing.T) {
 	if err != nil {
 		t.Fatalf("account creation failed: %v", err)
 	}
-	if accRes.Name != "Personal Checking" || accRes.Type != "checking" {
+	if accRes.Name != "Personal Checking" || accRes.Type != "checking" || accRes.AdminID != userRes.ID {
 		t.Errorf("unexpected account data: %+v", accRes)
 	}
 
@@ -178,5 +178,95 @@ func TestAccountAndCheckingRecordWorkflow(t *testing.T) {
 	_, err = ctrl.GetCheckingRecord(ctx, userRes.ID, accRes.ID, recRes.ID)
 	if err == nil {
 		t.Fatal("expected error getting deleted record, got nil")
+	}
+}
+
+func TestAccountAccessPermissions(t *testing.T) {
+	ctrl, repo := setupController()
+	ctx := context.Background()
+
+	adminUser, err := ctrl.RegisterUser(ctx, models.UserRegistrationRequest{
+		Username: "admin_owner",
+		Email:    "admin_owner@example.com",
+		Password: "Password123!",
+	})
+	if err != nil {
+		t.Fatalf("failed to register admin: %v", err)
+	}
+
+	secondUser, err := ctrl.RegisterUser(ctx, models.UserRegistrationRequest{
+		Username: "collaborator",
+		Email:    "collab@example.com",
+		Password: "Password123!",
+	})
+	if err != nil {
+		t.Fatalf("failed to register collaborator: %v", err)
+	}
+
+	acc, err := ctrl.CreateAccount(ctx, adminUser.ID, models.AccountCreationRequest{
+		Name:        "Shared Checking",
+		Type:        "checking",
+		Description: "Joint checking account",
+	})
+	if err != nil {
+		t.Fatalf("failed to create account: %v", err)
+	}
+	if acc.AdminID != adminUser.ID {
+		t.Errorf("expected AdminID to match adminUser.ID, got %s", acc.AdminID)
+	}
+
+	// 1. Before granting access, collaborator cannot access account records
+	val := -10.00
+	_, err = ctrl.CreateCheckingRecord(ctx, secondUser.ID, acc.ID, models.CheckingRecordCreateRequest{
+		Value:    &val,
+		DateSent: "2026-11-10",
+		Entity:   "Coffee Shop",
+	})
+	if err == nil {
+		t.Fatal("expected error for unauthorized user creating record, got nil")
+	}
+
+	// 2. Admin grants 'edit' access to collaborator
+	grantRes, err := ctrl.GrantAccountAccess(ctx, adminUser.ID, acc.ID, secondUser.ID, models.AccessLevelEdit)
+	if err != nil {
+		t.Fatalf("failed to grant access: %v", err)
+	}
+	if grantRes.AccessLevel != models.AccessLevelEdit || grantRes.UserID != secondUser.ID {
+		t.Errorf("unexpected grant result: %+v", grantRes)
+	}
+
+	// 3. Collaborator can now create and view checking records
+	rec, err := ctrl.CreateCheckingRecord(ctx, secondUser.ID, acc.ID, models.CheckingRecordCreateRequest{
+		Value:    &val,
+		DateSent: "2026-11-10",
+		Entity:   "Coffee Shop",
+	})
+	if err != nil {
+		t.Fatalf("expected collaborator with edit access to succeed, got %v", err)
+	}
+
+	gotRec, err := ctrl.GetCheckingRecord(ctx, secondUser.ID, acc.ID, rec.ID)
+	if err != nil || gotRec.ID != rec.ID {
+		t.Fatalf("collaborator failed to get record: %v", err)
+	}
+
+	// 4. Verify accounts list for collaborator includes this shared account
+	collabAccounts, err := repo.ListAccountsByUserID(ctx, secondUser.ID)
+	if err != nil {
+		t.Fatalf("failed to list collaborator accounts: %v", err)
+	}
+	if len(collabAccounts) != 1 || collabAccounts[0].ID != acc.ID {
+		t.Errorf("expected 1 shared account for collaborator, got %d", len(collabAccounts))
+	}
+
+	// 5. Admin revokes collaborator access
+	if err := ctrl.RevokeAccountAccess(ctx, adminUser.ID, acc.ID, secondUser.ID); err != nil {
+		t.Fatalf("failed to revoke access: %v", err)
+	}
+
+	// 6. After revocation, collaborator access is denied
+	_, err = ctrl.GetCheckingRecord(ctx, secondUser.ID, acc.ID, rec.ID)
+	if err == nil {
+		t.Fatal("expected access denied after revocation, got nil")
 	}
 }

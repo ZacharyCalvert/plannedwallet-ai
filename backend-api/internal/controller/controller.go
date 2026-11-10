@@ -196,7 +196,7 @@ func (c *Controller) CreateAccount(ctx context.Context, userID string, req model
 	now := time.Now().UTC()
 	account := &models.Account{
 		ID:          uuid.New().String(),
-		UserID:      userID,
+		AdminID:     userID,
 		Name:        name,
 		Type:        accType,
 		Description: description,
@@ -208,9 +208,20 @@ func (c *Controller) CreateAccount(ctx context.Context, userID string, req model
 		return nil, NewAppError(http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to create account.")
 	}
 
+	// Establish admin level access for the account creator
+	access := &models.AccountAccess{
+		ID:          uuid.New().String(),
+		AccountID:   account.ID,
+		UserID:      userID,
+		AccessLevel: models.AccessLevelAdmin,
+		CreatedAt:   now,
+		UpdatedAt:   now,
+	}
+	_ = c.repo.GrantAccountAccess(ctx, access)
+
 	return &models.AccountResponse{
 		ID:          account.ID,
-		UserID:      account.UserID,
+		AdminID:     account.AdminID,
 		Name:        account.Name,
 		Type:        account.Type,
 		Description: account.Description,
@@ -219,7 +230,7 @@ func (c *Controller) CreateAccount(ctx context.Context, userID string, req model
 	}, nil
 }
 
-// verifyCheckingAccount verifies that the account exists, belongs to the user, and is of type checking.
+// verifyCheckingAccount verifies that the account exists, belongs to or is accessible by the user, and is of type checking.
 func (c *Controller) verifyCheckingAccount(ctx context.Context, userID, accountID string) (*models.Account, error) {
 	account, err := c.repo.GetAccountByID(ctx, accountID)
 	if err != nil {
@@ -229,8 +240,15 @@ func (c *Controller) verifyCheckingAccount(ctx context.Context, userID, accountI
 		return nil, NewAppError(http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to verify account.")
 	}
 
-	if account.UserID != userID || account.Type != "checking" {
+	if account.Type != "checking" {
 		return nil, ErrAccountNotFound
+	}
+
+	if account.AdminID != userID {
+		access, err := c.repo.GetAccountAccess(ctx, accountID, userID)
+		if err != nil || access == nil {
+			return nil, ErrAccountNotFound
+		}
 	}
 
 	return account, nil
@@ -450,6 +468,111 @@ func (c *Controller) DeleteCheckingRecord(ctx context.Context, userID, accountID
 			return ErrRecordNotFound
 		}
 		return NewAppError(http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to delete record.")
+	}
+
+	return nil
+}
+
+// GrantAccountAccess allows an account admin to grant or update access permissions for another user.
+func (c *Controller) GrantAccountAccess(ctx context.Context, adminUserID, accountID, targetUserID string, level models.AccessLevel) (*models.AccountAccessResponse, error) {
+	if !models.ValidAccessLevels[level] {
+		return nil, NewAppError(http.StatusBadRequest, "INVALID_ACCESS_LEVEL", "Access level must be read, edit, or admin.")
+	}
+
+	account, err := c.repo.GetAccountByID(ctx, accountID)
+	if err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			return nil, ErrAccountNotFound
+		}
+		return nil, NewAppError(http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to retrieve account.")
+	}
+
+	if account.AdminID != adminUserID {
+		return nil, NewAppError(http.StatusForbidden, "FORBIDDEN", "Only the account admin can grant access permissions.")
+	}
+
+	if _, err := c.repo.GetUserByID(ctx, targetUserID); err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			return nil, NewAppError(http.StatusNotFound, "USER_NOT_FOUND", "Target user not found.")
+		}
+		return nil, NewAppError(http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to verify target user.")
+	}
+
+	now := time.Now().UTC()
+	access := &models.AccountAccess{
+		ID:          uuid.New().String(),
+		AccountID:   accountID,
+		UserID:      targetUserID,
+		AccessLevel: level,
+		CreatedAt:   now,
+		UpdatedAt:   now,
+	}
+
+	if err := c.repo.GrantAccountAccess(ctx, access); err != nil {
+		return nil, NewAppError(http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to grant account access.")
+	}
+
+	return &models.AccountAccessResponse{
+		ID:          access.ID,
+		AccountID:   access.AccountID,
+		UserID:      access.UserID,
+		AccessLevel: access.AccessLevel,
+		CreatedAt:   access.CreatedAt,
+		UpdatedAt:   access.UpdatedAt,
+	}, nil
+}
+
+// GetAccountAccess retrieves an access grant for a specific user and account.
+func (c *Controller) GetAccountAccess(ctx context.Context, requestingUserID, accountID, targetUserID string) (*models.AccountAccessResponse, error) {
+	account, err := c.repo.GetAccountByID(ctx, accountID)
+	if err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			return nil, ErrAccountNotFound
+		}
+		return nil, NewAppError(http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to retrieve account.")
+	}
+
+	if account.AdminID != requestingUserID && requestingUserID != targetUserID {
+		return nil, NewAppError(http.StatusForbidden, "FORBIDDEN", "Insufficient permissions to view access details.")
+	}
+
+	access, err := c.repo.GetAccountAccess(ctx, accountID, targetUserID)
+	if err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			return nil, NewAppError(http.StatusNotFound, "ACCESS_NOT_FOUND", "No access grant found for user on this account.")
+		}
+		return nil, NewAppError(http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to retrieve access details.")
+	}
+
+	return &models.AccountAccessResponse{
+		ID:          access.ID,
+		AccountID:   access.AccountID,
+		UserID:      access.UserID,
+		AccessLevel: access.AccessLevel,
+		CreatedAt:   access.CreatedAt,
+		UpdatedAt:   access.UpdatedAt,
+	}, nil
+}
+
+// RevokeAccountAccess allows an account admin to revoke another user's access to an account.
+func (c *Controller) RevokeAccountAccess(ctx context.Context, adminUserID, accountID, targetUserID string) error {
+	account, err := c.repo.GetAccountByID(ctx, accountID)
+	if err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			return ErrAccountNotFound
+		}
+		return NewAppError(http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to retrieve account.")
+	}
+
+	if account.AdminID != adminUserID {
+		return NewAppError(http.StatusForbidden, "FORBIDDEN", "Only the account admin can revoke access.")
+	}
+
+	if err := c.repo.RevokeAccountAccess(ctx, accountID, targetUserID); err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			return NewAppError(http.StatusNotFound, "ACCESS_NOT_FOUND", "No access grant found to revoke.")
+		}
+		return NewAppError(http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to revoke access.")
 	}
 
 	return nil

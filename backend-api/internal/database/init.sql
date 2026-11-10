@@ -8,7 +8,7 @@ CREATE TABLE IF NOT EXISTS users (
 
 CREATE TABLE IF NOT EXISTS accounts (
     id UUID PRIMARY KEY,
-    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    admin_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     name VARCHAR(100) NOT NULL,
     type VARCHAR(50) NOT NULL,
     description VARCHAR(255) NOT NULL,
@@ -16,7 +16,18 @@ CREATE TABLE IF NOT EXISTS accounts (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-ALTER TABLE accounts ADD COLUMN IF NOT EXISTS name VARCHAR(100) NOT NULL DEFAULT '';
+CREATE TABLE IF NOT EXISTS account_access (
+    id UUID PRIMARY KEY,
+    account_id UUID NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    access_level VARCHAR(20) NOT NULL CHECK (access_level IN ('read', 'edit', 'admin')),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT uq_account_access_account_user UNIQUE (account_id, user_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_account_access_user_id ON account_access(user_id);
+CREATE INDEX IF NOT EXISTS idx_account_access_account_id ON account_access(account_id);
 
 CREATE TABLE IF NOT EXISTS checking_records (
     id UUID PRIMARY KEY,

@@ -24,6 +24,12 @@ type Repository interface {
 	GetAccountByID(ctx context.Context, id string) (*models.Account, error)
 	ListAccountsByUserID(ctx context.Context, userID string) ([]*models.Account, error)
 
+	// Account Access operations
+	GrantAccountAccess(ctx context.Context, access *models.AccountAccess) error
+	GetAccountAccess(ctx context.Context, accountID, userID string) (*models.AccountAccess, error)
+	ListAccountAccess(ctx context.Context, accountID string) ([]*models.AccountAccess, error)
+	RevokeAccountAccess(ctx context.Context, accountID, userID string) error
+
 	// Checking Record operations
 	CreateCheckingRecord(ctx context.Context, record *models.CheckingRecord) error
 	GetCheckingRecordByID(ctx context.Context, accountID, recordID string) (*models.CheckingRecord, error)

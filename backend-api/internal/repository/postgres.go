@@ -86,19 +86,19 @@ func (p *PostgresRepository) GetUserByID(ctx context.Context, id string) (*model
 }
 
 func (p *PostgresRepository) CreateAccount(ctx context.Context, account *models.Account) error {
-	query := `INSERT INTO accounts (id, user_id, name, type, description, created_at, updated_at)
+	query := `INSERT INTO accounts (id, admin_id, name, type, description, created_at, updated_at)
 	          VALUES ($1, $2, $3, $4, $5, $6, $7)`
-	_, err := p.db.ExecContext(ctx, query, account.ID, account.UserID, account.Name, account.Type, account.Description, account.CreatedAt, account.UpdatedAt)
+	_, err := p.db.ExecContext(ctx, query, account.ID, account.AdminID, account.Name, account.Type, account.Description, account.CreatedAt, account.UpdatedAt)
 	return err
 }
 
 func (p *PostgresRepository) GetAccountByID(ctx context.Context, id string) (*models.Account, error) {
-	query := `SELECT id, user_id, name, type, description, created_at, updated_at
+	query := `SELECT id, admin_id, name, type, description, created_at, updated_at
 	          FROM accounts
 	          WHERE id = $1`
 	row := p.db.QueryRowContext(ctx, query, id)
 	var a models.Account
-	if err := row.Scan(&a.ID, &a.UserID, &a.Name, &a.Type, &a.Description, &a.CreatedAt, &a.UpdatedAt); err != nil {
+	if err := row.Scan(&a.ID, &a.AdminID, &a.Name, &a.Type, &a.Description, &a.CreatedAt, &a.UpdatedAt); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrNotFound
 		}
@@ -108,10 +108,11 @@ func (p *PostgresRepository) GetAccountByID(ctx context.Context, id string) (*mo
 }
 
 func (p *PostgresRepository) ListAccountsByUserID(ctx context.Context, userID string) ([]*models.Account, error) {
-	query := `SELECT id, user_id, name, type, description, created_at, updated_at
-	          FROM accounts
-	          WHERE user_id = $1
-	          ORDER BY created_at ASC`
+	query := `SELECT DISTINCT a.id, a.admin_id, a.name, a.type, a.description, a.created_at, a.updated_at
+	          FROM accounts a
+	          LEFT JOIN account_access aa ON a.id = aa.account_id
+	          WHERE a.admin_id = $1 OR aa.user_id = $1
+	          ORDER BY a.created_at ASC`
 	rows, err := p.db.QueryContext(ctx, query, userID)
 	if err != nil {
 		return nil, err
@@ -121,12 +122,78 @@ func (p *PostgresRepository) ListAccountsByUserID(ctx context.Context, userID st
 	var accounts []*models.Account
 	for rows.Next() {
 		var a models.Account
-		if err := rows.Scan(&a.ID, &a.UserID, &a.Name, &a.Type, &a.Description, &a.CreatedAt, &a.UpdatedAt); err != nil {
+		if err := rows.Scan(&a.ID, &a.AdminID, &a.Name, &a.Type, &a.Description, &a.CreatedAt, &a.UpdatedAt); err != nil {
 			return nil, err
 		}
 		accounts = append(accounts, &a)
 	}
 	return accounts, rows.Err()
+}
+
+func (p *PostgresRepository) GrantAccountAccess(ctx context.Context, access *models.AccountAccess) error {
+	query := `INSERT INTO account_access (id, account_id, user_id, access_level, created_at, updated_at)
+	          VALUES ($1, $2, $3, $4, $5, $6)
+	          ON CONFLICT (account_id, user_id)
+	          DO UPDATE SET access_level = EXCLUDED.access_level, updated_at = EXCLUDED.updated_at`
+	_, err := p.db.ExecContext(ctx, query, access.ID, access.AccountID, access.UserID, string(access.AccessLevel), access.CreatedAt, access.UpdatedAt)
+	return err
+}
+
+func (p *PostgresRepository) GetAccountAccess(ctx context.Context, accountID, userID string) (*models.AccountAccess, error) {
+	query := `SELECT id, account_id, user_id, access_level, created_at, updated_at
+	          FROM account_access
+	          WHERE account_id = $1 AND user_id = $2`
+	row := p.db.QueryRowContext(ctx, query, accountID, userID)
+	var a models.AccountAccess
+	var lvl string
+	if err := row.Scan(&a.ID, &a.AccountID, &a.UserID, &lvl, &a.CreatedAt, &a.UpdatedAt); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrNotFound
+		}
+		return nil, err
+	}
+	a.AccessLevel = models.AccessLevel(lvl)
+	return &a, nil
+}
+
+func (p *PostgresRepository) ListAccountAccess(ctx context.Context, accountID string) ([]*models.AccountAccess, error) {
+	query := `SELECT id, account_id, user_id, access_level, created_at, updated_at
+	          FROM account_access
+	          WHERE account_id = $1
+	          ORDER BY created_at ASC`
+	rows, err := p.db.QueryContext(ctx, query, accountID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var result []*models.AccountAccess
+	for rows.Next() {
+		var a models.AccountAccess
+		var lvl string
+		if err := rows.Scan(&a.ID, &a.AccountID, &a.UserID, &lvl, &a.CreatedAt, &a.UpdatedAt); err != nil {
+			return nil, err
+		}
+		a.AccessLevel = models.AccessLevel(lvl)
+		result = append(result, &a)
+	}
+	return result, rows.Err()
+}
+
+func (p *PostgresRepository) RevokeAccountAccess(ctx context.Context, accountID, userID string) error {
+	query := `DELETE FROM account_access WHERE account_id = $1 AND user_id = $2`
+	res, err := p.db.ExecContext(ctx, query, accountID, userID)
+	if err != nil {
+		return err
+	}
+	rowsAffected, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rowsAffected == 0 {
+		return ErrNotFound
+	}
+	return nil
 }
 
 func (p *PostgresRepository) CreateCheckingRecord(ctx context.Context, record *models.CheckingRecord) error {
