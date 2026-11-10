@@ -20,25 +20,23 @@ func getEnv(key, defaultVal string) string {
 	return defaultVal
 }
 
-func main() {
-	port := getEnv("PORT", "8080")
+func initJWTService() *auth.Service {
 	jwtSecret := getEnv("JWT_SECRET", "super-secret-jwt-key-replace-in-production")
 	jwtExpStr := getEnv("JWT_EXPIRATION_SECONDS", "3600")
 	jwtExp, err := strconv.Atoi(jwtExpStr)
 	if err != nil {
 		jwtExp = 3600
 	}
+	return auth.NewService(jwtSecret, jwtExp)
+}
 
-	authService := auth.NewService(jwtSecret, jwtExp)
-
+func initDatabase() repository.Repository {
 	pgHost := getEnv("POSTGRES_HOST", "localhost")
 	pgPort := getEnv("POSTGRES_PORT", "5432")
 	pgUser := getEnv("POSTGRES_USER", "postgres")
 	pgPassword := getEnv("POSTGRES_PASSWORD", "postgres")
 	pgDB := getEnv("POSTGRES_DB", "plannedwallet")
 	pgSSLMode := getEnv("POSTGRES_SSLMODE", "disable")
-
-	var repo repository.Repository
 
 	db, err := database.Connect(database.Config{
 		Host:     pgHost,
@@ -50,18 +48,18 @@ func main() {
 	})
 	if err != nil {
 		log.Printf("Warning: Failed to connect to PostgreSQL (%v). Falling back to In-Memory repository.", err)
-		repo = repository.NewMemoryRepository()
-	} else {
-		log.Println("Successfully connected to PostgreSQL. Running migrations...")
-		if err := database.Migrate(db); err != nil {
-			log.Fatalf("Database migration failed: %v", err)
-		}
-		log.Println("Database migrations applied successfully.")
-		repo = repository.NewPostgresRepository(db)
+		return repository.NewMemoryRepository()
 	}
 
-	r := gin.Default()
+	log.Println("Successfully connected to PostgreSQL. Initializing database schema...")
+	if err := database.InitDatabase(db); err != nil {
+		log.Fatalf("Database initialization failed: %v", err)
+	}
+	log.Println("Database initialized successfully.")
+	return repository.NewPostgresRepository(db)
+}
 
+func addHandlers(r *gin.Engine, repo repository.Repository, authService *auth.Service) {
 	// Health check / smoke test endpoint
 	r.GET("/hello", func(c *gin.Context) {
 		c.String(200, "world")
@@ -69,6 +67,16 @@ func main() {
 
 	handler := handlers.NewHandler(repo, authService)
 	handler.RegisterRoutes(r)
+}
+
+func main() {
+	port := getEnv("PORT", "8080")
+
+	authService := initJWTService()
+	repo := initDatabase()
+
+	r := gin.Default()
+	addHandlers(r, repo, authService)
 
 	log.Printf("Planned Wallet API listening on port :%s", port)
 	if err := r.Run(":" + port); err != nil {

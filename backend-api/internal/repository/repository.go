@@ -1,0 +1,33 @@
+package repository
+
+import (
+	"context"
+	"errors"
+
+	"github.com/plannedwallet/internal/models"
+)
+
+var (
+	ErrNotFound = errors.New("resource not found")
+	ErrConflict = errors.New("resource conflict")
+)
+
+type Repository interface {
+	// User operations
+	CreateUser(ctx context.Context, user *models.User) error
+	GetUserByUsername(ctx context.Context, username string) (*models.User, error)
+	GetUserByEmail(ctx context.Context, email string) (*models.User, error)
+	GetUserByID(ctx context.Context, id string) (*models.User, error)
+
+	// Account operations
+	CreateAccount(ctx context.Context, account *models.Account) error
+	GetAccountByID(ctx context.Context, id string) (*models.Account, error)
+	ListAccountsByUserID(ctx context.Context, userID string) ([]*models.Account, error)
+
+	// Checking Record operations
+	CreateCheckingRecord(ctx context.Context, record *models.CheckingRecord) error
+	GetCheckingRecordByID(ctx context.Context, accountID, recordID string) (*models.CheckingRecord, error)
+	ListCheckingRecords(ctx context.Context, accountID string, cleared *bool, startDate, endDate *string) ([]*models.CheckingRecord, error)
+	UpdateCheckingRecord(ctx context.Context, record *models.CheckingRecord) error
+	DeleteCheckingRecord(ctx context.Context, accountID, recordID string) error
+}
