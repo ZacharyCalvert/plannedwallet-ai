@@ -4,3 +4,9 @@ data/
 # Binaries
 server
 backend-api/server
+
+# Frontend build & dependencies
+frontend-ui/node_modules/
+frontend-ui/.next/
+frontend-ui/out/
+
