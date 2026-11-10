@@ -23,7 +23,7 @@ build-frontend:
 	docker build -t plannedwallet-frontend:local ./frontend-ui
 
 build-gateway:
-	docker build -t plannedwallet-gateway:local ./nginx
+	docker build -t plannedwallet-gateway:local ./nginx-gateway
 
 test:
 	make -C backend-api test
