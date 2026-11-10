@@ -1,2 +1,6 @@
 # Postgres data directory
 data/
+
+# Binaries
+server
+backend-api/server
