@@ -28,4 +28,8 @@ func TestInitSQLEmbedded(t *testing.T) {
 	if !strings.Contains(initSQL, "access_level VARCHAR(20) NOT NULL") {
 		t.Error("expected initSQL to contain access_level column definition in account_access table")
 	}
+
+	if !strings.Contains(initSQL, "totp_secret VARCHAR(64) NOT NULL") {
+		t.Error("expected initSQL to contain totp_secret column definition in users table")
+	}
 }

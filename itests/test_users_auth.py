@@ -1,7 +1,7 @@
 import uuid
 import pytest
 from playwright.sync_api import APIRequestContext
-from conftest import decode_jwt_unverified
+from conftest import decode_jwt_unverified, compute_totp_code
 
 TEST_PASSWORD = "ComplexPassword123!"
 
@@ -21,7 +21,7 @@ def test_hello_endpoint(api_context: APIRequestContext):
     assert response.text() == "world"
 
 def test_create_user(api_context: APIRequestContext):
-    """Test 1: Create a user with a username and test email."""
+    """Test 1: Create a user with username, email, and receive TOTP secret."""
     user_data = generate_user_data()
     response = api_context.post("/api/v1/users", data=user_data)
 
@@ -30,18 +30,23 @@ def test_create_user(api_context: APIRequestContext):
     assert "id" in data and len(data["id"]) > 0
     assert data["username"] == user_data["username"]
     assert data["email"] == user_data["email"]
+    assert "totp_secret" in data and len(data["totp_secret"]) > 0
+    assert "totp_url" in data and data["totp_url"].startswith("otpauth://totp/")
     assert "created_at" in data
 
 def test_login_and_validate_jwt(api_context: APIRequestContext):
-    """Test 2: Login as the user and validate the JWT response."""
+    """Test 2: Login as user with password and valid TOTP code."""
     user_data = generate_user_data()
     create_res = api_context.post("/api/v1/users", data=user_data)
     assert create_res.status == 201
-    user_id = create_res.json()["id"]
+    create_data = create_res.json()
+    user_id = create_data["id"]
+    totp_secret = create_data["totp_secret"]
 
+    totp_code = compute_totp_code(totp_secret)
     login_res = api_context.post(
         f"/api/v1/users/{user_data['username']}/token",
-        data={"password": user_data["password"]},
+        data={"password": user_data["password"], "totp_code": totp_code},
     )
     assert login_res.status == 200, f"Login failed: {login_res.text()}"
     token_data = login_res.json()
@@ -54,6 +59,19 @@ def test_login_and_validate_jwt(api_context: APIRequestContext):
     assert payload.get("sub") == user_id
     assert payload.get("username") == user_data["username"]
     assert payload.get("exp", 0) > payload.get("iat", 0)
+
+def test_login_invalid_totp_fails(api_context: APIRequestContext):
+    """Test: Attempting login with invalid TOTP code returns 401."""
+    user_data = generate_user_data()
+    create_res = api_context.post("/api/v1/users", data=user_data)
+    assert create_res.status == 201
+
+    login_res = api_context.post(
+        f"/api/v1/users/{user_data['username']}/token",
+        data={"password": user_data["password"], "totp_code": "000000"},
+    )
+    assert login_res.status == 401
+    assert login_res.json().get("error") == "INVALID_TOTP"
 
 def test_create_duplicate_username_fails(api_context: APIRequestContext):
     """Test 3: Attempt to create same username with different email and verify 409 conflict."""

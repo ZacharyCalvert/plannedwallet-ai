@@ -261,6 +261,64 @@ body {
   font-size: 0.875rem;
 }
 
+/* TOTP Setup */
+.totp-title {
+  font-size: 1.1rem;
+  font-weight: 700;
+  text-align: center;
+  color: #1e293b;
+  margin-bottom: 0.25rem;
+}
+
+.totp-qr-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+  margin: 0.5rem 0;
+}
+
+.totp-instructions {
+  font-size: 0.85rem;
+  color: var(--muted);
+  text-align: center;
+}
+
+.totp-qr-wrapper {
+  background: #ffffff;
+  padding: 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.totp-secret-wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.totp-secret-label {
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.totp-secret-key {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.8rem;
+  font-weight: 600;
+  background-color: #f1f5f9;
+  padding: 0.2rem 0.5rem;
+  border-radius: 0.25rem;
+  color: #334155;
+  letter-spacing: 0.05em;
+  word-break: break-all;
+}
+
 /* Dashboard Two-Pane Layout */
 .dashboard-layout {
   flex: 1;

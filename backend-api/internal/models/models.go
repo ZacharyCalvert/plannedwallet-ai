@@ -17,6 +17,7 @@ type User struct {
 	Username     string    `json:"username"`
 	Email        string    `json:"email"`
 	PasswordHash string    `json:"-"`
+	TOTPSecret   string    `json:"-"`
 	CreatedAt    time.Time `json:"created_at"`
 }
 
@@ -29,15 +30,18 @@ type UserRegistrationRequest struct {
 
 // UserResponse represents the public user info returned after registration.
 type UserResponse struct {
-	ID        string    `json:"id"`
-	Username  string    `json:"username"`
-	Email     string    `json:"email"`
-	CreatedAt time.Time `json:"created_at"`
+	ID         string    `json:"id"`
+	Username   string    `json:"username"`
+	Email      string    `json:"email"`
+	TOTPSecret string    `json:"totp_secret,omitempty"`
+	TOTPURL    string    `json:"totp_url,omitempty"`
+	CreatedAt  time.Time `json:"created_at"`
 }
 
 // TokenExchangeRequest represents the body when exchanging credentials for a JWT.
 type TokenExchangeRequest struct {
 	Password string `json:"password" binding:"required"`
+	TOTPCode string `json:"totp_code" binding:"required"`
 }
 
 // TokenResponse contains the issued JWT access token.

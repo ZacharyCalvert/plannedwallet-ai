@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"strings"
 	"time"
-	"unicode"
 
 	"github.com/google/uuid"
 
@@ -38,46 +37,10 @@ var (
 	ErrUserAlreadyExists  = NewAppError(http.StatusConflict, "USER_CONFLICT", "Username or email is already registered.")
 	ErrUserNotFound       = NewAppError(http.StatusNotFound, "USER_NOT_FOUND", "No user found matching the provided username.")
 	ErrInvalidCredentials = NewAppError(http.StatusUnauthorized, "INVALID_CREDENTIALS", "Invalid username or password.")
+	ErrInvalidTOTP        = NewAppError(http.StatusUnauthorized, "INVALID_TOTP", "Invalid or expired two-factor authentication code.")
 	ErrAccountNotFound    = NewAppError(http.StatusNotFound, "ACCOUNT_NOT_FOUND", "No checking account found matching the provided accountId.")
 	ErrRecordNotFound     = NewAppError(http.StatusNotFound, "RECORD_NOT_FOUND", "Checking record not found.")
 )
-
-// ValidatePassword enforces password rules:
-// minimum length of 10 characters, at least 1 uppercase, 1 lowercase, 1 number, and 1 non-alphanumeric special character.
-func ValidatePassword(password string) error {
-	if len(password) < 10 {
-		return NewAppError(http.StatusBadRequest, "INVALID_PASSWORD", "Password must be at least 10 characters long.")
-	}
-
-	var hasUpper, hasLower, hasDigit, hasSpecial bool
-	for _, r := range password {
-		switch {
-		case unicode.IsUpper(r):
-			hasUpper = true
-		case unicode.IsLower(r):
-			hasLower = true
-		case unicode.IsDigit(r):
-			hasDigit = true
-		case !unicode.IsLetter(r) && !unicode.IsDigit(r):
-			hasSpecial = true
-		}
-	}
-
-	if !hasUpper {
-		return NewAppError(http.StatusBadRequest, "INVALID_PASSWORD", "Password must contain at least one uppercase letter.")
-	}
-	if !hasLower {
-		return NewAppError(http.StatusBadRequest, "INVALID_PASSWORD", "Password must contain at least one lowercase letter.")
-	}
-	if !hasDigit {
-		return NewAppError(http.StatusBadRequest, "INVALID_PASSWORD", "Password must contain at least one number.")
-	}
-	if !hasSpecial {
-		return NewAppError(http.StatusBadRequest, "INVALID_PASSWORD", "Password must contain at least one special character not in the alphanumeric set.")
-	}
-
-	return nil
-}
 
 type Controller struct {
 	repo repository.Repository
@@ -89,145 +52,6 @@ func NewController(repo repository.Repository, authService *auth.Service) *Contr
 		repo: repo,
 		auth: authService,
 	}
-}
-
-// RegisterUser validates user existence, verifies password rules, hashes password, and persists user.
-func (c *Controller) RegisterUser(ctx context.Context, req models.UserRegistrationRequest) (*models.UserResponse, error) {
-	username := strings.TrimSpace(req.Username)
-	email := strings.TrimSpace(req.Email)
-
-	if err := ValidatePassword(req.Password); err != nil {
-		return nil, err
-	}
-
-	// Validate user does not already exist by username
-	existingUser, err := c.repo.GetUserByUsername(ctx, username)
-	if err == nil && existingUser != nil {
-		return nil, ErrUserAlreadyExists
-	}
-	if err != nil && !errors.Is(err, repository.ErrNotFound) {
-		return nil, NewAppError(http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to check existing username.")
-	}
-
-	// Validate user does not already exist by email
-	existingEmail, err := c.repo.GetUserByEmail(ctx, email)
-	if err == nil && existingEmail != nil {
-		return nil, ErrUserAlreadyExists
-	}
-	if err != nil && !errors.Is(err, repository.ErrNotFound) {
-		return nil, NewAppError(http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to check existing email.")
-	}
-
-	hash, err := c.auth.HashPassword(req.Password)
-	if err != nil {
-		return nil, NewAppError(http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to hash password.")
-	}
-
-	user := &models.User{
-		ID:           uuid.New().String(),
-		Username:     username,
-		Email:        email,
-		PasswordHash: hash,
-		CreatedAt:    time.Now().UTC(),
-	}
-
-	if err := c.repo.CreateUser(ctx, user); err != nil {
-		if errors.Is(err, repository.ErrConflict) {
-			return nil, ErrUserAlreadyExists
-		}
-		return nil, NewAppError(http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to create user.")
-	}
-
-	return &models.UserResponse{
-		ID:        user.ID,
-		Username:  user.Username,
-		Email:     user.Email,
-		CreatedAt: user.CreatedAt,
-	}, nil
-}
-
-// ExchangeToken validates user credentials and issues a signed JWT token.
-func (c *Controller) ExchangeToken(ctx context.Context, username, password string) (*models.TokenResponse, error) {
-	username = strings.TrimSpace(username)
-	if username == "" {
-		return nil, NewAppError(http.StatusBadRequest, "BAD_REQUEST", "Username is required.")
-	}
-
-	user, err := c.repo.GetUserByUsername(ctx, username)
-	if err != nil {
-		if errors.Is(err, repository.ErrNotFound) {
-			return nil, ErrUserNotFound
-		}
-		return nil, NewAppError(http.StatusInternalServerError, "INTERNAL_ERROR", "Error retrieving user.")
-	}
-
-	if !c.auth.CheckPassword(user.PasswordHash, password) {
-		return nil, ErrInvalidCredentials
-	}
-
-	token, err := c.auth.GenerateToken(user.ID, user.Username)
-	if err != nil {
-		return nil, NewAppError(http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to generate token.")
-	}
-
-	return &models.TokenResponse{
-		AccessToken: token,
-		TokenType:   "Bearer",
-		ExpiresIn:   c.auth.ExpirationSeconds(),
-	}, nil
-}
-
-// CreateAccount validates account constraints and creates a new financial account.
-func (c *Controller) CreateAccount(ctx context.Context, userID string, req models.AccountCreationRequest) (*models.AccountResponse, error) {
-	name := strings.TrimSpace(req.Name)
-	accType := strings.TrimSpace(req.Type)
-	description := strings.TrimSpace(req.Description)
-
-	if name == "" {
-		return nil, NewAppError(http.StatusBadRequest, "MISSING_NAME", "Account name cannot be empty.")
-	}
-	if !models.ValidAccountTypes[accType] {
-		return nil, NewAppError(http.StatusBadRequest, "INVALID_ACCOUNT_TYPE", "Invalid account type provided.")
-	}
-	if description == "" {
-		return nil, NewAppError(http.StatusBadRequest, "MISSING_DESCRIPTION", "Account description cannot be empty.")
-	}
-
-	now := time.Now().UTC()
-	account := &models.Account{
-		ID:          uuid.New().String(),
-		AdminID:     userID,
-		Name:        name,
-		Type:        accType,
-		Description: description,
-		CreatedAt:   now,
-		UpdatedAt:   now,
-	}
-
-	if err := c.repo.CreateAccount(ctx, account); err != nil {
-		return nil, NewAppError(http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to create account.")
-	}
-
-	// Establish admin level access for the account creator
-	access := &models.AccountAccess{
-		ID:          uuid.New().String(),
-		AccountID:   account.ID,
-		UserID:      userID,
-		AccessLevel: models.AccessLevelAdmin,
-		CreatedAt:   now,
-		UpdatedAt:   now,
-	}
-	_ = c.repo.GrantAccountAccess(ctx, access)
-
-	return &models.AccountResponse{
-		ID:          account.ID,
-		AdminID:     account.AdminID,
-		Name:        account.Name,
-		Type:        account.Type,
-		Description: account.Description,
-		CreatedAt:   account.CreatedAt,
-		UpdatedAt:   account.UpdatedAt,
-	}, nil
 }
 
 // ListAccounts retrieves all accounts accessible to the specified user.

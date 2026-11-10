@@ -1,6 +1,8 @@
-.PHONY: start stop build build-api build-frontend build-gateway test
+.PHONY: start stop build build-api build-frontend build-gateway test refresh
 
 DATA_DIR := data
+
+refresh: stop clean start
 
 start:
 	mkdir -p $(DATA_DIR)

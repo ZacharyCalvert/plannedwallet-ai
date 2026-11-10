@@ -97,11 +97,11 @@ func (h *Handler) ExchangeToken(c *gin.Context) {
 
 	var req models.TokenExchangeRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.sendError(c, http.StatusBadRequest, "BAD_REQUEST", "Password is required.")
+		h.sendError(c, http.StatusBadRequest, "BAD_REQUEST", "Password and totp_code are required.")
 		return
 	}
 
-	res, err := h.ctrl.ExchangeToken(c.Request.Context(), username, req.Password)
+	res, err := h.ctrl.ExchangeToken(c.Request.Context(), username, req.Password, req.TOTPCode)
 	if err != nil {
 		h.handleError(c, err)
 		return
