@@ -8,6 +8,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/plannedwallet/internal/auth"
+	"github.com/plannedwallet/internal/controller"
 	"github.com/plannedwallet/internal/database"
 	"github.com/plannedwallet/internal/handlers"
 	"github.com/plannedwallet/internal/repository"
@@ -65,7 +66,8 @@ func addHandlers(r *gin.Engine, repo repository.Repository, authService *auth.Se
 		c.String(200, "world")
 	})
 
-	handler := handlers.NewHandler(repo, authService)
+	ctrl := controller.NewController(repo, authService)
+	handler := handlers.NewHandler(ctrl, authService)
 	handler.RegisterRoutes(r)
 }
 

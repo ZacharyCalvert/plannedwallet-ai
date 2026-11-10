@@ -24,7 +24,7 @@ type User struct {
 type UserRegistrationRequest struct {
 	Username string `json:"username" binding:"required,min=3,max=50"`
 	Email    string `json:"email" binding:"required,email,max=255"`
-	Password string `json:"password" binding:"required,min=8"`
+	Password string `json:"password" binding:"required,min=10"`
 }
 
 // UserResponse represents the public user info returned after registration.

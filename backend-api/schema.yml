@@ -489,9 +489,9 @@ components:
         password:
           type: string
           format: password
-          minLength: 8
+          minLength: 10
           writeOnly: true
-          description: Plaintext password provided during registration; hashed with bcrypt and salted before persistence.
+          description: Plaintext password provided during registration; hashed with bcrypt and salted before persistence. Must be at least 10 characters and contain at least 1 uppercase letter, 1 lowercase letter, 1 number, and 1 non-alphanumeric special character.
           example: "P@ssw0rd123!"
 
     UserResponse:

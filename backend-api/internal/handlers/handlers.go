@@ -9,23 +9,24 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/google/uuid"
 
 	"github.com/plannedwallet/internal/auth"
+	"github.com/plannedwallet/internal/controller"
 	"github.com/plannedwallet/internal/models"
-	"github.com/plannedwallet/internal/repository"
 )
 
 var usernameRegex = regexp.MustCompile(`^[a-zA-Z0-9_-]+$`)
 
+// Handler serves as the view layer in the MVC architecture, translating
+// HTTP requests/responses and interacting with the controller layer.
 type Handler struct {
-	repo repository.Repository
+	ctrl *controller.Controller
 	auth *auth.Service
 }
 
-func NewHandler(repo repository.Repository, authService *auth.Service) *Handler {
+func NewHandler(ctrl *controller.Controller, authService *auth.Service) *Handler {
 	return &Handler{
-		repo: repo,
+		ctrl: ctrl,
 		auth: authService,
 	}
 }
@@ -38,9 +39,27 @@ func (h *Handler) sendError(c *gin.Context, statusCode int, errCode, message str
 	})
 }
 
+func (h *Handler) handleError(c *gin.Context, err error) {
+	var appErr *controller.AppError
+	if errors.As(err, &appErr) {
+		h.sendError(c, appErr.Status, appErr.Code, appErr.Message)
+		return
+	}
+	h.sendError(c, http.StatusInternalServerError, "INTERNAL_ERROR", "Internal server error.")
+}
+
 func parseDate(dateStr string) error {
 	_, err := time.Parse("2006-01-02", dateStr)
 	return err
+}
+
+func (h *Handler) getUserID(c *gin.Context) (string, bool) {
+	userIDVal, exists := c.Get("userID")
+	if !exists {
+		h.sendError(c, http.StatusUnauthorized, "UNAUTHORIZED", "Missing authenticated user.")
+		return "", false
+	}
+	return userIDVal.(string), true
 }
 
 // RegisterUser handles POST /api/v1/users
@@ -59,40 +78,13 @@ func (h *Handler) RegisterUser(c *gin.Context) {
 		return
 	}
 
-	if len(req.Password) < 8 {
-		h.sendError(c, http.StatusBadRequest, "INVALID_PASSWORD", "Password must be at least 8 characters long.")
-		return
-	}
-
-	hash, err := h.auth.HashPassword(req.Password)
+	res, err := h.ctrl.RegisterUser(c.Request.Context(), req)
 	if err != nil {
-		h.sendError(c, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to hash password.")
+		h.handleError(c, err)
 		return
 	}
 
-	user := &models.User{
-		ID:           uuid.New().String(),
-		Username:     req.Username,
-		Email:        req.Email,
-		PasswordHash: hash,
-		CreatedAt:    time.Now().UTC(),
-	}
-
-	if err := h.repo.CreateUser(c.Request.Context(), user); err != nil {
-		if errors.Is(err, repository.ErrConflict) {
-			h.sendError(c, http.StatusConflict, "USER_CONFLICT", "Username or email is already registered.")
-			return
-		}
-		h.sendError(c, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to create user.")
-		return
-	}
-
-	c.JSON(http.StatusCreated, models.UserResponse{
-		ID:        user.ID,
-		Username:  user.Username,
-		Email:     user.Email,
-		CreatedAt: user.CreatedAt,
-	})
+	c.JSON(http.StatusCreated, res)
 }
 
 // ExchangeToken handles POST /api/v1/users/{username}/token
@@ -109,42 +101,21 @@ func (h *Handler) ExchangeToken(c *gin.Context) {
 		return
 	}
 
-	user, err := h.repo.GetUserByUsername(c.Request.Context(), username)
+	res, err := h.ctrl.ExchangeToken(c.Request.Context(), username, req.Password)
 	if err != nil {
-		if errors.Is(err, repository.ErrNotFound) {
-			h.sendError(c, http.StatusNotFound, "USER_NOT_FOUND", "No user found matching the provided username.")
-			return
-		}
-		h.sendError(c, http.StatusInternalServerError, "INTERNAL_ERROR", "Error retrieving user.")
+		h.handleError(c, err)
 		return
 	}
 
-	if !h.auth.CheckPassword(user.PasswordHash, req.Password) {
-		h.sendError(c, http.StatusUnauthorized, "INVALID_CREDENTIALS", "Invalid username or password.")
-		return
-	}
-
-	token, err := h.auth.GenerateToken(user.ID, user.Username)
-	if err != nil {
-		h.sendError(c, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to generate token.")
-		return
-	}
-
-	c.JSON(http.StatusOK, models.TokenResponse{
-		AccessToken: token,
-		TokenType:   "Bearer",
-		ExpiresIn:   h.auth.ExpirationSeconds(),
-	})
+	c.JSON(http.StatusOK, res)
 }
 
 // CreateAccount handles POST /api/v1/accounts
 func (h *Handler) CreateAccount(c *gin.Context) {
-	userIDVal, exists := c.Get("userID")
-	if !exists {
-		h.sendError(c, http.StatusUnauthorized, "UNAUTHORIZED", "Missing authenticated user.")
+	userID, ok := h.getUserID(c)
+	if !ok {
 		return
 	}
-	userID := userIDVal.(string)
 
 	var req models.AccountCreationRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -152,92 +123,26 @@ func (h *Handler) CreateAccount(c *gin.Context) {
 		return
 	}
 
-	req.Name = strings.TrimSpace(req.Name)
-	req.Type = strings.TrimSpace(req.Type)
-	req.Description = strings.TrimSpace(req.Description)
-
-	if req.Name == "" {
-		h.sendError(c, http.StatusBadRequest, "MISSING_NAME", "Account name cannot be empty.")
-		return
-	}
-	if !models.ValidAccountTypes[req.Type] {
-		h.sendError(c, http.StatusBadRequest, "INVALID_ACCOUNT_TYPE", "Invalid account type provided.")
-		return
-	}
-	if req.Description == "" {
-		h.sendError(c, http.StatusBadRequest, "MISSING_DESCRIPTION", "Account description cannot be empty.")
-		return
-	}
-
-	now := time.Now().UTC()
-	account := &models.Account{
-		ID:          uuid.New().String(),
-		UserID:      userID,
-		Name:        req.Name,
-		Type:        req.Type,
-		Description: req.Description,
-		CreatedAt:   now,
-		UpdatedAt:   now,
-	}
-
-	if err := h.repo.CreateAccount(c.Request.Context(), account); err != nil {
-		h.sendError(c, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to create account.")
-		return
-	}
-
-	c.JSON(http.StatusCreated, models.AccountResponse{
-		ID:          account.ID,
-		UserID:      account.UserID,
-		Name:        account.Name,
-		Type:        account.Type,
-		Description: account.Description,
-		CreatedAt:   account.CreatedAt,
-		UpdatedAt:   account.UpdatedAt,
-	})
-}
-
-// verifyCheckingAccount checks that the account exists, belongs to the authenticated user, and is of type checking.
-func (h *Handler) verifyCheckingAccount(c *gin.Context, accountID string) (*models.Account, bool) {
-	userIDVal, exists := c.Get("userID")
-	if !exists {
-		h.sendError(c, http.StatusUnauthorized, "UNAUTHORIZED", "Missing authenticated user.")
-		return nil, false
-	}
-	userID := userIDVal.(string)
-
-	account, err := h.repo.GetAccountByID(c.Request.Context(), accountID)
+	res, err := h.ctrl.CreateAccount(c.Request.Context(), userID, req)
 	if err != nil {
-		if errors.Is(err, repository.ErrNotFound) {
-			h.sendError(c, http.StatusNotFound, "ACCOUNT_NOT_FOUND", "No checking account found matching the provided accountId.")
-			return nil, false
-		}
-		h.sendError(c, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to verify account.")
-		return nil, false
+		h.handleError(c, err)
+		return
 	}
 
-	if account.UserID != userID || account.Type != "checking" {
-		h.sendError(c, http.StatusNotFound, "ACCOUNT_NOT_FOUND", "No checking account found matching the provided accountId.")
-		return nil, false
-	}
-
-	return account, true
+	c.JSON(http.StatusCreated, res)
 }
 
 // CreateCheckingRecord handles POST /api/v1/accounts/{accountId}/checking-records
 func (h *Handler) CreateCheckingRecord(c *gin.Context) {
-	accountID := c.Param("accountId")
-	if _, ok := h.verifyCheckingAccount(c, accountID); !ok {
+	userID, ok := h.getUserID(c)
+	if !ok {
 		return
 	}
+	accountID := c.Param("accountId")
 
 	var req models.CheckingRecordCreateRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		h.sendError(c, http.StatusBadRequest, "BAD_REQUEST", err.Error())
-		return
-	}
-
-	if req.Value == nil {
-		h.sendError(c, http.StatusBadRequest, "INVALID_VALUE", "Transaction value is required.")
 		return
 	}
 
@@ -253,49 +158,22 @@ func (h *Handler) CreateCheckingRecord(c *gin.Context) {
 		}
 	}
 
-	entity := strings.TrimSpace(req.Entity)
-	if entity == "" {
-		h.sendError(c, http.StatusBadRequest, "INVALID_ENTITY", "entity cannot be empty.")
+	res, err := h.ctrl.CreateCheckingRecord(c.Request.Context(), userID, accountID, req)
+	if err != nil {
+		h.handleError(c, err)
 		return
 	}
 
-	now := time.Now().UTC()
-	record := &models.CheckingRecord{
-		ID:          uuid.New().String(),
-		AccountID:   accountID,
-		Value:       *req.Value,
-		DateSent:    req.DateSent,
-		DateCleared: req.DateCleared,
-		Entity:      entity,
-		Description: strings.TrimSpace(req.Description),
-		CreatedAt:   now,
-		UpdatedAt:   now,
-	}
-
-	if err := h.repo.CreateCheckingRecord(c.Request.Context(), record); err != nil {
-		h.sendError(c, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to create checking record.")
-		return
-	}
-
-	c.JSON(http.StatusCreated, models.CheckingRecordResponse{
-		ID:          record.ID,
-		AccountID:   record.AccountID,
-		Value:       record.Value,
-		DateSent:    record.DateSent,
-		DateCleared: record.DateCleared,
-		Entity:      record.Entity,
-		Description: record.Description,
-		CreatedAt:   record.CreatedAt,
-		UpdatedAt:   record.UpdatedAt,
-	})
+	c.JSON(http.StatusCreated, res)
 }
 
 // ListCheckingRecords handles GET /api/v1/accounts/{accountId}/checking-records
 func (h *Handler) ListCheckingRecords(c *gin.Context) {
-	accountID := c.Param("accountId")
-	if _, ok := h.verifyCheckingAccount(c, accountID); !ok {
+	userID, ok := h.getUserID(c)
+	if !ok {
 		return
 	}
+	accountID := c.Param("accountId")
 
 	var clearedFilter *bool
 	if clearedStr := c.Query("cleared"); clearedStr != "" {
@@ -325,25 +203,10 @@ func (h *Handler) ListCheckingRecords(c *gin.Context) {
 		endDateFilter = &eDate
 	}
 
-	records, err := h.repo.ListCheckingRecords(c.Request.Context(), accountID, clearedFilter, startDateFilter, endDateFilter)
+	res, err := h.ctrl.ListCheckingRecords(c.Request.Context(), userID, accountID, clearedFilter, startDateFilter, endDateFilter)
 	if err != nil {
-		h.sendError(c, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to retrieve checking records.")
+		h.handleError(c, err)
 		return
-	}
-
-	res := make([]models.CheckingRecordResponse, 0, len(records))
-	for _, r := range records {
-		res = append(res, models.CheckingRecordResponse{
-			ID:          r.ID,
-			AccountID:   r.AccountID,
-			Value:       r.Value,
-			DateSent:    r.DateSent,
-			DateCleared: r.DateCleared,
-			Entity:      r.Entity,
-			Description: r.Description,
-			CreatedAt:   r.CreatedAt,
-			UpdatedAt:   r.UpdatedAt,
-		})
 	}
 
 	c.JSON(http.StatusOK, res)
@@ -351,61 +214,34 @@ func (h *Handler) ListCheckingRecords(c *gin.Context) {
 
 // GetCheckingRecord handles GET /api/v1/accounts/{accountId}/checking-records/{recordId}
 func (h *Handler) GetCheckingRecord(c *gin.Context) {
+	userID, ok := h.getUserID(c)
+	if !ok {
+		return
+	}
 	accountID := c.Param("accountId")
-	if _, ok := h.verifyCheckingAccount(c, accountID); !ok {
-		return
-	}
-
 	recordID := c.Param("recordId")
-	record, err := h.repo.GetCheckingRecordByID(c.Request.Context(), accountID, recordID)
+
+	res, err := h.ctrl.GetCheckingRecord(c.Request.Context(), userID, accountID, recordID)
 	if err != nil {
-		if errors.Is(err, repository.ErrNotFound) {
-			h.sendError(c, http.StatusNotFound, "RECORD_NOT_FOUND", "Checking record not found.")
-			return
-		}
-		h.sendError(c, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to retrieve record.")
+		h.handleError(c, err)
 		return
 	}
 
-	c.JSON(http.StatusOK, models.CheckingRecordResponse{
-		ID:          record.ID,
-		AccountID:   record.AccountID,
-		Value:       record.Value,
-		DateSent:    record.DateSent,
-		DateCleared: record.DateCleared,
-		Entity:      record.Entity,
-		Description: record.Description,
-		CreatedAt:   record.CreatedAt,
-		UpdatedAt:   record.UpdatedAt,
-	})
+	c.JSON(http.StatusOK, res)
 }
 
 // UpdateCheckingRecord handles PUT /api/v1/accounts/{accountId}/checking-records/{recordId}
 func (h *Handler) UpdateCheckingRecord(c *gin.Context) {
+	userID, ok := h.getUserID(c)
+	if !ok {
+		return
+	}
 	accountID := c.Param("accountId")
-	if _, ok := h.verifyCheckingAccount(c, accountID); !ok {
-		return
-	}
-
 	recordID := c.Param("recordId")
-	existing, err := h.repo.GetCheckingRecordByID(c.Request.Context(), accountID, recordID)
-	if err != nil {
-		if errors.Is(err, repository.ErrNotFound) {
-			h.sendError(c, http.StatusNotFound, "RECORD_NOT_FOUND", "Checking record not found.")
-			return
-		}
-		h.sendError(c, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to retrieve record.")
-		return
-	}
 
 	var req models.CheckingRecordUpdateRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		h.sendError(c, http.StatusBadRequest, "BAD_REQUEST", err.Error())
-		return
-	}
-
-	if req.Value == nil {
-		h.sendError(c, http.StatusBadRequest, "INVALID_VALUE", "Transaction value is required.")
 		return
 	}
 
@@ -421,54 +257,23 @@ func (h *Handler) UpdateCheckingRecord(c *gin.Context) {
 		}
 	}
 
-	entity := strings.TrimSpace(req.Entity)
-	if entity == "" {
-		h.sendError(c, http.StatusBadRequest, "INVALID_ENTITY", "entity cannot be empty.")
+	res, err := h.ctrl.UpdateCheckingRecord(c.Request.Context(), userID, accountID, recordID, req)
+	if err != nil {
+		h.handleError(c, err)
 		return
 	}
 
-	existing.Value = *req.Value
-	existing.DateSent = req.DateSent
-	existing.DateCleared = req.DateCleared
-	existing.Entity = entity
-	existing.Description = strings.TrimSpace(req.Description)
-	existing.UpdatedAt = time.Now().UTC()
-
-	if err := h.repo.UpdateCheckingRecord(c.Request.Context(), existing); err != nil {
-		h.sendError(c, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to update record.")
-		return
-	}
-
-	c.JSON(http.StatusOK, models.CheckingRecordResponse{
-		ID:          existing.ID,
-		AccountID:   existing.AccountID,
-		Value:       existing.Value,
-		DateSent:    existing.DateSent,
-		DateCleared: existing.DateCleared,
-		Entity:      existing.Entity,
-		Description: existing.Description,
-		CreatedAt:   existing.CreatedAt,
-		UpdatedAt:   existing.UpdatedAt,
-	})
+	c.JSON(http.StatusOK, res)
 }
 
 // PatchCheckingRecord handles PATCH /api/v1/accounts/{accountId}/checking-records/{recordId}
 func (h *Handler) PatchCheckingRecord(c *gin.Context) {
+	userID, ok := h.getUserID(c)
+	if !ok {
+		return
+	}
 	accountID := c.Param("accountId")
-	if _, ok := h.verifyCheckingAccount(c, accountID); !ok {
-		return
-	}
-
 	recordID := c.Param("recordId")
-	existing, err := h.repo.GetCheckingRecordByID(c.Request.Context(), accountID, recordID)
-	if err != nil {
-		if errors.Is(err, repository.ErrNotFound) {
-			h.sendError(c, http.StatusNotFound, "RECORD_NOT_FOUND", "Checking record not found.")
-			return
-		}
-		h.sendError(c, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to retrieve record.")
-		return
-	}
 
 	var req models.CheckingRecordPatchRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -476,72 +281,39 @@ func (h *Handler) PatchCheckingRecord(c *gin.Context) {
 		return
 	}
 
-	if req.Value != nil {
-		existing.Value = *req.Value
-	}
 	if req.DateSent != nil {
 		if err := parseDate(*req.DateSent); err != nil {
 			h.sendError(c, http.StatusBadRequest, "INVALID_DATE_SENT", "date_sent must be formatted as YYYY-MM-DD.")
 			return
 		}
-		existing.DateSent = *req.DateSent
 	}
-	if req.DateCleared != nil {
-		if *req.DateCleared != "" {
-			if err := parseDate(*req.DateCleared); err != nil {
-				h.sendError(c, http.StatusBadRequest, "INVALID_DATE_CLEARED", "date_cleared must be formatted as YYYY-MM-DD.")
-				return
-			}
-			existing.DateCleared = req.DateCleared
-		} else {
-			existing.DateCleared = nil
-		}
-	}
-	if req.Entity != nil {
-		entity := strings.TrimSpace(*req.Entity)
-		if entity == "" {
-			h.sendError(c, http.StatusBadRequest, "INVALID_ENTITY", "entity cannot be empty.")
+	if req.DateCleared != nil && *req.DateCleared != "" {
+		if err := parseDate(*req.DateCleared); err != nil {
+			h.sendError(c, http.StatusBadRequest, "INVALID_DATE_CLEARED", "date_cleared must be formatted as YYYY-MM-DD.")
 			return
 		}
-		existing.Entity = entity
 	}
-	if req.Description != nil {
-		existing.Description = strings.TrimSpace(*req.Description)
-	}
-	existing.UpdatedAt = time.Now().UTC()
 
-	if err := h.repo.UpdateCheckingRecord(c.Request.Context(), existing); err != nil {
-		h.sendError(c, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to update record.")
+	res, err := h.ctrl.PatchCheckingRecord(c.Request.Context(), userID, accountID, recordID, req)
+	if err != nil {
+		h.handleError(c, err)
 		return
 	}
 
-	c.JSON(http.StatusOK, models.CheckingRecordResponse{
-		ID:          existing.ID,
-		AccountID:   existing.AccountID,
-		Value:       existing.Value,
-		DateSent:    existing.DateSent,
-		DateCleared: existing.DateCleared,
-		Entity:      existing.Entity,
-		Description: existing.Description,
-		CreatedAt:   existing.CreatedAt,
-		UpdatedAt:   existing.UpdatedAt,
-	})
+	c.JSON(http.StatusOK, res)
 }
 
 // DeleteCheckingRecord handles DELETE /api/v1/accounts/{accountId}/checking-records/{recordId}
 func (h *Handler) DeleteCheckingRecord(c *gin.Context) {
-	accountID := c.Param("accountId")
-	if _, ok := h.verifyCheckingAccount(c, accountID); !ok {
+	userID, ok := h.getUserID(c)
+	if !ok {
 		return
 	}
-
+	accountID := c.Param("accountId")
 	recordID := c.Param("recordId")
-	if err := h.repo.DeleteCheckingRecord(c.Request.Context(), accountID, recordID); err != nil {
-		if errors.Is(err, repository.ErrNotFound) {
-			h.sendError(c, http.StatusNotFound, "RECORD_NOT_FOUND", "Checking record not found.")
-			return
-		}
-		h.sendError(c, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to delete record.")
+
+	if err := h.ctrl.DeleteCheckingRecord(c.Request.Context(), userID, accountID, recordID); err != nil {
+		h.handleError(c, err)
 		return
 	}
 

@@ -11,6 +11,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/plannedwallet/internal/auth"
+	"github.com/plannedwallet/internal/controller"
 	"github.com/plannedwallet/internal/handlers"
 	"github.com/plannedwallet/internal/models"
 	"github.com/plannedwallet/internal/repository"
@@ -23,7 +24,8 @@ func setupTestRouter() (*gin.Engine, *handlers.Handler) {
 
 	repo := repository.NewMemoryRepository()
 	authService := auth.NewService("test-secret-key-12345", 3600)
-	h := handlers.NewHandler(repo, authService)
+	ctrl := controller.NewController(repo, authService)
+	h := handlers.NewHandler(ctrl, authService)
 	h.RegisterRoutes(r)
 	return r, h
 }
@@ -124,18 +126,33 @@ func TestUserRegistrationAndAuthentication(t *testing.T) {
 		t.Fatalf("expected 409, got %d: %s", wDup.Code, wDup.Body.String())
 	}
 
-	// 3. Validation failure: short password (400)
-	shortPwBody, _ := json.Marshal(models.UserRegistrationRequest{
-		Username: "bob_builder",
-		Email:    "bob@example.com",
-		Password: "short",
-	})
-	reqShort := httptest.NewRequest(http.MethodPost, "/api/v1/users", bytes.NewReader(shortPwBody))
-	reqShort.Header.Set("Content-Type", "application/json")
-	wShort := httptest.NewRecorder()
-	r.ServeHTTP(wShort, reqShort)
-	if wShort.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400 for short password, got %d: %s", wShort.Code, wShort.Body.String())
+	// 3. Password rules enforcement (400)
+	invalidPasswords := []struct {
+		desc string
+		pw   string
+	}{
+		{"less than 10 characters", "Short1!"},
+		{"no uppercase", "lowercase123!"},
+		{"no lowercase", "UPPERCASE123!"},
+		{"no number", "NoNumbersHere!"},
+		{"no special character", "NoSpecialChar123"},
+	}
+
+	for _, tc := range invalidPasswords {
+		t.Run("password_"+tc.desc, func(t *testing.T) {
+			badPwBody, _ := json.Marshal(models.UserRegistrationRequest{
+				Username: "bob_builder",
+				Email:    "bob@example.com",
+				Password: tc.pw,
+			})
+			reqBadPw := httptest.NewRequest(http.MethodPost, "/api/v1/users", bytes.NewReader(badPwBody))
+			reqBadPw.Header.Set("Content-Type", "application/json")
+			wBadPw := httptest.NewRecorder()
+			r.ServeHTTP(wBadPw, reqBadPw)
+			if wBadPw.Code != http.StatusBadRequest {
+				t.Fatalf("expected 400 for password rule (%s), got %d: %s", tc.desc, wBadPw.Code, wBadPw.Body.String())
+			}
+		})
 	}
 
 	// 4. Token exchange success (200)

@@ -1,10 +1,6 @@
-// Package handlers implements HTTP request routing, input validation, and RESTful
-// endpoint handlers for the Planned Wallet API according to schema.yml.
+// Package handlers serves as the view layer in the MVC architecture for the Planned Wallet API.
 //
-// Handlers cover:
-//   - User self-signup and profile registration.
-//   - Token exchange and credential verification for JWT authentication.
-//   - Financial account creation and type validation against supported account types.
-//   - Checking account transaction records CRUD operations (create, list with filters,
-//     read by ID, full update, partial patch for clearance status, and deletion).
+// It handles HTTP request parsing, input formatting and binding, routing,
+// delegating operations to the controller layer, and formatting HTTP JSON responses
+// and status codes according to schema.yml.
 package handlers
