@@ -1,0 +1,6 @@
+server
+plannedwallet
+*.exe
+*.test
+.git
+.gitignore
