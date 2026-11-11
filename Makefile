@@ -4,7 +4,7 @@ DATA_DIR := data
 
 refresh: stop clean start
 
-start:
+start: stop
 	mkdir -p $(DATA_DIR)
 	docker compose up -d --build
 
