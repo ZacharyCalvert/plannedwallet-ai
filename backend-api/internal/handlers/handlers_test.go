@@ -525,3 +525,26 @@ func TestSavingsAccountAPI(t *testing.T) {
 		t.Fatalf("expected 200 on savings records list, got %d: %s", wList.Code, wList.Body.String())
 	}
 }
+
+func TestCreditCardAccountAPI(t *testing.T) {
+	r, _ := setupTestRouter()
+	token := registerAndGetToken(t, r, "ccuser", "cc@example.com", "Password123!")
+	accountID := createAccount(t, r, token, "Premier Card", "credit card", "Rewards Card")
+
+	val := -75.00
+	createPayload, _ := json.Marshal(models.CheckingRecordCreateRequest{
+		Value:       &val,
+		DateSent:    "2026-11-01",
+		Entity:      "Gas Station",
+		Description: "Fuel",
+	})
+	req := newTestRequest(http.MethodPost, fmt.Sprintf("/api/v1/accounts/%s/records", accountID), bytes.NewReader(createPayload))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+token)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusCreated {
+		t.Fatalf("expected 201 on cc record create, got %d: %s", w.Code, w.Body.String())
+	}
+}

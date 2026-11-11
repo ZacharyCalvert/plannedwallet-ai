@@ -104,9 +104,14 @@ func (c *Controller) GetAccount(ctx context.Context, userID, accountID string) (
 	}, nil
 }
 
-// isCheckingOrSavingsAccount returns true if the account type supports transaction records.
-func isCheckingOrSavingsAccount(accType string) bool {
-	return accType == "checking" || accType == "savings"
+// isRecordSupportedAccount returns true if the account type supports transaction records.
+func isRecordSupportedAccount(accType string) bool {
+	switch accType {
+	case "checking", "savings", "credit card", "credit_card":
+		return true
+	default:
+		return false
+	}
 }
 
 func (c *Controller) userHasAccountAccess(ctx context.Context, account *models.Account, userID string) bool {
@@ -117,7 +122,7 @@ func (c *Controller) userHasAccountAccess(ctx context.Context, account *models.A
 	return err == nil && access != nil
 }
 
-// verifyCheckingAccount verifies that the account exists, belongs to or is accessible by the user, and is of type checking or savings.
+// verifyCheckingAccount verifies that the account exists, belongs to or is accessible by the user, and is of a supported record type.
 func (c *Controller) verifyCheckingAccount(ctx context.Context, userID, accountID string) (*models.Account, error) {
 	account, err := c.repo.GetAccountByID(ctx, accountID)
 	if err != nil {
@@ -127,7 +132,7 @@ func (c *Controller) verifyCheckingAccount(ctx context.Context, userID, accountI
 		return nil, NewAppError(http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to verify account.")
 	}
 
-	if !isCheckingOrSavingsAccount(account.Type) || !c.userHasAccountAccess(ctx, account, userID) {
+	if !isRecordSupportedAccount(account.Type) || !c.userHasAccountAccess(ctx, account, userID) {
 		return nil, ErrAccountNotFound
 	}
 

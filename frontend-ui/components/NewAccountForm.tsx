@@ -47,6 +47,7 @@ export function NewAccountForm({ token, onSuccess, onCancel }: NewAccountFormPro
           >
             <option value="checking">Checking</option>
             <option value="savings">Savings</option>
+            <option value="credit card">Credit Card</option>
           </select>
         </div>
         <div className="form-group">
@@ -59,7 +60,9 @@ export function NewAccountForm({ token, onSuccess, onCancel }: NewAccountFormPro
             onChange={(e) => setName(e.target.value)}
             placeholder={
               accountType === 'savings'
-                ? 'e.g. High Yield Emergency Savings'
+                ? 'e.g. Emergency Savings'
+                : accountType === 'credit card'
+                ? 'e.g. Preferred Rewards Card'
                 : 'e.g. Primary Everyday Checking'
             }
           />
@@ -75,6 +78,8 @@ export function NewAccountForm({ token, onSuccess, onCancel }: NewAccountFormPro
             placeholder={
               accountType === 'savings'
                 ? 'e.g. Emergency reserve and long-term savings fund'
+                : accountType === 'credit card'
+                ? 'e.g. Dining, travel, and rewards card'
                 : 'e.g. Household bills and everyday purchases'
             }
           />

@@ -17,6 +17,9 @@ func validateAccountRequest(req models.AccountCreationRequest) (string, string, 
 	accType := strings.TrimSpace(req.Type)
 	description := strings.TrimSpace(req.Description)
 
+	if accType == "credit_card" {
+		accType = "credit card"
+	}
 	if name == "" {
 		return "", "", "", NewAppError(http.StatusBadRequest, "MISSING_NAME", "Account name cannot be empty.")
 	}
@@ -41,7 +44,7 @@ func (c *Controller) grantInitialAdminAccess(ctx context.Context, accountID, use
 	_ = c.repo.GrantAccountAccess(ctx, access)
 }
 
-// CreateAccount validates account constraints and creates a new checking financial account.
+// CreateAccount validates account constraints and creates a new financial account.
 func (c *Controller) CreateAccount(ctx context.Context, userID string, req models.AccountCreationRequest) (*models.AccountResponse, error) {
 	name, accType, description, err := validateAccountRequest(req)
 	if err != nil {

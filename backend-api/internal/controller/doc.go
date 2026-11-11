@@ -9,5 +9,5 @@
 //     prior to creating user records).
 //   - Managing token exchange and credential verification with the authentication service.
 //   - Enforcing account type constraints and account ownership checks.
-//   - Orchestrating checking account transaction records CRUD operations.
+//   - Orchestrating account transaction records CRUD operations.
 package controller

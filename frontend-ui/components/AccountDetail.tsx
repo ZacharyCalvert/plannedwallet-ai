@@ -178,7 +178,7 @@ export function AccountDetail({ account, token }: AccountDetailProps) {
   // Expected balance assumes all records apply to the total value of the account
   const expectedBalance = records.reduce((sum, r) => sum + r.value, 0);
 
-  // Current balance includes only what has been given a cleared date
+  // Cleared balance includes only what has been given a cleared date
   const currentBalance = records
     .filter((r) => r.date_cleared !== null && r.date_cleared !== undefined && r.date_cleared.trim() !== '')
     .reduce((sum, r) => sum + r.value, 0);
@@ -295,7 +295,9 @@ export function AccountDetail({ account, token }: AccountDetailProps) {
         <div className="account-detail-info">
           <div className="account-title-row">
             <h2>{account.name}</h2>
-            <span className={`badge-account-type badge-${account.type}`}>{account.type}</span>
+            <span className={`badge-account-type badge-${(account.type || '').toLowerCase().replace(/\s+/g, '-')}`}>
+              {account.type}
+            </span>
           </div>
           <p className="account-desc-text">{account.description}</p>
           <p className="account-id-label">Account ID: {account.id}</p>
@@ -304,7 +306,7 @@ export function AccountDetail({ account, token }: AccountDetailProps) {
         {/* Rightmost side balances */}
         <div className="account-balances">
           <div className="balance-box current-balance-box">
-            <span className="balance-label">Current balance</span>
+            <span className="balance-label">Cleared balance</span>
             <span
               className={`balance-value ${
                 currentBalance >= 0 ? 'balance-positive' : 'balance-negative'

@@ -7,6 +7,7 @@ var ValidAccountTypes = map[string]bool{
 	"checking":    true,
 	"savings":     true,
 	"credit card": true,
+	"credit_card": true,
 	"assets":      true,
 	"snapshot":    true,
 }

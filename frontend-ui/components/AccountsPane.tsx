@@ -31,20 +31,23 @@ export function AccountsPane({
         {accounts.length === 0 ? (
           <p className="accounts-empty">No accounts yet. Click + to add one.</p>
         ) : (
-          accounts.map((acc) => (
-            <button
-              key={acc.id}
-              type="button"
-              className={`account-card ${selectedId === acc.id ? 'selected' : ''}`}
-              onClick={() => onSelectAccount(acc)}
-            >
-              <div className="account-card-header">
-                <span className="account-card-name">{acc.name}</span>
-                <span className={`badge-account-type badge-${acc.type}`}>{acc.type}</span>
-              </div>
-              <p className="account-card-desc">{acc.description}</p>
-            </button>
-          ))
+          accounts.map((acc) => {
+            const typeSlug = (acc.type || '').toLowerCase().replace(/\s+/g, '-');
+            return (
+              <button
+                key={acc.id}
+                type="button"
+                className={`account-card account-card-${typeSlug} ${selectedId === acc.id ? 'selected' : ''}`}
+                onClick={() => onSelectAccount(acc)}
+              >
+                <div className="account-card-header">
+                  <span className="account-card-name">{acc.name}</span>
+                  <span className={`badge-account-type badge-${typeSlug}`}>{acc.type}</span>
+                </div>
+                <p className="account-card-desc">{acc.description}</p>
+              </button>
+            );
+          })
         )}
       </div>
     </aside>

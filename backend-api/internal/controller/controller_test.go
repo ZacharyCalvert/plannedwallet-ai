@@ -337,3 +337,43 @@ func TestSavingsAccountWorkflow(t *testing.T) {
 		t.Errorf("unexpected record value: %v", recRes.Value)
 	}
 }
+
+func TestCreditCardAccountWorkflow(t *testing.T) {
+	ctrl, _ := setupController()
+	ctx := context.Background()
+
+	userRes, err := ctrl.RegisterUser(ctx, models.UserRegistrationRequest{
+		Username: "cc_user",
+		Email:    "cc@example.com",
+		Password: "StrongPassword99$",
+	})
+	if err != nil {
+		t.Fatalf("registration failed: %v", err)
+	}
+
+	accRes, err := ctrl.CreateAccount(ctx, userRes.ID, models.AccountCreationRequest{
+		Name:        "Rewards Credit Card",
+		Type:        "credit card",
+		Description: "Everyday rewards credit card",
+	})
+	if err != nil {
+		t.Fatalf("credit card account creation failed: %v", err)
+	}
+	if accRes.Type != "credit card" {
+		t.Errorf("expected type 'credit card', got %s", accRes.Type)
+	}
+
+	val := -120.50
+	recRes, err := ctrl.CreateCheckingRecord(ctx, userRes.ID, accRes.ID, models.CheckingRecordCreateRequest{
+		Value:       &val,
+		DateSent:    "2026-11-10",
+		Entity:      "Electronics Store",
+		Description: "Headphones purchase",
+	})
+	if err != nil {
+		t.Fatalf("record creation failed on credit card account: %v", err)
+	}
+	if recRes.Value != -120.50 {
+		t.Errorf("unexpected record value: %v", recRes.Value)
+	}
+}

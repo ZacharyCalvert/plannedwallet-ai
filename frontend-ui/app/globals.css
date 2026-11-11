@@ -14,6 +14,9 @@
   --checking-bg: #e0f2fe;
   --savings: #059669;
   --savings-bg: #d1fae5;
+  --credit-card: #e11d48;
+  --credit-card-bg: #ffe4e6;
+  --credit-card-border: #fecdd3;
 }
 
 * {
@@ -416,6 +419,8 @@ body {
 
 .badge-checking,
 .badge-savings,
+.badge-credit-card,
+.badge-credit_card,
 .badge-account-type {
   display: inline-block;
   padding: 0.15rem 0.5rem;
@@ -430,6 +435,32 @@ body {
 .badge-savings {
   background-color: var(--savings-bg);
   color: var(--savings);
+}
+
+.badge-credit-card,
+.badge-credit_card {
+  background-color: var(--credit-card-bg);
+  color: var(--credit-card);
+  border: 1px solid var(--credit-card-border);
+}
+
+.account-card-credit-card,
+.account-card-credit_card {
+  border-color: #fecdd3;
+  background-color: #fffafb;
+}
+
+.account-card-credit-card:hover,
+.account-card-credit_card:hover {
+  border-color: #fda4af;
+  background-color: #fff1f2;
+}
+
+.account-card-credit-card.selected,
+.account-card-credit_card.selected {
+  border-color: var(--credit-card);
+  background-color: #fff1f2;
+  box-shadow: 0 0 0 1px var(--credit-card);
 }
 
 /* Dashboard Main Content */
