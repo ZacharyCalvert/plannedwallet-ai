@@ -6,6 +6,7 @@ Database is postgres, with an in-memory variation for local testing.
 No functions more than 40 lines.
 No cyclomatic complexity in functions greater than 6.
 User operations / API interactions log with WC3 trace context.
+The integration tests in "itests" execute against a back-end with a completely fresh (wiped) database, every time.
 
 # 1. Project Stack
 - Tech Stack: Next.js for Front-End.  Golang for back-end.  Postgres for database.  Containers built with intent that they are deployed within a docker compose for local testing and integration testing.
