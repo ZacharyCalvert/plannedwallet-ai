@@ -7,6 +7,9 @@ async function tracedFetch(url: string, init: RequestInit = {}): Promise<Respons
   if (!headers.has('traceparent')) {
     headers.set('traceparent', traceparent);
   }
+  if (!headers.has('X-Client-ID')) {
+    headers.set('X-Client-ID', 'nextjs-static');
+  }
   logTraceInfo(traceparent, `Request: ${init.method || 'GET'} ${url}`);
 
   try {

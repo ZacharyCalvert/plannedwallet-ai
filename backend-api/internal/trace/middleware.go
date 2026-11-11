@@ -2,9 +2,12 @@ package trace
 
 import (
 	"context"
+	"net/http"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/plannedwallet/internal/models"
 )
 
 const ContextKey = "traceContext"
@@ -24,7 +27,26 @@ func logCompletion(ctx context.Context, method, path string, status int, latency
 	LogInfo(ctx, "Completed %s %s -> %d (in %v)", method, path, status, latency)
 }
 
-// Middleware injects W3C Trace Context into request context and response headers.
+func logClientTrace(ctx context.Context, tc *TraceContext, clientID string) {
+	LogInfo(ctx, "Received %s: %s", HeaderClientID, clientID)
+	LogInfo(ctx, "Trace context [trace_id=%s span_id=%s] correlated with %s: %s", tc.TraceID, tc.SpanID, HeaderClientID, clientID)
+}
+
+func enforceClientID(c *gin.Context, ctx context.Context) (string, bool) {
+	clientID := strings.TrimSpace(c.GetHeader(HeaderClientID))
+	if clientID == "" {
+		LogError(ctx, nil, "Missing or empty required %s header", HeaderClientID)
+		c.AbortWithStatusJSON(http.StatusBadRequest, models.ErrorResponse{
+			Error:     "MISSING_CLIENT_ID",
+			Message:   "Missing or invalid required X-Client-ID header.",
+			Timestamp: time.Now().UTC(),
+		})
+		return "", false
+	}
+	return clientID, true
+}
+
+// Middleware injects W3C Trace Context and enforces X-Client-ID on requests.
 func Middleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		start := time.Now()
@@ -36,6 +58,16 @@ func Middleware() gin.HandlerFunc {
 		c.Set(ContextKey, tc)
 		c.Set("traceID", tc.TraceID)
 		applyResponseHeaders(c, tc)
+
+		clientID, ok := enforceClientID(c, ctx)
+		if !ok {
+			logCompletion(ctx, c.Request.Method, c.Request.URL.Path, c.Writer.Status(), time.Since(start))
+			return
+		}
+
+		tc.ClientID = clientID
+		c.Set("clientID", clientID)
+		logClientTrace(ctx, tc, clientID)
 
 		LogInfo(ctx, "Started %s %s from %s", c.Request.Method, c.Request.URL.Path, c.ClientIP())
 

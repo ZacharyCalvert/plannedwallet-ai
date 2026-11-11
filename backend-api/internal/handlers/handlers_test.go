@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -18,6 +19,12 @@ import (
 	"github.com/plannedwallet/internal/repository"
 	"github.com/plannedwallet/internal/trace"
 )
+
+func newTestRequest(method, target string, body io.Reader) *http.Request {
+	req := httptest.NewRequest(method, target, body)
+	req.Header.Set("X-Client-ID", "test-client")
+	return req
+}
 
 func setupTestRouter() (*gin.Engine, *handlers.Handler) {
 	gin.SetMode(gin.TestMode)
@@ -35,7 +42,7 @@ func setupTestRouter() (*gin.Engine, *handlers.Handler) {
 
 func TestHelloEndpoint(t *testing.T) {
 	r, _ := setupTestRouter()
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/hello", nil)
+	req := newTestRequest(http.MethodGet, "/api/v1/hello", nil)
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 
@@ -50,6 +57,20 @@ func TestHelloEndpoint(t *testing.T) {
 	}
 }
 
+func TestMissingClientID_Rejected(t *testing.T) {
+	r, _ := setupTestRouter()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/hello", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for missing X-Client-ID, got %d", w.Code)
+	}
+	if w.Header().Get("traceparent") == "" {
+		t.Fatalf("expected traceparent header on error response")
+	}
+}
+
 func registerAndGetToken(t *testing.T, r *gin.Engine, username, email, password string) string {
 	t.Helper()
 
@@ -58,7 +79,7 @@ func registerAndGetToken(t *testing.T, r *gin.Engine, username, email, password 
 		Email:    email,
 		Password: password,
 	})
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/users", bytes.NewReader(regBody))
+	req := newTestRequest(http.MethodPost, "/api/v1/users", bytes.NewReader(regBody))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
@@ -74,7 +95,7 @@ func registerAndGetToken(t *testing.T, r *gin.Engine, username, email, password 
 		Password: password,
 		TOTPCode: totpCode,
 	})
-	tokenReq := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/api/v1/users/%s/token", username), bytes.NewReader(tokenBody))
+	tokenReq := newTestRequest(http.MethodPost, fmt.Sprintf("/api/v1/users/%s/token", username), bytes.NewReader(tokenBody))
 	tokenReq.Header.Set("Content-Type", "application/json")
 	tw := httptest.NewRecorder()
 	r.ServeHTTP(tw, tokenReq)
@@ -97,7 +118,7 @@ func createAccount(t *testing.T, r *gin.Engine, token, name, accType, descriptio
 		Type:        accType,
 		Description: description,
 	})
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/accounts", bytes.NewReader(body))
+	req := newTestRequest(http.MethodPost, "/api/v1/accounts", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+token)
 	w := httptest.NewRecorder()
@@ -124,7 +145,7 @@ func TestUserRegistration_ValidationAndConflict(t *testing.T) {
 		Email:    "alice@example.com",
 		Password: "SecurePassword123!",
 	})
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/users", bytes.NewReader(regBody))
+	req := newTestRequest(http.MethodPost, "/api/v1/users", bytes.NewReader(regBody))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
@@ -143,7 +164,7 @@ func TestUserRegistration_ValidationAndConflict(t *testing.T) {
 	}
 
 	// Duplicate registration conflict (409)
-	reqDup := httptest.NewRequest(http.MethodPost, "/api/v1/users", bytes.NewReader(regBody))
+	reqDup := newTestRequest(http.MethodPost, "/api/v1/users", bytes.NewReader(regBody))
 	reqDup.Header.Set("Content-Type", "application/json")
 	wDup := httptest.NewRecorder()
 	r.ServeHTTP(wDup, reqDup)
@@ -173,7 +194,7 @@ func TestUserRegistration_PasswordRules(t *testing.T) {
 				Email:    "bob@example.com",
 				Password: tc.pw,
 			})
-			reqBadPw := httptest.NewRequest(http.MethodPost, "/api/v1/users", bytes.NewReader(badPwBody))
+			reqBadPw := newTestRequest(http.MethodPost, "/api/v1/users", bytes.NewReader(badPwBody))
 			reqBadPw.Header.Set("Content-Type", "application/json")
 			wBadPw := httptest.NewRecorder()
 			r.ServeHTTP(wBadPw, reqBadPw)
@@ -192,7 +213,7 @@ func TestTokenExchange_TOTPAndAuthentication(t *testing.T) {
 		Email:    "auth_user@example.com",
 		Password: "SecurePassword123!",
 	})
-	reqReg := httptest.NewRequest(http.MethodPost, "/api/v1/users", bytes.NewReader(regBody))
+	reqReg := newTestRequest(http.MethodPost, "/api/v1/users", bytes.NewReader(regBody))
 	reqReg.Header.Set("Content-Type", "application/json")
 	wReg := httptest.NewRecorder()
 	r.ServeHTTP(wReg, reqReg)
@@ -206,7 +227,7 @@ func TestTokenExchange_TOTPAndAuthentication(t *testing.T) {
 		Password: "SecurePassword123!",
 		TOTPCode: totpCode,
 	})
-	reqTok := httptest.NewRequest(http.MethodPost, "/api/v1/users/auth_user/token", bytes.NewReader(tokBody))
+	reqTok := newTestRequest(http.MethodPost, "/api/v1/users/auth_user/token", bytes.NewReader(tokBody))
 	reqTok.Header.Set("Content-Type", "application/json")
 	wTok := httptest.NewRecorder()
 	r.ServeHTTP(wTok, reqTok)
@@ -219,7 +240,7 @@ func TestTokenExchange_TOTPAndAuthentication(t *testing.T) {
 		Password: "SecurePassword123!",
 		TOTPCode: "000000",
 	})
-	reqBadTotp := httptest.NewRequest(http.MethodPost, "/api/v1/users/auth_user/token", bytes.NewReader(badTotpBody))
+	reqBadTotp := newTestRequest(http.MethodPost, "/api/v1/users/auth_user/token", bytes.NewReader(badTotpBody))
 	reqBadTotp.Header.Set("Content-Type", "application/json")
 	wBadTotp := httptest.NewRecorder()
 	r.ServeHTTP(wBadTotp, reqBadTotp)
@@ -238,7 +259,7 @@ func TestAccountCreation(t *testing.T) {
 		Type:        "checking",
 		Description: "Primary Checking",
 	})
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/accounts", bytes.NewReader(body))
+	req := newTestRequest(http.MethodPost, "/api/v1/accounts", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+token)
 	w := httptest.NewRecorder()
@@ -262,7 +283,7 @@ func TestAccountCreation(t *testing.T) {
 		Type:        "checking",
 		Description: "Primary Checking",
 	})
-	reqMissingName := httptest.NewRequest(http.MethodPost, "/api/v1/accounts", bytes.NewReader(missingNameBody))
+	reqMissingName := newTestRequest(http.MethodPost, "/api/v1/accounts", bytes.NewReader(missingNameBody))
 	reqMissingName.Header.Set("Content-Type", "application/json")
 	reqMissingName.Header.Set("Authorization", "Bearer "+token)
 	wMissingName := httptest.NewRecorder()
@@ -277,7 +298,7 @@ func TestAccountCreation(t *testing.T) {
 		Type:        "unsupported_type",
 		Description: "Bad Account",
 	})
-	reqBad := httptest.NewRequest(http.MethodPost, "/api/v1/accounts", bytes.NewReader(badBody))
+	reqBad := newTestRequest(http.MethodPost, "/api/v1/accounts", bytes.NewReader(badBody))
 	reqBad.Header.Set("Content-Type", "application/json")
 	reqBad.Header.Set("Authorization", "Bearer "+token)
 	wBad := httptest.NewRecorder()
@@ -287,7 +308,7 @@ func TestAccountCreation(t *testing.T) {
 	}
 
 	// 4. Unauthorized without token (401)
-	reqNoAuth := httptest.NewRequest(http.MethodPost, "/api/v1/accounts", bytes.NewReader(body))
+	reqNoAuth := newTestRequest(http.MethodPost, "/api/v1/accounts", bytes.NewReader(body))
 	reqNoAuth.Header.Set("Content-Type", "application/json")
 	wNoAuth := httptest.NewRecorder()
 	r.ServeHTTP(wNoAuth, reqNoAuth)
@@ -301,7 +322,7 @@ func TestListAndGetAccounts(t *testing.T) {
 	token := registerAndGetToken(t, r, "accuser", "accuser@example.com", "Password123!")
 	accountID := createAccount(t, r, token, "Everyday Checking", "checking", "My Everyday Checking")
 
-	listReq := httptest.NewRequest(http.MethodGet, "/api/v1/accounts", nil)
+	listReq := newTestRequest(http.MethodGet, "/api/v1/accounts", nil)
 	listReq.Header.Set("Authorization", "Bearer "+token)
 	lw := httptest.NewRecorder()
 	r.ServeHTTP(lw, listReq)
@@ -314,7 +335,7 @@ func TestListAndGetAccounts(t *testing.T) {
 		t.Fatalf("unexpected accounts list: %+v", accounts)
 	}
 
-	getReq := httptest.NewRequest(http.MethodGet, "/api/v1/accounts/"+accountID, nil)
+	getReq := newTestRequest(http.MethodGet, "/api/v1/accounts/"+accountID, nil)
 	getReq.Header.Set("Authorization", "Bearer "+token)
 	gw := httptest.NewRecorder()
 	r.ServeHTTP(gw, getReq)
@@ -337,7 +358,7 @@ func TestCheckingRecordsCRUD(t *testing.T) {
 		Entity:      "Target",
 		Description: "Household supplies",
 	})
-	req := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/api/v1/accounts/%s/checking-records", accountID), bytes.NewReader(createPayload))
+	req := newTestRequest(http.MethodPost, fmt.Sprintf("/api/v1/accounts/%s/checking-records", accountID), bytes.NewReader(createPayload))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+token)
 	w := httptest.NewRecorder()
@@ -365,7 +386,7 @@ func TestCheckingRecordsCRUD(t *testing.T) {
 		Entity:      "Employer Payroll",
 		Description: "Bi-weekly paycheck",
 	})
-	req2 := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/api/v1/accounts/%s/checking-records", accountID), bytes.NewReader(createPayload2))
+	req2 := newTestRequest(http.MethodPost, fmt.Sprintf("/api/v1/accounts/%s/checking-records", accountID), bytes.NewReader(createPayload2))
 	req2.Header.Set("Content-Type", "application/json")
 	req2.Header.Set("Authorization", "Bearer "+token)
 	w2 := httptest.NewRecorder()
@@ -375,7 +396,7 @@ func TestCheckingRecordsCRUD(t *testing.T) {
 	}
 
 	// 3. List checking records (unfiltered)
-	listReq := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/api/v1/accounts/%s/checking-records", accountID), nil)
+	listReq := newTestRequest(http.MethodGet, fmt.Sprintf("/api/v1/accounts/%s/checking-records", accountID), nil)
 	listReq.Header.Set("Authorization", "Bearer "+token)
 	wList := httptest.NewRecorder()
 	r.ServeHTTP(wList, listReq)
@@ -389,7 +410,7 @@ func TestCheckingRecordsCRUD(t *testing.T) {
 	}
 
 	// 4. List with query filter: cleared=false
-	filterReq := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/api/v1/accounts/%s/checking-records?cleared=false", accountID), nil)
+	filterReq := newTestRequest(http.MethodGet, fmt.Sprintf("/api/v1/accounts/%s/checking-records?cleared=false", accountID), nil)
 	filterReq.Header.Set("Authorization", "Bearer "+token)
 	wFilter := httptest.NewRecorder()
 	r.ServeHTTP(wFilter, filterReq)
@@ -403,7 +424,7 @@ func TestCheckingRecordsCRUD(t *testing.T) {
 	}
 
 	// 5. Get checking record by ID
-	getReq := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/api/v1/accounts/%s/checking-records/%s", accountID, rec1.ID), nil)
+	getReq := newTestRequest(http.MethodGet, fmt.Sprintf("/api/v1/accounts/%s/checking-records/%s", accountID, rec1.ID), nil)
 	getReq.Header.Set("Authorization", "Bearer "+token)
 	wGet := httptest.NewRecorder()
 	r.ServeHTTP(wGet, getReq)
@@ -416,7 +437,7 @@ func TestCheckingRecordsCRUD(t *testing.T) {
 	patchBody, _ := json.Marshal(models.CheckingRecordPatchRequest{
 		DateCleared: &clearedDate,
 	})
-	patchReq := httptest.NewRequest(http.MethodPatch, fmt.Sprintf("/api/v1/accounts/%s/checking-records/%s", accountID, rec1.ID), bytes.NewReader(patchBody))
+	patchReq := newTestRequest(http.MethodPatch, fmt.Sprintf("/api/v1/accounts/%s/checking-records/%s", accountID, rec1.ID), bytes.NewReader(patchBody))
 	patchReq.Header.Set("Content-Type", "application/json")
 	patchReq.Header.Set("Authorization", "Bearer "+token)
 	wPatch := httptest.NewRecorder()
@@ -439,7 +460,7 @@ func TestCheckingRecordsCRUD(t *testing.T) {
 		Entity:      "Super Target Store",
 		Description: "Groceries and clothes",
 	})
-	putReq := httptest.NewRequest(http.MethodPut, fmt.Sprintf("/api/v1/accounts/%s/checking-records/%s", accountID, rec1.ID), bytes.NewReader(putBody))
+	putReq := newTestRequest(http.MethodPut, fmt.Sprintf("/api/v1/accounts/%s/checking-records/%s", accountID, rec1.ID), bytes.NewReader(putBody))
 	putReq.Header.Set("Content-Type", "application/json")
 	putReq.Header.Set("Authorization", "Bearer "+token)
 	wPut := httptest.NewRecorder()
@@ -454,7 +475,7 @@ func TestCheckingRecordsCRUD(t *testing.T) {
 	}
 
 	// 8. Delete record
-	delReq := httptest.NewRequest(http.MethodDelete, fmt.Sprintf("/api/v1/accounts/%s/checking-records/%s", accountID, rec1.ID), nil)
+	delReq := newTestRequest(http.MethodDelete, fmt.Sprintf("/api/v1/accounts/%s/checking-records/%s", accountID, rec1.ID), nil)
 	delReq.Header.Set("Authorization", "Bearer "+token)
 	wDel := httptest.NewRecorder()
 	r.ServeHTTP(wDel, delReq)
@@ -463,7 +484,7 @@ func TestCheckingRecordsCRUD(t *testing.T) {
 	}
 
 	// 9. Verify record is deleted (404)
-	getDeletedReq := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/api/v1/accounts/%s/checking-records/%s", accountID, rec1.ID), nil)
+	getDeletedReq := newTestRequest(http.MethodGet, fmt.Sprintf("/api/v1/accounts/%s/checking-records/%s", accountID, rec1.ID), nil)
 	getDeletedReq.Header.Set("Authorization", "Bearer "+token)
 	wDeleted := httptest.NewRecorder()
 	r.ServeHTTP(wDeleted, getDeletedReq)

@@ -1,6 +1,6 @@
 import re
 import pytest
-from playwright.sync_api import APIRequestContext
+from playwright.sync_api import sync_playwright, APIRequestContext
 
 TRACEPARENT_REGEX = re.compile(r"^([0-9a-f]{2})-([0-9a-f]{32})-([0-9a-f]{16})-([0-9a-f]{2})$")
 
@@ -49,3 +49,14 @@ def test_w3c_trace_context_on_error_response(api_context: APIRequestContext):
     m = TRACEPARENT_REGEX.match(traceparent)
     assert m is not None
     assert m.group(2) == custom_trace_id
+
+def test_missing_x_client_id_rejected(target_server: str):
+    """Verify backend rejects requests without X-Client-ID header with 400 Bad Request."""
+    with sync_playwright() as playwright:
+        ctx = playwright.request.new_context(base_url=target_server)
+        res = ctx.get("/api/v1/hello")
+        assert res.status == 400
+        data = res.json()
+        assert data.get("error") == "MISSING_CLIENT_ID"
+        assert res.headers.get("traceparent") is not None
+        ctx.dispose()

@@ -27,6 +27,8 @@ tags:
 
 paths:
   /api/v1/hello:
+    parameters:
+      - $ref: '#/components/parameters/XClientId'
     get:
       tags:
         - Health
@@ -41,8 +43,17 @@ paths:
               schema:
                 type: string
                 example: "world"
+        '400':
+          summary: Missing or invalid client ID
+          description: Missing or invalid required X-Client-ID header.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 
   /api/v1/users:
+    parameters:
+      - $ref: '#/components/parameters/XClientId'
     post:
       tags:
         - Users
@@ -82,6 +93,8 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
 
   /api/v1/users/{username}/token:
+    parameters:
+      - $ref: '#/components/parameters/XClientId'
     post:
       tags:
         - Authentication
@@ -135,6 +148,8 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
 
   /api/v1/accounts:
+    parameters:
+      - $ref: '#/components/parameters/XClientId'
     post:
       tags:
         - Accounts
@@ -195,6 +210,13 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/AccountResponse'
+        '400':
+          summary: Bad request
+          description: Missing or invalid required X-Client-ID header.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '401':
           summary: Unauthorized
           description: Missing, invalid, or expired JWT.
@@ -205,6 +227,7 @@ paths:
 
   /api/v1/accounts/{accountId}:
     parameters:
+      - $ref: '#/components/parameters/XClientId'
       - name: accountId
         in: path
         required: true
@@ -229,6 +252,13 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/AccountResponse'
+        '400':
+          summary: Bad request
+          description: Missing or invalid required X-Client-ID header.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '401':
           summary: Unauthorized
           content:
@@ -244,6 +274,7 @@ paths:
 
   /api/v1/accounts/{accountId}/checking-records:
     parameters:
+      - $ref: '#/components/parameters/XClientId'
       - name: accountId
         in: path
         required: true
@@ -344,6 +375,13 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/CheckingRecordResponse'
+        '400':
+          summary: Bad request
+          description: Missing or invalid required X-Client-ID header or query parameters.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '401':
           summary: Unauthorized
           description: Missing, invalid, or expired JWT.
@@ -361,6 +399,7 @@ paths:
 
   /api/v1/accounts/{accountId}/checking-records/{recordId}:
     parameters:
+      - $ref: '#/components/parameters/XClientId'
       - name: accountId
         in: path
         required: true
@@ -394,6 +433,13 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CheckingRecordResponse'
+        '400':
+          summary: Bad request
+          description: Missing or invalid required X-Client-ID header.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '401':
           summary: Unauthorized
           description: Missing, invalid, or expired JWT.
@@ -515,6 +561,13 @@ paths:
         '204':
           summary: Record deleted
           description: Record successfully deleted.
+        '400':
+          summary: Bad request
+          description: Missing or invalid required X-Client-ID header.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '401':
           summary: Unauthorized
           description: Missing, invalid, or expired JWT.
@@ -539,6 +592,16 @@ components:
       description: |
         Authenticate using a JWT issued by POST `/api/v1/users/{username}/token`.
         Provide the token in the HTTP `Authorization` header with the format: `Bearer <token>`.
+
+  parameters:
+    XClientId:
+      name: X-Client-ID
+      in: header
+      required: true
+      description: Identifier of the client application making the request, used for debugging and caller identification purposes.
+      schema:
+        type: string
+        example: "nextjs-static"
 
   schemas:
     AccountType:

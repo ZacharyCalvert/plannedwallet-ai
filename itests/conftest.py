@@ -18,7 +18,10 @@ def target_server() -> str:
 def api_context(target_server: str):
     """Provide a Playwright APIRequestContext bound to the target server."""
     with sync_playwright() as playwright:
-        request_context = playwright.request.new_context(base_url=target_server)
+        request_context = playwright.request.new_context(
+            base_url=target_server,
+            extra_http_headers={"X-Client-ID": "plawrite-itest"},
+        )
         yield request_context
         request_context.dispose()
 

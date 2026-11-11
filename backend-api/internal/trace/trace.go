@@ -13,6 +13,7 @@ import (
 const (
 	HeaderTraceparent = "traceparent"
 	HeaderTracestate  = "tracestate"
+	HeaderClientID    = "X-Client-ID"
 	DefaultVersion    = "00"
 	DefaultFlags      = "01"
 )
@@ -31,6 +32,7 @@ type TraceContext struct {
 	ParentID   string
 	TraceFlags string
 	TraceState string
+	ClientID   string
 }
 
 func (tc *TraceContext) String() string {
@@ -132,6 +134,14 @@ func FromContext(ctx context.Context) *TraceContext {
 func TraceIDFromContext(ctx context.Context) string {
 	if tc := FromContext(ctx); tc != nil {
 		return tc.TraceID
+	}
+	return ""
+}
+
+// ClientIDFromContext extracts the ClientID from context, or returns empty string.
+func ClientIDFromContext(ctx context.Context) string {
+	if tc := FromContext(ctx); tc != nil {
+		return tc.ClientID
 	}
 	return ""
 }

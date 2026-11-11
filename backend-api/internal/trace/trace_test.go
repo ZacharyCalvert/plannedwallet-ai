@@ -90,7 +90,37 @@ func TestContextCarrying(t *testing.T) {
 	}
 }
 
-func TestMiddleware(t *testing.T) {
+func TestMiddleware_WithoutTraceparent(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	r.Use(Middleware())
+
+	var capturedTraceID string
+	var capturedClientID string
+	r.GET("/test", func(c *gin.Context) {
+		capturedTraceID = TraceIDFromContext(c.Request.Context())
+		capturedClientID = ClientIDFromContext(c.Request.Context())
+		c.String(http.StatusOK, "ok")
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/test", nil)
+	req.Header.Set(HeaderClientID, "client-1")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+	if capturedClientID != "client-1" {
+		t.Errorf("expected captured client ID 'client-1', got %q", capturedClientID)
+	}
+	respTraceparent := w.Header().Get(HeaderTraceparent)
+	if respTraceparent == "" || !strings.Contains(respTraceparent, capturedTraceID) {
+		t.Errorf("expected response traceparent containing %s, got %s", capturedTraceID, respTraceparent)
+	}
+}
+
+func TestMiddleware_WithTraceparent(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
 	r.Use(Middleware())
@@ -101,22 +131,9 @@ func TestMiddleware(t *testing.T) {
 		c.String(http.StatusOK, "ok")
 	})
 
-	// 1. Without traceparent header
-	req := httptest.NewRequest(http.MethodGet, "/test", nil)
-	w := httptest.NewRecorder()
-	r.ServeHTTP(w, req)
-
-	if w.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d", w.Code)
-	}
-	respTraceparent := w.Header().Get(HeaderTraceparent)
-	if respTraceparent == "" || !strings.Contains(respTraceparent, capturedTraceID) {
-		t.Errorf("expected response traceparent containing %s, got %s", capturedTraceID, respTraceparent)
-	}
-
-	// 2. With incoming traceparent header
 	incoming := "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01"
 	req2 := httptest.NewRequest(http.MethodGet, "/test", nil)
+	req2.Header.Set(HeaderClientID, "client-2")
 	req2.Header.Set(HeaderTraceparent, incoming)
 	req2.Header.Set(HeaderTracestate, "rojo=1")
 	w2 := httptest.NewRecorder()
@@ -127,5 +144,25 @@ func TestMiddleware(t *testing.T) {
 	}
 	if w2.Header().Get(HeaderTracestate) != "rojo=1" {
 		t.Errorf("expected tracestate rojo=1, got %s", w2.Header().Get(HeaderTracestate))
+	}
+}
+
+func TestMiddleware_MissingClientID(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	r.Use(Middleware())
+	r.GET("/test", func(c *gin.Context) {
+		c.String(http.StatusOK, "ok")
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/test", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for missing client ID, got %d", w.Code)
+	}
+	if w.Header().Get(HeaderTraceparent) == "" {
+		t.Errorf("expected traceparent header in 400 response")
 	}
 }
