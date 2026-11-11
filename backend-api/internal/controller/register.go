@@ -13,6 +13,7 @@ import (
 	"github.com/plannedwallet/internal/auth"
 	"github.com/plannedwallet/internal/models"
 	"github.com/plannedwallet/internal/repository"
+	"github.com/plannedwallet/internal/trace"
 )
 
 // ValidatePassword enforces password rules:
@@ -94,19 +95,25 @@ func (c *Controller) buildNewUser(username, email, password string) (*models.Use
 // RegisterUser validates user existence, verifies password rules, generates TOTP secret, and persists user.
 func (c *Controller) RegisterUser(ctx context.Context, req models.UserRegistrationRequest) (*models.UserResponse, error) {
 	username, email := strings.TrimSpace(req.Username), strings.TrimSpace(req.Email)
+	trace.LogInfo(ctx, "Registering user: %s (email: %s)", username, email)
 	if err := ValidatePassword(req.Password); err != nil {
+		trace.LogError(ctx, err, "User registration password validation failed for %s", username)
 		return nil, err
 	}
 	if err := c.validateUserUniqueness(ctx, username, email); err != nil {
+		trace.LogError(ctx, err, "User registration uniqueness conflict for %s", username)
 		return nil, err
 	}
 	user, err := c.buildNewUser(username, email, req.Password)
 	if err != nil {
+		trace.LogError(ctx, err, "Failed to build user %s", username)
 		return nil, err
 	}
 	if err := c.persistNewUser(ctx, user); err != nil {
+		trace.LogError(ctx, err, "Failed to persist user %s", username)
 		return nil, err
 	}
+	trace.LogInfo(ctx, "User registered successfully: %s (id: %s)", user.Username, user.ID)
 	return &models.UserResponse{
 		ID:         user.ID,
 		Username:   user.Username,

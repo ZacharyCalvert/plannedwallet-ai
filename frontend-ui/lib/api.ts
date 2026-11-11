@@ -1,4 +1,28 @@
 import { Account, UserRegistrationResponse } from './types';
+import { createTraceparent, logTraceError, logTraceInfo } from './trace';
+
+async function tracedFetch(url: string, init: RequestInit = {}): Promise<Response> {
+  const traceparent = createTraceparent();
+  const headers = new Headers(init.headers || {});
+  if (!headers.has('traceparent')) {
+    headers.set('traceparent', traceparent);
+  }
+  logTraceInfo(traceparent, `Request: ${init.method || 'GET'} ${url}`);
+
+  try {
+    const res = await fetch(url, { ...init, headers });
+    const resTraceparent = res.headers.get('traceparent') || traceparent;
+    if (!res.ok) {
+      logTraceError(resTraceparent, `Response error ${res.status} for ${url}`);
+    } else {
+      logTraceInfo(resTraceparent, `Response success ${res.status} for ${url}`);
+    }
+    return res;
+  } catch (err) {
+    logTraceError(traceparent, `Network failure for ${url}:`, err);
+    throw err;
+  }
+}
 
 export async function loginUser(
   username: string,
@@ -6,7 +30,7 @@ export async function loginUser(
   totpCode: string
 ): Promise<string> {
   const url = `/api/v1/users/${encodeURIComponent(username)}/token`;
-  const res = await fetch(url, {
+  const res = await tracedFetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ password, totp_code: totpCode }),
@@ -24,7 +48,7 @@ export async function registerUser(
   email: string,
   password: string
 ): Promise<UserRegistrationResponse> {
-  const res = await fetch('/api/v1/users', {
+  const res = await tracedFetch('/api/v1/users', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ username, email, password }),
@@ -37,7 +61,7 @@ export async function registerUser(
 }
 
 export async function fetchAccounts(token: string): Promise<Account[]> {
-  const res = await fetch('/api/v1/accounts', {
+  const res = await tracedFetch('/api/v1/accounts', {
     headers: { Authorization: `Bearer ${token}` },
   });
   if (!res.ok) {
@@ -51,7 +75,7 @@ export async function createCheckingAccount(
   name: string,
   description: string
 ): Promise<Account> {
-  const res = await fetch('/api/v1/accounts', {
+  const res = await tracedFetch('/api/v1/accounts', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',

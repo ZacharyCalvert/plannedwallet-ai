@@ -1,18 +1,8 @@
-UI
-Create use cases
-Infrastructure / deployment hosting IaC
-Container build / release cycles
-Nonprod vs prod environment
-Local integration test client (fresh client, fresh database)
-Snapshot extraction of gold / silver / stocks / gas
-
-
-Brainstorm:
-
 Top features:
 all features outlined in my book (review the book):
 - X-Client-ID
-- trace-context 
+- [x] trace-context (W3C Trace Context across backend & frontend) 
+CORS support
 add / update / reconcile checking records
 snapshot account inputs - this account is worth x at this time
 asset account -> like X bitcoin / total worth of the account
@@ -46,6 +36,7 @@ text search (find record by keyword) -> text search in postgres?
 fun money / daily money based on income expectations (payroll)
 Payroll / payday features -> button to add?
 Cookie to ignore TOTP challenge ? 
+Snapshot extraction of gold / silver / stocks / gas
 
 Premium features:
 Bulk data upload (json/csv)
@@ -77,3 +68,8 @@ bitcoin / etherum
 
 Follow up:
 scale postgres / review native eventual consistency models
+
+
+Completed:
+- W3C Trace Context (traceparent, tracestate) across backend, frontend, gateway, and logs
+

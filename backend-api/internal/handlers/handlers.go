@@ -13,6 +13,7 @@ import (
 	"github.com/plannedwallet/internal/auth"
 	"github.com/plannedwallet/internal/controller"
 	"github.com/plannedwallet/internal/models"
+	"github.com/plannedwallet/internal/trace"
 )
 
 var usernameRegex = regexp.MustCompile(`^[a-zA-Z0-9_-]+$`)
@@ -32,6 +33,7 @@ func NewHandler(ctrl *controller.Controller, authService *auth.Service) *Handler
 }
 
 func (h *Handler) sendError(c *gin.Context, statusCode int, errCode, message string) {
+	trace.LogError(c.Request.Context(), nil, "Handler error [%s]: %s (status %d)", errCode, message, statusCode)
 	c.JSON(statusCode, models.ErrorResponse{
 		Error:     errCode,
 		Message:   message,
@@ -45,6 +47,7 @@ func (h *Handler) handleError(c *gin.Context, err error) {
 		h.sendError(c, appErr.Status, appErr.Code, appErr.Message)
 		return
 	}
+	trace.LogError(c.Request.Context(), err, "Internal server error")
 	h.sendError(c, http.StatusInternalServerError, "INTERNAL_ERROR", "Internal server error.")
 }
 

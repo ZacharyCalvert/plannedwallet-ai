@@ -16,11 +16,13 @@ import (
 	"github.com/plannedwallet/internal/handlers"
 	"github.com/plannedwallet/internal/models"
 	"github.com/plannedwallet/internal/repository"
+	"github.com/plannedwallet/internal/trace"
 )
 
 func setupTestRouter() (*gin.Engine, *handlers.Handler) {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
+	r.Use(trace.Middleware())
 	r.Use(gin.Recovery())
 
 	repo := repository.NewMemoryRepository()
@@ -42,6 +44,9 @@ func TestHelloEndpoint(t *testing.T) {
 	}
 	if w.Body.String() != "world" {
 		t.Fatalf("expected 'world', got %q", w.Body.String())
+	}
+	if w.Header().Get("traceparent") == "" {
+		t.Fatalf("expected traceparent header in response")
 	}
 }
 

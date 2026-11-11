@@ -13,6 +13,7 @@ import (
 	"github.com/plannedwallet/internal/database"
 	"github.com/plannedwallet/internal/handlers"
 	"github.com/plannedwallet/internal/repository"
+	"github.com/plannedwallet/internal/trace"
 )
 
 func getEnv(key, defaultVal string) string {
@@ -73,7 +74,9 @@ func main() {
 	authService := initJWTService()
 	repo := initDatabase()
 
-	r := gin.Default()
+	r := gin.New()
+	r.Use(trace.Middleware())
+	r.Use(gin.Recovery())
 	addHandlers(r, repo, authService)
 
 	log.Printf("Planned Wallet API listening on port :%s", port)

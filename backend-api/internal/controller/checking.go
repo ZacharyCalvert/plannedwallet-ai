@@ -9,6 +9,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/plannedwallet/internal/models"
+	"github.com/plannedwallet/internal/trace"
 )
 
 func validateAccountRequest(req models.AccountCreationRequest) (string, string, string, error) {
@@ -59,10 +60,12 @@ func (c *Controller) CreateAccount(ctx context.Context, userID string, req model
 	}
 
 	if err := c.repo.CreateAccount(ctx, account); err != nil {
+		trace.LogError(ctx, err, "Failed to create account %s for user %s", name, userID)
 		return nil, NewAppError(http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to create account.")
 	}
 
 	c.grantInitialAdminAccess(ctx, account.ID, userID, now)
+	trace.LogInfo(ctx, "Account created successfully: %s (id: %s) for user: %s", account.Name, account.ID, userID)
 
 	return &models.AccountResponse{
 		ID:          account.ID,
