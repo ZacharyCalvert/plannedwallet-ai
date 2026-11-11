@@ -21,3 +21,23 @@ export interface Account {
   created_at: string;
   updated_at: string;
 }
+
+export interface AccountRecord {
+  id: string;
+  account_id: string;
+  value: number;
+  date_sent: string;
+  date_cleared: string | null;
+  entity: string;
+  description?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreateRecordRequest {
+  value: number;
+  date_sent: string;
+  date_cleared?: string | null;
+  entity: string;
+  description?: string;
+}
