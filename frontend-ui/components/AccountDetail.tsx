@@ -53,6 +53,59 @@ function getAmountColorClass(amtStr: string): string {
   return num > 0 ? 'amount-text-positive' : 'amount-text-negative';
 }
 
+function isRecordCleared(r: AccountRecord): boolean {
+  return Boolean(r.date_cleared && r.date_cleared.trim() !== '');
+}
+
+function compareRecordsForDisplay(a: AccountRecord, b: AccountRecord): number {
+  const aCleared = isRecordCleared(a);
+  const bCleared = isRecordCleared(b);
+
+  // 1. Not cleared -> top priority, Cleared -> second priority
+  if (!aCleared && bCleared) {
+    return -1;
+  }
+  if (aCleared && !bCleared) {
+    return 1;
+  }
+
+  // 2. Both are Not Cleared:
+  // Sort by date sent with oldest records staying at the top.
+  // For records with the same sent date, sort by largest number at the top.
+  if (!aCleared && !bCleared) {
+    if (a.date_sent !== b.date_sent) {
+      return a.date_sent.localeCompare(b.date_sent);
+    }
+    if (a.value !== b.value) {
+      return b.value - a.value;
+    }
+    const aCreated = a.created_at || '';
+    const bCreated = b.created_at || '';
+    if (aCreated !== bCreated) {
+      return aCreated.localeCompare(bCreated);
+    }
+    return a.id.localeCompare(b.id);
+  }
+
+  // 3. Both are Cleared:
+  // Sort by date cleared with latest clear date at the top.
+  // For records with the same clear date, sort by the largest number being at the top.
+  const aDateCleared = a.date_cleared?.trim() || '';
+  const bDateCleared = b.date_cleared?.trim() || '';
+  if (aDateCleared !== bDateCleared) {
+    return bDateCleared.localeCompare(aDateCleared);
+  }
+  if (a.value !== b.value) {
+    return b.value - a.value;
+  }
+  const aCreated = a.created_at || '';
+  const bCreated = b.created_at || '';
+  if (aCreated !== bCreated) {
+    return bCreated.localeCompare(aCreated);
+  }
+  return a.id.localeCompare(b.id);
+}
+
 export function AccountDetail({ account, token }: AccountDetailProps) {
   const [records, setRecords] = useState<AccountRecord[]>([]);
   const [loading, setLoading] = useState(true);
@@ -130,41 +183,23 @@ export function AccountDetail({ account, token }: AccountDetailProps) {
     .filter((r) => r.date_cleared !== null && r.date_cleared !== undefined && r.date_cleared.trim() !== '')
     .reduce((sum, r) => sum + r.value, 0);
 
-  // Compute running balance based on prior records + current record adjustment
+  // Compute display records and running balance matching the record ordering
   const { sortedRecords, recordBalances } = useMemo(() => {
-    // 1. Sort chronologically (oldest to newest) to compute cumulative running balances
-    const chronological = [...records].sort((a, b) => {
-      if (a.date_sent !== b.date_sent) {
-        return a.date_sent.localeCompare(b.date_sent);
-      }
-      const aCreated = a.created_at || '';
-      const bCreated = b.created_at || '';
-      if (aCreated !== bCreated) {
-        return aCreated.localeCompare(bCreated);
-      }
-      return a.id.localeCompare(b.id);
-    });
+    // 1. Display order:
+    // Not cleared -> top priority (oldest date_sent first, largest value first on ties)
+    // Cleared -> second priority (latest date_cleared first, largest value first on ties)
+    const display = [...records].sort(compareRecordsForDisplay);
 
+    // 2. Balance calculations match the ordering of the records calculated bottom-up:
+    // The lowest record at the bottom reflects its own value,
+    // and balances accumulate upwards so the top record reflects all values added together.
     let runningBalance = 0;
     const balances = new Map<string, number>();
-    for (const rec of chronological) {
-      // Balance reflects last known balance based on prior records + adjustment from current record
+    for (let i = display.length - 1; i >= 0; i--) {
+      const rec = display[i];
       runningBalance += rec.value;
       balances.set(rec.id, runningBalance);
     }
-
-    // 2. Display order: most recent first (date_sent DESC, created_at DESC)
-    const display = [...records].sort((a, b) => {
-      if (a.date_sent !== b.date_sent) {
-        return b.date_sent.localeCompare(a.date_sent);
-      }
-      const aCreated = a.created_at || '';
-      const bCreated = b.created_at || '';
-      if (aCreated !== bCreated) {
-        return bCreated.localeCompare(aCreated);
-      }
-      return b.id.localeCompare(a.id);
-    });
 
     return { sortedRecords: display, recordBalances: balances };
   }, [records]);
