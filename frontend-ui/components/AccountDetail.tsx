@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { Account, AccountRecord } from '../lib/types';
+import { DateInput } from './DateInput';
 import {
   fetchAccountRecords,
   createAccountRecord,
@@ -336,24 +337,24 @@ export function AccountDetail({ account, token }: AccountDetailProps) {
             {/* 2. Sent Date */}
             <div className="field-group field-sent">
               <label htmlFor="record-sent">Sent</label>
-              <input
+              <DateInput
                 id="record-sent"
-                type="date"
                 required
+                defaultToday
                 value={dateSent}
-                onChange={(e) => setDateSent(e.target.value)}
+                onChange={setDateSent}
+                nextFieldId="record-cleared"
               />
             </div>
 
             {/* 3. Cleared Date */}
             <div className="field-group field-cleared">
               <label htmlFor="record-cleared">Cleared</label>
-              <input
+              <DateInput
                 id="record-cleared"
-                type="date"
                 value={dateCleared}
-                onChange={(e) => setDateCleared(e.target.value)}
-                placeholder="Optional"
+                onChange={setDateCleared}
+                nextFieldId="record-recipient"
               />
             </div>
 

@@ -657,6 +657,47 @@ body {
   align-items: center;
 }
 
+.date-input-wrapper {
+  position: relative;
+  width: 100%;
+  display: flex;
+  align-items: center;
+}
+
+.date-text-input {
+  width: 100%;
+  padding-right: 2.1rem !important;
+  font-variant-numeric: tabular-nums;
+}
+
+.date-calendar-btn {
+  position: absolute;
+  right: 0.5rem;
+  background: none;
+  border: none;
+  padding: 0.2rem;
+  color: #94a3b8;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.25rem;
+  transition: color 0.15s ease-in-out, background-color 0.15s ease-in-out;
+}
+
+.date-calendar-btn:hover {
+  color: var(--foreground);
+  background-color: #f1f5f9;
+}
+
+.hidden-native-date {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
+
 .currency-prefix {
   position: absolute;
   left: 0.65rem;
