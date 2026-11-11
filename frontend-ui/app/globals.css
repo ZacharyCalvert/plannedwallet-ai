@@ -539,6 +539,21 @@ body {
   color: #b91c1c;
 }
 
+.balance-zero {
+  color: #64748b;
+}
+
+.balance-cell {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  font-size: 0.9rem;
+}
+
+.td-balance {
+  font-weight: 700;
+  white-space: nowrap;
+}
+
 .balance-subtext {
   font-size: 0.7rem;
   color: #94a3b8;

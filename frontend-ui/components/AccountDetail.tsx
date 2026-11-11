@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Account, AccountRecord } from '../lib/types';
 import {
   fetchAccountRecords,
@@ -104,6 +104,45 @@ export function AccountDetail({ account, token }: AccountDetailProps) {
   const currentBalance = records
     .filter((r) => r.date_cleared !== null && r.date_cleared !== undefined && r.date_cleared.trim() !== '')
     .reduce((sum, r) => sum + r.value, 0);
+
+  // Compute running balance based on prior records + current record adjustment
+  const { sortedRecords, recordBalances } = useMemo(() => {
+    // 1. Sort chronologically (oldest to newest) to compute cumulative running balances
+    const chronological = [...records].sort((a, b) => {
+      if (a.date_sent !== b.date_sent) {
+        return a.date_sent.localeCompare(b.date_sent);
+      }
+      const aCreated = a.created_at || '';
+      const bCreated = b.created_at || '';
+      if (aCreated !== bCreated) {
+        return aCreated.localeCompare(bCreated);
+      }
+      return a.id.localeCompare(b.id);
+    });
+
+    let runningBalance = 0;
+    const balances = new Map<string, number>();
+    for (const rec of chronological) {
+      // Balance reflects last known balance based on prior records + adjustment from current record
+      runningBalance += rec.value;
+      balances.set(rec.id, runningBalance);
+    }
+
+    // 2. Display order: most recent first (date_sent DESC, created_at DESC)
+    const display = [...records].sort((a, b) => {
+      if (a.date_sent !== b.date_sent) {
+        return b.date_sent.localeCompare(a.date_sent);
+      }
+      const aCreated = a.created_at || '';
+      const bCreated = b.created_at || '';
+      if (aCreated !== bCreated) {
+        return bCreated.localeCompare(aCreated);
+      }
+      return b.id.localeCompare(a.id);
+    });
+
+    return { sortedRecords: display, recordBalances: balances };
+  }, [records]);
 
   const amountColorClass = getAmountColorClass(amount);
 
@@ -356,6 +395,7 @@ export function AccountDetail({ account, token }: AccountDetailProps) {
             <table className="records-table">
               <thead>
                 <tr>
+                  <th className="th-balance">Balance</th>
                   <th className="th-amount">Amount</th>
                   <th className="th-sent">Sent</th>
                   <th className="th-cleared">Cleared</th>
@@ -365,23 +405,39 @@ export function AccountDetail({ account, token }: AccountDetailProps) {
                 </tr>
               </thead>
               <tbody>
-                {records.length === 0 ? (
+                {sortedRecords.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="records-empty">
+                    <td colSpan={7} className="records-empty">
                       No records found for this account. Use the row above to add income or spending.
                     </td>
                   </tr>
                 ) : (
-                  records.map((rec) => {
+                  sortedRecords.map((rec) => {
                     const isPositive = rec.value > 0;
                     const isNegative = rec.value < 0;
                     const isSelected = selectedRecordId === rec.id;
+                    const recBalance = recordBalances.get(rec.id) ?? rec.value;
+                    const isBalancePositive = recBalance > 0;
+                    const isBalanceNegative = recBalance < 0;
                     return (
                       <tr
                         key={rec.id}
                         className={`record-row ${isSelected ? 'record-row-selected' : ''}`}
                         onClick={() => handleSelectRecord(rec)}
                       >
+                        <td className="td-balance">
+                          <span
+                            className={`balance-cell ${
+                              isBalancePositive
+                                ? 'balance-positive'
+                                : isBalanceNegative
+                                ? 'balance-negative'
+                                : 'balance-zero'
+                            }`}
+                          >
+                            {formatCurrency(recBalance)}
+                          </span>
+                        </td>
                         <td className="td-amount">
                           <span
                             className={`amount-badge ${
