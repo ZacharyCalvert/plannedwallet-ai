@@ -4,7 +4,7 @@ Top features:
 - [x] CORS support
 - [x] API review / plan
 - [x] Database review / plan
-add / update / reconcile checking records
+- [x] add / update / reconcile checking records
 Add credit card account types
 snapshot account inputs - this account is worth x at this time
 asset account -> like X bitcoin / total worth of the account
@@ -52,6 +52,7 @@ Earmark / planning (5k for property taxes, earmark it for savings based on month
 payment plans (like buying an iPhone split up by 12 months)
 
 Low priority:
+Add sql injection test cases
 Help text / features on hover
 Cookie retention removing need for TOTP
 Phone app - input service
