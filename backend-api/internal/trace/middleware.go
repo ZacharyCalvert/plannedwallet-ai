@@ -46,6 +46,25 @@ func enforceClientID(c *gin.Context, ctx context.Context) (string, bool) {
 	return clientID, true
 }
 
+func handleClientID(c *gin.Context, ctx context.Context, tc *TraceContext) bool {
+	if c.Request.Method == http.MethodOptions {
+		if clientID := strings.TrimSpace(c.GetHeader(HeaderClientID)); clientID != "" {
+			tc.ClientID = clientID
+			c.Set("clientID", clientID)
+			logClientTrace(ctx, tc, clientID)
+		}
+		return true
+	}
+	clientID, ok := enforceClientID(c, ctx)
+	if !ok {
+		return false
+	}
+	tc.ClientID = clientID
+	c.Set("clientID", clientID)
+	logClientTrace(ctx, tc, clientID)
+	return true
+}
+
 // Middleware injects W3C Trace Context and enforces X-Client-ID on requests.
 func Middleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -59,15 +78,10 @@ func Middleware() gin.HandlerFunc {
 		c.Set("traceID", tc.TraceID)
 		applyResponseHeaders(c, tc)
 
-		clientID, ok := enforceClientID(c, ctx)
-		if !ok {
+		if !handleClientID(c, ctx, tc) {
 			logCompletion(ctx, c.Request.Method, c.Request.URL.Path, c.Writer.Status(), time.Since(start))
 			return
 		}
-
-		tc.ClientID = clientID
-		c.Set("clientID", clientID)
-		logClientTrace(ctx, tc, clientID)
 
 		LogInfo(ctx, "Started %s %s from %s", c.Request.Method, c.Request.URL.Path, c.ClientIP())
 

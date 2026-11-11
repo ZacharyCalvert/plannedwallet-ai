@@ -10,6 +10,7 @@ import (
 
 	"github.com/plannedwallet/internal/auth"
 	"github.com/plannedwallet/internal/controller"
+	"github.com/plannedwallet/internal/cors"
 	"github.com/plannedwallet/internal/database"
 	"github.com/plannedwallet/internal/handlers"
 	"github.com/plannedwallet/internal/repository"
@@ -76,6 +77,7 @@ func main() {
 
 	r := gin.New()
 	r.Use(trace.Middleware())
+	r.Use(cors.Middleware())
 	r.Use(gin.Recovery())
 	addHandlers(r, repo, authService)
 

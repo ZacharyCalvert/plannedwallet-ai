@@ -14,6 +14,7 @@ import (
 
 	"github.com/plannedwallet/internal/auth"
 	"github.com/plannedwallet/internal/controller"
+	"github.com/plannedwallet/internal/cors"
 	"github.com/plannedwallet/internal/handlers"
 	"github.com/plannedwallet/internal/models"
 	"github.com/plannedwallet/internal/repository"
@@ -30,6 +31,7 @@ func setupTestRouter() (*gin.Engine, *handlers.Handler) {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
 	r.Use(trace.Middleware())
+	r.Use(cors.Middleware())
 	r.Use(gin.Recovery())
 
 	repo := repository.NewMemoryRepository()

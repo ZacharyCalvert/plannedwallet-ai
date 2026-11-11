@@ -1,8 +1,7 @@
 Top features:
-all features outlined in my book (review the book):
-- X-Client-ID
+- [x] X-Client-ID
 - [x] trace-context (W3C Trace Context across backend & frontend) 
-CORS support
+- [x] CORS support
 add / update / reconcile checking records
 snapshot account inputs - this account is worth x at this time
 asset account -> like X bitcoin / total worth of the account
@@ -72,4 +71,5 @@ scale postgres / review native eventual consistency models
 
 Completed:
 - W3C Trace Context (traceparent, tracestate) across backend, frontend, gateway, and logs
+- X-Client-ID header
 
