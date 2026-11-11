@@ -2,11 +2,11 @@ Top features:
 - [x] X-Client-ID
 - [x] trace-context (W3C Trace Context across backend & frontend) 
 - [x] CORS support
+API review / plan
+Database review / plan
 add / update / reconcile checking records
 snapshot account inputs - this account is worth x at this time
 asset account -> like X bitcoin / total worth of the account
-API review / plan
-Database review / plan
 
 Top priority:
 Infrastructure + auto deploy to staging
