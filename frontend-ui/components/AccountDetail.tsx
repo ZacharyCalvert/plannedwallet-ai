@@ -62,6 +62,26 @@ export function AccountDetail({ account, token }: AccountDetailProps) {
 
   // Ref to the amount input for focusing after submitting or canceling
   const amountInputRef = useRef<HTMLInputElement>(null);
+  const [focusCounter, setFocusCounter] = useState(0);
+
+  const focusAmountInput = () => {
+    if (amountInputRef.current) {
+      amountInputRef.current.focus();
+      amountInputRef.current.select();
+    }
+  };
+
+  useEffect(() => {
+    if (focusCounter > 0) {
+      focusAmountInput();
+      const raf = requestAnimationFrame(focusAmountInput);
+      const timer = setTimeout(focusAmountInput, 60);
+      return () => {
+        cancelAnimationFrame(raf);
+        clearTimeout(timer);
+      };
+    }
+  }, [focusCounter]);
 
   // Record entry/edit fields: amount, sent, cleared, Recipient, description
   const [amount, setAmount] = useState('');
@@ -98,9 +118,7 @@ export function AccountDetail({ account, token }: AccountDetailProps) {
   useEffect(() => {
     loadRecords();
     resetForm();
-    setTimeout(() => {
-      amountInputRef.current?.focus();
-    }, 0);
+    setFocusCounter((c) => c + 1);
   }, [account.id, token]);
 
   // Expected balance assumes all records apply to the total value of the account
@@ -160,17 +178,12 @@ export function AccountDetail({ account, token }: AccountDetailProps) {
     setRecipient(rec.entity);
     setDescription(rec.description || '');
     setFormError('');
-    setTimeout(() => {
-      amountInputRef.current?.focus();
-      amountInputRef.current?.select();
-    }, 0);
+    setFocusCounter((c) => c + 1);
   };
 
   const handleCancelEdit = () => {
     resetForm();
-    setTimeout(() => {
-      amountInputRef.current?.focus();
-    }, 0);
+    setFocusCounter((c) => c + 1);
   };
 
   const handleFormSubmit = async (e: React.FormEvent) => {
@@ -180,7 +193,7 @@ export function AccountDetail({ account, token }: AccountDetailProps) {
     const parsedAmount = parseAmount(amount);
     if (isNaN(parsedAmount) || parsedAmount === 0) {
       setFormError('Please enter a valid non-zero amount (positive for income, negative for spending, e.g. 1,250.00 or -45.50).');
-      amountInputRef.current?.focus();
+      setFocusCounter((c) => c + 1);
       return;
     }
 
@@ -215,10 +228,8 @@ export function AccountDetail({ account, token }: AccountDetailProps) {
         resetForm();
       }
 
-      // Move cursor focus back to Amount input for the next new record
-      setTimeout(() => {
-        amountInputRef.current?.focus();
-      }, 0);
+      // Move cursor focus back to Amount input box for the next new record
+      setFocusCounter((c) => c + 1);
     } catch (err: unknown) {
       setFormError(err instanceof Error ? err.message : 'Failed to save record');
     } finally {
@@ -378,6 +389,7 @@ export function AccountDetail({ account, token }: AccountDetailProps) {
               type="submit"
               className="btn-primary btn-add-record"
               disabled={submitting}
+              onMouseDown={(e) => e.preventDefault()}
             >
               {submitting
                 ? selectedRecordId
@@ -392,6 +404,7 @@ export function AccountDetail({ account, token }: AccountDetailProps) {
                 type="button"
                 className="btn-secondary btn-cancel-edit"
                 onClick={handleCancelEdit}
+                onMouseDown={(e) => e.preventDefault()}
                 disabled={submitting}
               >
                 Cancel
