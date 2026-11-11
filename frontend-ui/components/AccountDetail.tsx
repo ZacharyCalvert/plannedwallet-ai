@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { Account, AccountRecord } from '../lib/types';
 import {
   fetchAccountRecords,
@@ -60,6 +60,9 @@ export function AccountDetail({ account, token }: AccountDetailProps) {
   // Selected record for edit mode (null means New Record mode)
   const [selectedRecordId, setSelectedRecordId] = useState<string | null>(null);
 
+  // Ref to the amount input for focusing after submitting or canceling
+  const amountInputRef = useRef<HTMLInputElement>(null);
+
   // Record entry/edit fields: amount, sent, cleared, Recipient, description
   const [amount, setAmount] = useState('');
   const [dateSent, setDateSent] = useState(getTodayDateString());
@@ -95,6 +98,9 @@ export function AccountDetail({ account, token }: AccountDetailProps) {
   useEffect(() => {
     loadRecords();
     resetForm();
+    setTimeout(() => {
+      amountInputRef.current?.focus();
+    }, 0);
   }, [account.id, token]);
 
   // Expected balance assumes all records apply to the total value of the account
@@ -154,10 +160,17 @@ export function AccountDetail({ account, token }: AccountDetailProps) {
     setRecipient(rec.entity);
     setDescription(rec.description || '');
     setFormError('');
+    setTimeout(() => {
+      amountInputRef.current?.focus();
+      amountInputRef.current?.select();
+    }, 0);
   };
 
   const handleCancelEdit = () => {
     resetForm();
+    setTimeout(() => {
+      amountInputRef.current?.focus();
+    }, 0);
   };
 
   const handleFormSubmit = async (e: React.FormEvent) => {
@@ -167,6 +180,7 @@ export function AccountDetail({ account, token }: AccountDetailProps) {
     const parsedAmount = parseAmount(amount);
     if (isNaN(parsedAmount) || parsedAmount === 0) {
       setFormError('Please enter a valid non-zero amount (positive for income, negative for spending, e.g. 1,250.00 or -45.50).');
+      amountInputRef.current?.focus();
       return;
     }
 
@@ -200,6 +214,11 @@ export function AccountDetail({ account, token }: AccountDetailProps) {
         setRecords((prev) => [newRecord, ...prev]);
         resetForm();
       }
+
+      // Move cursor focus back to Amount input for the next new record
+      setTimeout(() => {
+        amountInputRef.current?.focus();
+      }, 0);
     } catch (err: unknown) {
       setFormError(err instanceof Error ? err.message : 'Failed to save record');
     } finally {
@@ -285,6 +304,7 @@ export function AccountDetail({ account, token }: AccountDetailProps) {
               <div className={`amount-input-wrapper ${amountColorClass}`}>
                 <span className={`currency-prefix ${amountColorClass}`}>$</span>
                 <input
+                  ref={amountInputRef}
                   id="record-amount"
                   type="text"
                   inputMode="decimal"
