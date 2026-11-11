@@ -494,3 +494,34 @@ func TestCheckingRecordsCRUD(t *testing.T) {
 		t.Fatalf("expected 404 for deleted record, got %d: %s", wDeleted.Code, wDeleted.Body.String())
 	}
 }
+
+func TestSavingsAccountAPI(t *testing.T) {
+	r, _ := setupTestRouter()
+	token := registerAndGetToken(t, r, "savingsuser", "savings@example.com", "Password123!")
+	accountID := createAccount(t, r, token, "High Yield Savings", "savings", "Emergency Fund")
+
+	val := 1500.00
+	createPayload, _ := json.Marshal(models.CheckingRecordCreateRequest{
+		Value:       &val,
+		DateSent:    "2026-11-01",
+		Entity:      "Deposit",
+		Description: "Initial deposit",
+	})
+	req := newTestRequest(http.MethodPost, fmt.Sprintf("/api/v1/accounts/%s/records", accountID), bytes.NewReader(createPayload))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+token)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusCreated {
+		t.Fatalf("expected 201 on savings record create, got %d: %s", w.Code, w.Body.String())
+	}
+
+	listReq := newTestRequest(http.MethodGet, fmt.Sprintf("/api/v1/accounts/%s/records", accountID), nil)
+	listReq.Header.Set("Authorization", "Bearer "+token)
+	wList := httptest.NewRecorder()
+	r.ServeHTTP(wList, listReq)
+	if wList.Code != http.StatusOK {
+		t.Fatalf("expected 200 on savings records list, got %d: %s", wList.Code, wList.Body.String())
+	}
+}

@@ -104,7 +104,20 @@ func (c *Controller) GetAccount(ctx context.Context, userID, accountID string) (
 	}, nil
 }
 
-// verifyCheckingAccount verifies that the account exists, belongs to or is accessible by the user, and is of type checking.
+// isCheckingOrSavingsAccount returns true if the account type supports transaction records.
+func isCheckingOrSavingsAccount(accType string) bool {
+	return accType == "checking" || accType == "savings"
+}
+
+func (c *Controller) userHasAccountAccess(ctx context.Context, account *models.Account, userID string) bool {
+	if account.AdminID == userID {
+		return true
+	}
+	access, err := c.repo.GetAccountAccess(ctx, account.ID, userID)
+	return err == nil && access != nil
+}
+
+// verifyCheckingAccount verifies that the account exists, belongs to or is accessible by the user, and is of type checking or savings.
 func (c *Controller) verifyCheckingAccount(ctx context.Context, userID, accountID string) (*models.Account, error) {
 	account, err := c.repo.GetAccountByID(ctx, accountID)
 	if err != nil {
@@ -114,15 +127,8 @@ func (c *Controller) verifyCheckingAccount(ctx context.Context, userID, accountI
 		return nil, NewAppError(http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to verify account.")
 	}
 
-	if account.Type != "checking" {
+	if !isCheckingOrSavingsAccount(account.Type) || !c.userHasAccountAccess(ctx, account, userID) {
 		return nil, ErrAccountNotFound
-	}
-
-	if account.AdminID != userID {
-		access, err := c.repo.GetAccountAccess(ctx, accountID, userID)
-		if err != nil || access == nil {
-			return nil, ErrAccountNotFound
-		}
 	}
 
 	return account, nil

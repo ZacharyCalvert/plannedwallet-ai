@@ -297,3 +297,43 @@ func TestAccountAccessPermissions(t *testing.T) {
 		t.Fatal("expected access denied after revocation, got nil")
 	}
 }
+
+func TestSavingsAccountWorkflow(t *testing.T) {
+	ctrl, _ := setupController()
+	ctx := context.Background()
+
+	userRes, err := ctrl.RegisterUser(ctx, models.UserRegistrationRequest{
+		Username: "savings_user",
+		Email:    "savings@example.com",
+		Password: "StrongPassword99$",
+	})
+	if err != nil {
+		t.Fatalf("registration failed: %v", err)
+	}
+
+	accRes, err := ctrl.CreateAccount(ctx, userRes.ID, models.AccountCreationRequest{
+		Name:        "Emergency Savings",
+		Type:        "savings",
+		Description: "High-yield emergency savings fund",
+	})
+	if err != nil {
+		t.Fatalf("savings account creation failed: %v", err)
+	}
+	if accRes.Type != "savings" {
+		t.Errorf("expected type savings, got %s", accRes.Type)
+	}
+
+	val := 500.00
+	recRes, err := ctrl.CreateCheckingRecord(ctx, userRes.ID, accRes.ID, models.CheckingRecordCreateRequest{
+		Value:       &val,
+		DateSent:    "2026-11-10",
+		Entity:      "Interest Payment",
+		Description: "Monthly savings interest",
+	})
+	if err != nil {
+		t.Fatalf("record creation failed on savings account: %v", err)
+	}
+	if recRes.Value != 500.00 {
+		t.Errorf("unexpected record value: %v", recRes.Value)
+	}
+}
