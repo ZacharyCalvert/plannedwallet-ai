@@ -40,7 +40,7 @@ export function AccountsPane({
             >
               <div className="account-card-header">
                 <span className="account-card-name">{acc.name}</span>
-                <span className="badge-checking">{acc.type}</span>
+                <span className={`badge-account-type badge-${acc.type}`}>{acc.type}</span>
               </div>
               <p className="account-card-desc">{acc.description}</p>
             </button>

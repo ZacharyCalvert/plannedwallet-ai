@@ -60,7 +60,7 @@ export function Dashboard({ session }: DashboardProps) {
           <AccountDetail account={selected} token={session.token} />
         ) : (
           <div className="card empty-prompt">
-            <p>Select an account from the left pane or click <strong>+</strong> to create a checking account.</p>
+            <p>Select an account from the left pane or click <strong>+</strong> to create an account.</p>
           </div>
         )}
       </main>

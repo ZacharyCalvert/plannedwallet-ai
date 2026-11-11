@@ -5,6 +5,7 @@ Top features:
 - [x] API review / plan
 - [x] Database review / plan
 add / update / reconcile checking records
+Add credit card account types
 snapshot account inputs - this account is worth x at this time
 asset account -> like X bitcoin / total worth of the account
 

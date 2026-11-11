@@ -73,9 +73,10 @@ export async function fetchAccounts(token: string): Promise<Account[]> {
   return res.json();
 }
 
-export async function createCheckingAccount(
+export async function createAccount(
   token: string,
   name: string,
+  type: string,
   description: string
 ): Promise<Account> {
   const res = await tracedFetch('/api/v1/accounts', {
@@ -84,13 +85,21 @@ export async function createCheckingAccount(
       'Content-Type': 'application/json',
       Authorization: `Bearer ${token}`,
     },
-    body: JSON.stringify({ name, type: 'checking', description }),
+    body: JSON.stringify({ name, type, description }),
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
     throw new Error(err.message || 'Failed to create account');
   }
   return res.json();
+}
+
+export async function createCheckingAccount(
+  token: string,
+  name: string,
+  description: string
+): Promise<Account> {
+  return createAccount(token, name, 'checking', description);
 }
 
 export async function fetchAccountRecords(

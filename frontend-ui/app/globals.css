@@ -12,6 +12,8 @@
   --danger-bg: #fee2e2;
   --checking: #0284c7;
   --checking-bg: #e0f2fe;
+  --savings: #059669;
+  --savings-bg: #d1fae5;
 }
 
 * {
@@ -147,6 +149,7 @@ body {
 }
 
 .form-group input,
+.form-group select,
 .form-group textarea {
   width: 100%;
   padding: 0.6rem 0.75rem;
@@ -155,9 +158,11 @@ body {
   font-size: 0.95rem;
   font-family: inherit;
   transition: border-color 0.15s ease-in-out;
+  background-color: #ffffff;
 }
 
 .form-group input:focus,
+.form-group select:focus,
 .form-group textarea:focus {
   outline: none;
   border-color: var(--primary);
@@ -409,7 +414,9 @@ body {
   white-space: nowrap;
 }
 
-.badge-checking {
+.badge-checking,
+.badge-savings,
+.badge-account-type {
   display: inline-block;
   padding: 0.15rem 0.5rem;
   border-radius: 9999px;
@@ -418,6 +425,11 @@ body {
   background-color: var(--checking-bg);
   color: var(--checking);
   text-transform: capitalize;
+}
+
+.badge-savings {
+  background-color: var(--savings-bg);
+  color: var(--savings);
 }
 
 /* Dashboard Main Content */

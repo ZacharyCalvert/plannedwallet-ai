@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { createCheckingAccount } from '../lib/api';
+import { createAccount } from '../lib/api';
 import { Account } from '../lib/types';
 
 interface NewAccountFormProps {
@@ -12,6 +12,7 @@ interface NewAccountFormProps {
 
 export function NewAccountForm({ token, onSuccess, onCancel }: NewAccountFormProps) {
   const [name, setName] = useState('');
+  const [accountType, setAccountType] = useState('checking');
   const [description, setDescription] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -21,7 +22,7 @@ export function NewAccountForm({ token, onSuccess, onCancel }: NewAccountFormPro
     setError('');
     setLoading(true);
     try {
-      const created = await createCheckingAccount(token, name.trim(), description.trim());
+      const created = await createAccount(token, name.trim(), accountType, description.trim());
       onSuccess(created);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to create account');
@@ -34,10 +35,20 @@ export function NewAccountForm({ token, onSuccess, onCancel }: NewAccountFormPro
     <div className="card new-account-card">
       <div className="new-account-header">
         <h3>Create New Account</h3>
-        <span className="badge-checking">Checking Only</span>
       </div>
       {error && <div className="alert-error">{error}</div>}
       <form onSubmit={handleSubmit}>
+        <div className="form-group">
+          <label htmlFor="account-type">Account Type</label>
+          <select
+            id="account-type"
+            value={accountType}
+            onChange={(e) => setAccountType(e.target.value)}
+          >
+            <option value="checking">Checking</option>
+            <option value="savings">Savings</option>
+          </select>
+        </div>
         <div className="form-group">
           <label htmlFor="account-name">Account Name</label>
           <input
@@ -46,13 +57,12 @@ export function NewAccountForm({ token, onSuccess, onCancel }: NewAccountFormPro
             required
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="e.g. Primary Everyday Checking"
+            placeholder={
+              accountType === 'savings'
+                ? 'e.g. High Yield Emergency Savings'
+                : 'e.g. Primary Everyday Checking'
+            }
           />
-        </div>
-        <div className="form-group">
-          <label htmlFor="account-type">Account Type</label>
-          <input id="account-type" type="text" value="checking" disabled readOnly />
-          <p className="form-hint">Currently, only checking accounts are supported.</p>
         </div>
         <div className="form-group">
           <label htmlFor="account-desc">Description</label>
@@ -62,7 +72,11 @@ export function NewAccountForm({ token, onSuccess, onCancel }: NewAccountFormPro
             rows={3}
             value={description}
             onChange={(e) => setDescription(e.target.value)}
-            placeholder="e.g. Household bills and everyday purchases"
+            placeholder={
+              accountType === 'savings'
+                ? 'e.g. Emergency reserve and long-term savings fund'
+                : 'e.g. Household bills and everyday purchases'
+            }
           />
         </div>
         <div className="form-actions">

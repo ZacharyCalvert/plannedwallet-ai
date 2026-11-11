@@ -295,7 +295,7 @@ export function AccountDetail({ account, token }: AccountDetailProps) {
         <div className="account-detail-info">
           <div className="account-title-row">
             <h2>{account.name}</h2>
-            <span className="badge-checking">{account.type}</span>
+            <span className={`badge-account-type badge-${account.type}`}>{account.type}</span>
           </div>
           <p className="account-desc-text">{account.description}</p>
           <p className="account-id-label">Account ID: {account.id}</p>
@@ -337,7 +337,7 @@ export function AccountDetail({ account, token }: AccountDetailProps) {
           <span className="section-subtitle">
             {selectedRecordId
               ? 'Update record details or set cleared date'
-              : 'Add income (+) or spending (-) to this checking account'}
+              : 'Add income (+) or spending (-) to this account'}
           </span>
         </div>
 
