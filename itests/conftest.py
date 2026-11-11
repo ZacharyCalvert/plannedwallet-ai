@@ -15,15 +15,27 @@ def target_server() -> str:
     return server
 
 @pytest.fixture(scope="session")
-def api_context(target_server: str):
-    """Provide a Playwright APIRequestContext bound to the target server."""
+def playwright_instance():
+    """Provide a session-scoped Playwright instance."""
     with sync_playwright() as playwright:
-        request_context = playwright.request.new_context(
-            base_url=target_server,
-            extra_http_headers={"X-Client-ID": "plawrite-itest"},
-        )
-        yield request_context
-        request_context.dispose()
+        yield playwright
+
+@pytest.fixture(scope="session")
+def api_context(playwright_instance, target_server: str):
+    """Provide a Playwright APIRequestContext bound to the target server."""
+    request_context = playwright_instance.request.new_context(
+        base_url=target_server,
+        extra_http_headers={"X-Client-ID": "plawrite-itest"},
+    )
+    yield request_context
+    request_context.dispose()
+
+@pytest.fixture
+def raw_context(playwright_instance, target_server: str):
+    """Provide a fresh Playwright APIRequestContext without pre-configured headers."""
+    ctx = playwright_instance.request.new_context(base_url=target_server)
+    yield ctx
+    ctx.dispose()
 
 def decode_jwt_unverified(token: str) -> dict:
     """Decode JWT payload without verifying signature for assertion checks."""
