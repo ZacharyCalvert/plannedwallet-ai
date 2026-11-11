@@ -45,7 +45,7 @@ def add_checking_record(api_context: APIRequestContext, account_id: str, headers
         "description": "Weekly grocery run",
     }
     res = api_context.post(
-        f"/api/v1/accounts/{account_id}/checking-records",
+        f"/api/v1/accounts/{account_id}/records",
         data=payload,
         headers=headers,
     )
@@ -67,7 +67,7 @@ def test_create_checking_account_and_records(api_context: APIRequestContext):
     # 2. Add record to account and verify via get records API
     record = add_checking_record(api_context, account["id"], headers)
     rec_res = api_context.get(
-        f"/api/v1/accounts/{account['id']}/checking-records",
+        f"/api/v1/accounts/{account['id']}/records",
         headers=headers,
     )
     assert rec_res.status == 200, f"Get records failed: {rec_res.text()}"

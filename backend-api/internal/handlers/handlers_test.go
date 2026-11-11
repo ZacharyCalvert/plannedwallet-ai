@@ -360,7 +360,7 @@ func TestCheckingRecordsCRUD(t *testing.T) {
 		Entity:      "Target",
 		Description: "Household supplies",
 	})
-	req := newTestRequest(http.MethodPost, fmt.Sprintf("/api/v1/accounts/%s/checking-records", accountID), bytes.NewReader(createPayload))
+	req := newTestRequest(http.MethodPost, fmt.Sprintf("/api/v1/accounts/%s/records", accountID), bytes.NewReader(createPayload))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+token)
 	w := httptest.NewRecorder()
@@ -388,7 +388,7 @@ func TestCheckingRecordsCRUD(t *testing.T) {
 		Entity:      "Employer Payroll",
 		Description: "Bi-weekly paycheck",
 	})
-	req2 := newTestRequest(http.MethodPost, fmt.Sprintf("/api/v1/accounts/%s/checking-records", accountID), bytes.NewReader(createPayload2))
+	req2 := newTestRequest(http.MethodPost, fmt.Sprintf("/api/v1/accounts/%s/records", accountID), bytes.NewReader(createPayload2))
 	req2.Header.Set("Content-Type", "application/json")
 	req2.Header.Set("Authorization", "Bearer "+token)
 	w2 := httptest.NewRecorder()
@@ -398,7 +398,7 @@ func TestCheckingRecordsCRUD(t *testing.T) {
 	}
 
 	// 3. List checking records (unfiltered)
-	listReq := newTestRequest(http.MethodGet, fmt.Sprintf("/api/v1/accounts/%s/checking-records", accountID), nil)
+	listReq := newTestRequest(http.MethodGet, fmt.Sprintf("/api/v1/accounts/%s/records", accountID), nil)
 	listReq.Header.Set("Authorization", "Bearer "+token)
 	wList := httptest.NewRecorder()
 	r.ServeHTTP(wList, listReq)
@@ -412,7 +412,7 @@ func TestCheckingRecordsCRUD(t *testing.T) {
 	}
 
 	// 4. List with query filter: cleared=false
-	filterReq := newTestRequest(http.MethodGet, fmt.Sprintf("/api/v1/accounts/%s/checking-records?cleared=false", accountID), nil)
+	filterReq := newTestRequest(http.MethodGet, fmt.Sprintf("/api/v1/accounts/%s/records?cleared=false", accountID), nil)
 	filterReq.Header.Set("Authorization", "Bearer "+token)
 	wFilter := httptest.NewRecorder()
 	r.ServeHTTP(wFilter, filterReq)
@@ -426,7 +426,7 @@ func TestCheckingRecordsCRUD(t *testing.T) {
 	}
 
 	// 5. Get checking record by ID
-	getReq := newTestRequest(http.MethodGet, fmt.Sprintf("/api/v1/accounts/%s/checking-records/%s", accountID, rec1.ID), nil)
+	getReq := newTestRequest(http.MethodGet, fmt.Sprintf("/api/v1/accounts/%s/records/%s", accountID, rec1.ID), nil)
 	getReq.Header.Set("Authorization", "Bearer "+token)
 	wGet := httptest.NewRecorder()
 	r.ServeHTTP(wGet, getReq)
@@ -439,7 +439,7 @@ func TestCheckingRecordsCRUD(t *testing.T) {
 	patchBody, _ := json.Marshal(models.CheckingRecordPatchRequest{
 		DateCleared: &clearedDate,
 	})
-	patchReq := newTestRequest(http.MethodPatch, fmt.Sprintf("/api/v1/accounts/%s/checking-records/%s", accountID, rec1.ID), bytes.NewReader(patchBody))
+	patchReq := newTestRequest(http.MethodPatch, fmt.Sprintf("/api/v1/accounts/%s/records/%s", accountID, rec1.ID), bytes.NewReader(patchBody))
 	patchReq.Header.Set("Content-Type", "application/json")
 	patchReq.Header.Set("Authorization", "Bearer "+token)
 	wPatch := httptest.NewRecorder()
@@ -462,7 +462,7 @@ func TestCheckingRecordsCRUD(t *testing.T) {
 		Entity:      "Super Target Store",
 		Description: "Groceries and clothes",
 	})
-	putReq := newTestRequest(http.MethodPut, fmt.Sprintf("/api/v1/accounts/%s/checking-records/%s", accountID, rec1.ID), bytes.NewReader(putBody))
+	putReq := newTestRequest(http.MethodPut, fmt.Sprintf("/api/v1/accounts/%s/records/%s", accountID, rec1.ID), bytes.NewReader(putBody))
 	putReq.Header.Set("Content-Type", "application/json")
 	putReq.Header.Set("Authorization", "Bearer "+token)
 	wPut := httptest.NewRecorder()
@@ -477,7 +477,7 @@ func TestCheckingRecordsCRUD(t *testing.T) {
 	}
 
 	// 8. Delete record
-	delReq := newTestRequest(http.MethodDelete, fmt.Sprintf("/api/v1/accounts/%s/checking-records/%s", accountID, rec1.ID), nil)
+	delReq := newTestRequest(http.MethodDelete, fmt.Sprintf("/api/v1/accounts/%s/records/%s", accountID, rec1.ID), nil)
 	delReq.Header.Set("Authorization", "Bearer "+token)
 	wDel := httptest.NewRecorder()
 	r.ServeHTTP(wDel, delReq)
@@ -486,7 +486,7 @@ func TestCheckingRecordsCRUD(t *testing.T) {
 	}
 
 	// 9. Verify record is deleted (404)
-	getDeletedReq := newTestRequest(http.MethodGet, fmt.Sprintf("/api/v1/accounts/%s/checking-records/%s", accountID, rec1.ID), nil)
+	getDeletedReq := newTestRequest(http.MethodGet, fmt.Sprintf("/api/v1/accounts/%s/records/%s", accountID, rec1.ID), nil)
 	getDeletedReq.Header.Set("Authorization", "Bearer "+token)
 	wDeleted := httptest.NewRecorder()
 	r.ServeHTTP(wDeleted, getDeletedReq)

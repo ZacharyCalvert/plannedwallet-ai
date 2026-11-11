@@ -272,7 +272,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
-  /api/v1/accounts/{accountId}/checking-records:
+  /api/v1/accounts/{accountId}/records:
     parameters:
       - $ref: '#/components/parameters/XClientId'
       - name: accountId
@@ -397,7 +397,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
-  /api/v1/accounts/{accountId}/checking-records/{recordId}:
+  /api/v1/accounts/{accountId}/records/{recordId}:
     parameters:
       - $ref: '#/components/parameters/XClientId'
       - name: accountId

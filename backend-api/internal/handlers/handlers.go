@@ -168,7 +168,7 @@ func (h *Handler) GetAccount(c *gin.Context) {
 	c.JSON(http.StatusOK, res)
 }
 
-// CreateCheckingRecord handles POST /api/v1/accounts/{accountId}/checking-records
+// CreateCheckingRecord handles POST /api/v1/accounts/{accountId}/records
 func (h *Handler) CreateCheckingRecord(c *gin.Context) {
 	userID, ok := h.getUserID(c)
 	if !ok {
@@ -203,7 +203,7 @@ func (h *Handler) CreateCheckingRecord(c *gin.Context) {
 	c.JSON(http.StatusCreated, res)
 }
 
-// ListCheckingRecords handles GET /api/v1/accounts/{accountId}/checking-records
+// ListCheckingRecords handles GET /api/v1/accounts/{accountId}/records
 func (h *Handler) ListCheckingRecords(c *gin.Context) {
 	userID, ok := h.getUserID(c)
 	if !ok {
@@ -248,7 +248,7 @@ func (h *Handler) ListCheckingRecords(c *gin.Context) {
 	c.JSON(http.StatusOK, res)
 }
 
-// GetCheckingRecord handles GET /api/v1/accounts/{accountId}/checking-records/{recordId}
+// GetCheckingRecord handles GET /api/v1/accounts/{accountId}/records/{recordId}
 func (h *Handler) GetCheckingRecord(c *gin.Context) {
 	userID, ok := h.getUserID(c)
 	if !ok {
@@ -266,7 +266,7 @@ func (h *Handler) GetCheckingRecord(c *gin.Context) {
 	c.JSON(http.StatusOK, res)
 }
 
-// UpdateCheckingRecord handles PUT /api/v1/accounts/{accountId}/checking-records/{recordId}
+// UpdateCheckingRecord handles PUT /api/v1/accounts/{accountId}/records/{recordId}
 func (h *Handler) UpdateCheckingRecord(c *gin.Context) {
 	userID, ok := h.getUserID(c)
 	if !ok {
@@ -302,7 +302,7 @@ func (h *Handler) UpdateCheckingRecord(c *gin.Context) {
 	c.JSON(http.StatusOK, res)
 }
 
-// PatchCheckingRecord handles PATCH /api/v1/accounts/{accountId}/checking-records/{recordId}
+// PatchCheckingRecord handles PATCH /api/v1/accounts/{accountId}/records/{recordId}
 func (h *Handler) PatchCheckingRecord(c *gin.Context) {
 	userID, ok := h.getUserID(c)
 	if !ok {
@@ -339,7 +339,7 @@ func (h *Handler) PatchCheckingRecord(c *gin.Context) {
 	c.JSON(http.StatusOK, res)
 }
 
-// DeleteCheckingRecord handles DELETE /api/v1/accounts/{accountId}/checking-records/{recordId}
+// DeleteCheckingRecord handles DELETE /api/v1/accounts/{accountId}/records/{recordId}
 func (h *Handler) DeleteCheckingRecord(c *gin.Context) {
 	userID, ok := h.getUserID(c)
 	if !ok {
@@ -378,13 +378,13 @@ func (h *Handler) RegisterRoutes(r *gin.Engine) {
 			protected.GET("/accounts", h.ListAccounts)
 			protected.GET("/accounts/:accountId", h.GetAccount)
 
-			// Checking Records
-			protected.POST("/accounts/:accountId/checking-records", h.CreateCheckingRecord)
-			protected.GET("/accounts/:accountId/checking-records", h.ListCheckingRecords)
-			protected.GET("/accounts/:accountId/checking-records/:recordId", h.GetCheckingRecord)
-			protected.PUT("/accounts/:accountId/checking-records/:recordId", h.UpdateCheckingRecord)
-			protected.PATCH("/accounts/:accountId/checking-records/:recordId", h.PatchCheckingRecord)
-			protected.DELETE("/accounts/:accountId/checking-records/:recordId", h.DeleteCheckingRecord)
+			// Records
+			protected.POST("/accounts/:accountId/records", h.CreateCheckingRecord)
+			protected.GET("/accounts/:accountId/records", h.ListCheckingRecords)
+			protected.GET("/accounts/:accountId/records/:recordId", h.GetCheckingRecord)
+			protected.PUT("/accounts/:accountId/records/:recordId", h.UpdateCheckingRecord)
+			protected.PATCH("/accounts/:accountId/records/:recordId", h.PatchCheckingRecord)
+			protected.DELETE("/accounts/:accountId/records/:recordId", h.DeleteCheckingRecord)
 		}
 	}
 }
