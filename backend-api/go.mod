@@ -3,6 +3,7 @@ module github.com/plannedwallet
 go 1.19
 
 require (
+	github.com/dchest/captcha v1.1.0
 	github.com/gin-gonic/gin v1.10.0
 	github.com/golang-jwt/jwt/v5 v5.2.1
 	github.com/google/uuid v1.6.0

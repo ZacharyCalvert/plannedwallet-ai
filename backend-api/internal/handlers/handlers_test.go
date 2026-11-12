@@ -7,12 +7,14 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/gin-gonic/gin"
 
 	"github.com/plannedwallet/internal/auth"
+	"github.com/plannedwallet/internal/captcha"
 	"github.com/plannedwallet/internal/controller"
 	"github.com/plannedwallet/internal/cors"
 	"github.com/plannedwallet/internal/handlers"
@@ -35,6 +37,7 @@ func setupTestRouter() (*gin.Engine, *handlers.Handler) {
 	r.Use(gin.Recovery())
 
 	repo := repository.NewMemoryRepository()
+	captcha.SetCustomStore(captcha.NewRepoStore(repo))
 	authService := auth.NewService("test-secret-key-12345", 3600)
 	ctrl := controller.NewController(repo, authService)
 	h := handlers.NewHandler(ctrl, authService)
@@ -725,5 +728,66 @@ func TestAccountSnapshotsAPI(t *testing.T) {
 	r.ServeHTTP(wList, reqList)
 	if wList.Code != http.StatusOK {
 		t.Fatalf("expected 200 on list snapshots, got %d: %s", wList.Code, wList.Body.String())
+	}
+}
+
+func TestCaptchaEndpoints(t *testing.T) {
+	r, _ := setupTestRouter()
+
+	// 1. GET /api/v1/captcha
+	req := newTestRequest(http.MethodGet, "/api/v1/captcha", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200 from /api/v1/captcha, got %d: %s", w.Code, w.Body.String())
+	}
+	var captchaRes models.CaptchaResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &captchaRes); err != nil {
+		t.Fatalf("failed to unmarshal captcha response: %v", err)
+	}
+	if captchaRes.ID == "" || !strings.HasPrefix(captchaRes.Image, "data:image/png;base64,") {
+		t.Errorf("unexpected captcha response: %+v", captchaRes)
+	}
+
+	// 2. GET /api/v1/captcha/:id.png
+	imgReq := newTestRequest(http.MethodGet, fmt.Sprintf("/api/v1/captcha/%s.png", captchaRes.ID), nil)
+	imgW := httptest.NewRecorder()
+	r.ServeHTTP(imgW, imgReq)
+	if imgW.Code != http.StatusOK {
+		t.Fatalf("expected 200 for captcha image, got %d", imgW.Code)
+	}
+	if imgW.Header().Get("Content-Type") != "image/png" {
+		t.Errorf("expected image/png content type, got: %s", imgW.Header().Get("Content-Type"))
+	}
+
+	// 3. GET /api/v1/captcha/nonexistent.png -> 404
+	errReq := newTestRequest(http.MethodGet, "/api/v1/captcha/nonexistent.png", nil)
+	errW := httptest.NewRecorder()
+	r.ServeHTTP(errW, errReq)
+	if errW.Code != http.StatusNotFound {
+		t.Fatalf("expected 404 for invalid captcha image, got %d", errW.Code)
+	}
+}
+
+func TestRegisterWithInvalidCaptcha(t *testing.T) {
+	r, _ := setupTestRouter()
+	body, _ := json.Marshal(models.UserRegistrationRequest{
+		Username:        "captcha_user",
+		Email:           "captcha_user@example.com",
+		Password:        "Password123!",
+		CaptchaID:       "some-challenge-id",
+		CaptchaSolution: "wrong-solution",
+	})
+	req := newTestRequest(http.MethodPost, "/api/v1/users", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 on invalid captcha, got %d: %s", w.Code, w.Body.String())
+	}
+	var errRes models.ErrorResponse
+	_ = json.Unmarshal(w.Body.Bytes(), &errRes)
+	if errRes.Error != "INVALID_CAPTCHA" {
+		t.Errorf("expected INVALID_CAPTCHA error code, got %s", errRes.Error)
 	}
 }

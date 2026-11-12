@@ -95,4 +95,13 @@ CREATE TABLE IF NOT EXISTS account_snapshots (
 
 CREATE INDEX IF NOT EXISTS idx_account_snapshots_account_date ON account_snapshots(account_id, snapshot_date ASC);
 
+CREATE TABLE IF NOT EXISTS captchas (
+    id VARCHAR(64) PRIMARY KEY,
+    digits BYTEA NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_captchas_created_at ON captchas(created_at);
+
+
 

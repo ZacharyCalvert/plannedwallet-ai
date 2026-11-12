@@ -1,7 +1,7 @@
 'use client';
 
-import { useState } from 'react';
-import { registerUser } from '../lib/api';
+import { useCallback, useEffect, useState } from 'react';
+import { fetchCaptcha, registerUser } from '../lib/api';
 import { UserRegistrationResponse } from '../lib/types';
 import { TOTPSetup } from './TOTPSetup';
 
@@ -59,18 +59,67 @@ function UserFields(p: UserFieldsProps) {
   );
 }
 
+interface CaptchaFieldProps {
+  captchaImage: string;
+  solution: string;
+  onChangeSolution: (v: string) => void;
+  onRefreshCaptcha: () => void;
+  loading: boolean;
+}
+
+function CaptchaField(p: CaptchaFieldProps) {
+  return (
+    <div className="form-group captcha-group">
+      <label htmlFor="signup-captcha">Security Verification (CAPTCHA)</label>
+      <div className="captcha-display-row">
+        {p.captchaImage ? (
+          <img
+            src={p.captchaImage}
+            alt="CAPTCHA challenge code"
+            className="captcha-img"
+          />
+        ) : (
+          <div className="captcha-placeholder">Loading challenge...</div>
+        )}
+        <button
+          type="button"
+          className="btn-secondary btn-refresh-captcha"
+          onClick={p.onRefreshCaptcha}
+          disabled={p.loading}
+          title="Reload CAPTCHA challenge"
+        >
+          ↻ Refresh
+        </button>
+      </div>
+      <input
+        id="signup-captcha"
+        type="text"
+        required
+        autoComplete="off"
+        value={p.solution}
+        onChange={(e) => p.onChangeSolution(e.target.value)}
+        placeholder="Enter the 6 characters shown above"
+        className="captcha-input"
+      />
+      <p className="form-hint">Enter the characters displayed in the image to verify you are human.</p>
+    </div>
+  );
+}
+
 interface RegisterFormViewProps {
   error: string;
   loading: boolean;
   fields: UserFieldsProps;
+  captcha: CaptchaFieldProps;
   onSubmit: (e: React.FormEvent) => void;
 }
 
-function RegisterFormView({ error, loading, fields, onSubmit }: RegisterFormViewProps) {
+function RegisterFormView({ error, loading, fields, captcha, onSubmit }: RegisterFormViewProps) {
   return (
     <form className="auth-form" onSubmit={onSubmit}>
       {error && <div className="alert-error">{error}</div>}
       <UserFields {...fields} />
+      <CaptchaField {...captcha} />
       <button type="submit" className="btn-primary btn-block" disabled={loading}>
         {loading ? 'Creating Account...' : 'Continue to Two-Factor Setup'}
       </button>
@@ -82,24 +131,54 @@ function useRegistration() {
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [captchaId, setCaptchaId] = useState('');
+  const [captchaImage, setCaptchaImage] = useState('');
+  const [captchaSolution, setCaptchaSolution] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [regData, setRegData] = useState<UserRegistrationResponse | null>(null);
+
+  const loadCaptcha = useCallback(async () => {
+    try {
+      const c = await fetchCaptcha();
+      setCaptchaId(c.id);
+      setCaptchaImage(c.image);
+      setCaptchaSolution('');
+    } catch {
+      // Ignore initial load error
+    }
+  }, []);
+
+  useEffect(() => {
+    loadCaptcha();
+  }, [loadCaptcha]);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     setLoading(true);
     try {
-      setRegData(await registerUser(username.trim(), email.trim(), password));
+      const res = await registerUser(
+        username.trim(),
+        email.trim(),
+        password,
+        captchaId,
+        captchaSolution.trim()
+      );
+      setRegData(res);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Registration failed');
+      loadCaptcha();
     } finally {
       setLoading(false);
     }
   };
 
-  return { username, setUsername, email, setEmail, password, setPassword, error, loading, regData, setRegData, submit };
+  return {
+    username, setUsername, email, setEmail, password, setPassword,
+    captchaId, captchaImage, captchaSolution, setCaptchaSolution, loadCaptcha,
+    error, loading, regData, setRegData, submit,
+  };
 }
 
 export function CreateUserForm({ onSuccess }: CreateUserFormProps) {
@@ -122,5 +201,12 @@ export function CreateUserForm({ onSuccess }: CreateUserFormProps) {
     username: r.username, email: r.email, password: r.password,
     onChangeUsername: r.setUsername, onChangeEmail: r.setEmail, onChangePassword: r.setPassword,
   };
-  return <RegisterFormView error={r.error} loading={r.loading} fields={fields} onSubmit={r.submit} />;
+  const captcha = {
+    captchaImage: r.captchaImage,
+    solution: r.captchaSolution,
+    onChangeSolution: r.setCaptchaSolution,
+    onRefreshCaptcha: r.loadCaptcha,
+    loading: r.loading,
+  };
+  return <RegisterFormView error={r.error} loading={r.loading} fields={fields} captcha={captcha} onSubmit={r.submit} />;
 }

@@ -757,3 +757,46 @@ func (p *PostgresRepository) DeleteAccountSnapshot(ctx context.Context, accountI
 	}
 	return nil
 }
+
+func (p *PostgresRepository) SetCaptcha(ctx context.Context, id string, digits []byte) error {
+	query := `INSERT INTO captchas (id, digits, created_at)
+	          VALUES ($1, $2, NOW())
+	          ON CONFLICT (id) DO UPDATE SET digits = $2, created_at = NOW()`
+	_, err := p.db.ExecContext(ctx, query, id, digits)
+	return err
+}
+
+func (p *PostgresRepository) GetCaptcha(ctx context.Context, id string, clear bool) ([]byte, error) {
+	if clear {
+		query := `DELETE FROM captchas WHERE id = $1 AND created_at >= NOW() - INTERVAL '5 minutes' RETURNING digits`
+		var digits []byte
+		err := p.db.QueryRowContext(ctx, query, id).Scan(&digits)
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return nil, nil
+			}
+			return nil, err
+		}
+		return digits, nil
+	}
+	query := `SELECT digits FROM captchas WHERE id = $1 AND created_at >= NOW() - INTERVAL '5 minutes'`
+	var digits []byte
+	err := p.db.QueryRowContext(ctx, query, id).Scan(&digits)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return digits, nil
+}
+
+func (p *PostgresRepository) DeleteExpiredCaptchas(ctx context.Context, olderThan time.Duration) (int64, error) {
+	cutoff := time.Now().UTC().Add(-olderThan)
+	query := `DELETE FROM captchas WHERE created_at < $1`
+	res, err := p.db.ExecContext(ctx, query, cutoff)
+	if err != nil {
+		return 0, err
+	}
+	return res.RowsAffected()
+}

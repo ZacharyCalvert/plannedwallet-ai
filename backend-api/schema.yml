@@ -66,6 +66,77 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
+  /api/v1/captcha:
+    parameters:
+      - $ref: '#/components/parameters/XClientId'
+    get:
+      tags:
+        - Security
+      summary: Generate a CAPTCHA challenge
+      description: Generates a new visual CAPTCHA challenge to prevent automated bot registrations. Returns a unique CAPTCHA ID and a base64-encoded PNG image data URI.
+      operationId: getCaptcha
+      responses:
+        '200':
+          summary: CAPTCHA generated
+          description: CAPTCHA challenge generated successfully.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CaptchaResponse'
+        '400':
+          summary: Missing or invalid client ID
+          description: Missing or invalid required X-Client-ID header.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          summary: Generation error
+          description: Internal server error generating CAPTCHA.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/captcha/{captchaId}:
+    parameters:
+      - $ref: '#/components/parameters/XClientId'
+      - name: captchaId
+        in: path
+        required: true
+        schema:
+          type: string
+        description: Unique identifier of the CAPTCHA challenge (optionally with .png suffix).
+    get:
+      tags:
+        - Security
+      summary: Stream CAPTCHA PNG image
+      description: Retrieves the rendered PNG image directly for the specified CAPTCHA challenge ID.
+      operationId: getCaptchaImage
+      responses:
+        '200':
+          summary: CAPTCHA image
+          description: PNG image bytes for the challenge.
+          content:
+            image/png:
+              schema:
+                type: string
+                format: binary
+        '400':
+          summary: Missing or invalid client ID
+          description: Missing or invalid required X-Client-ID header.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          summary: Not found
+          description: CAPTCHA challenge not found or expired.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
   /api/v1/users:
     parameters:
       - $ref: '#/components/parameters/XClientId'
@@ -1844,6 +1915,29 @@ components:
           writeOnly: true
           description: Plaintext password provided during registration; hashed with bcrypt and salted before persistence. Must be at least 10 characters and contain at least 1 uppercase letter, 1 lowercase letter, 1 number, and 1 non-alphanumeric special character.
           example: "P@ssw0rd123!"
+        captcha_id:
+          type: string
+          description: Unique challenge ID of the CAPTCHA provided during registration.
+          example: "0kL7k9Xm..."
+        captcha_solution:
+          type: string
+          description: The 6-digit challenge solution matching the CAPTCHA image.
+          example: "123456"
+
+    CaptchaResponse:
+      type: object
+      required:
+        - id
+        - image
+      properties:
+        id:
+          type: string
+          description: Unique challenge identifier for the CAPTCHA.
+          example: "0kL7k9Xm..."
+        image:
+          type: string
+          description: Base64-encoded PNG data URI representing the challenge image.
+          example: "data:image/png;base64,iVBORw0KGgo..."
 
     UserResponse:
       type: object

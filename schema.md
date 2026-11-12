@@ -93,6 +93,13 @@ Stores manual point-in-time valuations for `snapshot` accounts.
 - **Constraint**: `CONSTRAINT uq_account_snapshots_account_date UNIQUE (account_id, snapshot_date)`
 - **Index**: `idx_account_snapshots_account_date (account_id, snapshot_date ASC)`
 
+### 1.9 `captchas`
+Shared backing store for ephemeral CAPTCHA challenges to support 12-factor stateless application instances. Expired challenges older than 5 minutes are purged on application startup and expired on retrieval.
+- `id` (VARCHAR(64), Primary Key) - Challenge identifier
+- `digits` (BYTEA, Not Null) - Challenge solution digits
+- `created_at` (TIMESTAMPTZ, Not Null, Default NOW())
+- **Index**: `idx_captchas_created_at (created_at)`
+
 ---
 
 ## 2. Account Types & Behavior
@@ -112,8 +119,10 @@ All HTTP requests require the `X-Client-ID` header. Protected endpoints require 
 ### 3.1 Health
 - `GET /api/v1/hello`: Liveness smoke test.
 
-### 3.2 Authentication & Users
-- `POST /api/v1/users`: User self-registration.
+### 3.2 Authentication, Security & Users
+- `GET /api/v1/captcha`: Generate a new visual CAPTCHA challenge (returns unique ID and base64 PNG data URI) to prevent automated bot account creations.
+- `GET /api/v1/captcha/{captchaId}`: Stream raw PNG image bytes for a CAPTCHA challenge.
+- `POST /api/v1/users`: User self-registration with password complexity, uniqueness checks, and CAPTCHA challenge verification (`captcha_id`, `captcha_solution`).
 - `POST /api/v1/users/{username}/token`: TOTP-authenticated JWT token exchange.
 
 ### 3.3 Accounts

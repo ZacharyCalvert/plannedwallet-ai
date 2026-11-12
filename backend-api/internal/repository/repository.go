@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"errors"
+	"time"
 
 	"github.com/plannedwallet/internal/models"
 )
@@ -64,4 +65,9 @@ type Repository interface {
 	ListAccountSnapshots(ctx context.Context, accountID string, startDate, endDate *string) ([]*models.AccountSnapshot, error)
 	UpdateAccountSnapshot(ctx context.Context, snapshot *models.AccountSnapshot) error
 	DeleteAccountSnapshot(ctx context.Context, accountID, snapshotID string) error
+
+	// CAPTCHA operations
+	SetCaptcha(ctx context.Context, id string, digits []byte) error
+	GetCaptcha(ctx context.Context, id string, clear bool) ([]byte, error)
+	DeleteExpiredCaptchas(ctx context.Context, olderThan time.Duration) (int64, error)
 }

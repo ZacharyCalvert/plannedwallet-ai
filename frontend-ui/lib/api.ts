@@ -2,6 +2,7 @@ import {
   Account,
   AccountRecord,
   AccountSnapshot,
+  CaptchaResponse,
   CreateRecordRequest,
   CreateSnapshotRequest,
   UpdateSnapshotRequest,
@@ -54,15 +55,29 @@ export async function loginUser(
   return data.access_token;
 }
 
+export async function fetchCaptcha(): Promise<CaptchaResponse> {
+  const res = await tracedFetch('/api/v1/captcha');
+  if (!res.ok) {
+    throw new Error('Failed to load CAPTCHA challenge');
+  }
+  return res.json();
+}
+
 export async function registerUser(
   username: string,
   email: string,
-  password: string
+  password: string,
+  captchaId?: string,
+  captchaSolution?: string
 ): Promise<UserRegistrationResponse> {
+  const payload: Record<string, string> = { username, email, password };
+  if (captchaId) payload.captcha_id = captchaId;
+  if (captchaSolution) payload.captcha_solution = captchaSolution;
+
   const res = await tracedFetch('/api/v1/users', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ username, email, password }),
+    body: JSON.stringify(payload),
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));

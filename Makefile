@@ -9,11 +9,10 @@ start: stop
 	docker compose up -d --build
 
 clean: stop
-	rm -rf ./$(DATA_DIR)
+	rm -rf ./$(DATA_DIR) || sleep 2 && docker compose down --remove-orphans && rm -rf ./$(DATA_DIR)
 
 stop:
-	docker compose down
-	sleep 5 # issues pending file locks being released
+	docker compose down --remove-orphans
 
 build: build-api build-frontend build-gateway
 

@@ -11,6 +11,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/plannedwallet/internal/auth"
+	"github.com/plannedwallet/internal/captcha"
 	"github.com/plannedwallet/internal/models"
 	"github.com/plannedwallet/internal/repository"
 	"github.com/plannedwallet/internal/trace"
@@ -92,16 +93,48 @@ func (c *Controller) buildNewUser(username, email, password string) (*models.Use
 	}, nil
 }
 
+func (c *Controller) verifyCaptcha(id, solution string) error {
+	id = strings.TrimSpace(id)
+	solution = strings.TrimSpace(solution)
+	if id == "" || solution == "" {
+		if c.requireCaptcha {
+			return ErrCaptchaRequired
+		}
+		return nil
+	}
+	if !captcha.Verify(id, solution) {
+		return ErrInvalidCaptcha
+	}
+	return nil
+}
+
+func (c *Controller) validateRegistrationInput(ctx context.Context, req models.UserRegistrationRequest) error {
+	if err := c.verifyCaptcha(req.CaptchaID, req.CaptchaSolution); err != nil {
+		return err
+	}
+	if err := ValidatePassword(req.Password); err != nil {
+		return err
+	}
+	return c.validateUserUniqueness(ctx, strings.TrimSpace(req.Username), strings.TrimSpace(req.Email))
+}
+
+func buildUserResponse(user *models.User) *models.UserResponse {
+	return &models.UserResponse{
+		ID:         user.ID,
+		Username:   user.Username,
+		Email:      user.Email,
+		TOTPSecret: user.TOTPSecret,
+		TOTPURL:    auth.BuildTOTPURL("PlannedWallet", user.Username, user.TOTPSecret),
+		CreatedAt:  user.CreatedAt,
+	}
+}
+
 // RegisterUser validates user existence, verifies password rules, generates TOTP secret, and persists user.
 func (c *Controller) RegisterUser(ctx context.Context, req models.UserRegistrationRequest) (*models.UserResponse, error) {
 	username, email := strings.TrimSpace(req.Username), strings.TrimSpace(req.Email)
 	trace.LogInfo(ctx, "Registering user: %s (email: %s)", username, email)
-	if err := ValidatePassword(req.Password); err != nil {
-		trace.LogError(ctx, err, "User registration password validation failed for %s", username)
-		return nil, err
-	}
-	if err := c.validateUserUniqueness(ctx, username, email); err != nil {
-		trace.LogError(ctx, err, "User registration uniqueness conflict for %s", username)
+	if err := c.validateRegistrationInput(ctx, req); err != nil {
+		trace.LogError(ctx, err, "User registration validation failed for %s", username)
 		return nil, err
 	}
 	user, err := c.buildNewUser(username, email, req.Password)
@@ -114,12 +147,5 @@ func (c *Controller) RegisterUser(ctx context.Context, req models.UserRegistrati
 		return nil, err
 	}
 	trace.LogInfo(ctx, "User registered successfully: %s (id: %s)", user.Username, user.ID)
-	return &models.UserResponse{
-		ID:         user.ID,
-		Username:   user.Username,
-		Email:      user.Email,
-		TOTPSecret: user.TOTPSecret,
-		TOTPURL:    auth.BuildTOTPURL("PlannedWallet", user.Username, user.TOTPSecret),
-		CreatedAt:  user.CreatedAt,
-	}, nil
+	return buildUserResponse(user), nil
 }

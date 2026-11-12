@@ -22,6 +22,12 @@ type MemoryRepository struct {
 	assetValues     map[string]*models.AssetValue     // id -> AssetValue
 	accountAssets   map[string]*models.AccountAsset   // id -> AccountAsset
 	accountSnapshots map[string]*models.AccountSnapshot // id -> AccountSnapshot
+	captchas        map[string]*memoryCaptcha         // id -> memoryCaptcha
+}
+
+type memoryCaptcha struct {
+	digits    []byte
+	createdAt time.Time
 }
 
 func NewMemoryRepository() *MemoryRepository {
@@ -36,6 +42,7 @@ func NewMemoryRepository() *MemoryRepository {
 		assetValues:     make(map[string]*models.AssetValue),
 		accountAssets:   make(map[string]*models.AccountAsset),
 		accountSnapshots: make(map[string]*models.AccountSnapshot),
+		captchas:        make(map[string]*memoryCaptcha),
 	}
 }
 
@@ -701,4 +708,51 @@ func (m *MemoryRepository) DeleteAccountSnapshot(_ context.Context, accountID, s
 	}
 	delete(m.accountSnapshots, snapshotID)
 	return nil
+}
+
+func (m *MemoryRepository) SetCaptcha(_ context.Context, id string, digits []byte) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	copied := make([]byte, len(digits))
+	copy(copied, digits)
+	m.captchas[id] = &memoryCaptcha{
+		digits:    copied,
+		createdAt: time.Now().UTC(),
+	}
+	return nil
+}
+
+func (m *MemoryRepository) GetCaptcha(_ context.Context, id string, clear bool) ([]byte, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	entry, exists := m.captchas[id]
+	if !exists || time.Since(entry.createdAt) > 5*time.Minute {
+		if exists {
+			delete(m.captchas, id)
+		}
+		return nil, nil
+	}
+	copied := make([]byte, len(entry.digits))
+	copy(copied, entry.digits)
+	if clear {
+		delete(m.captchas, id)
+	}
+	return copied, nil
+}
+
+func (m *MemoryRepository) DeleteExpiredCaptchas(_ context.Context, olderThan time.Duration) (int64, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	var count int64
+	cutoff := time.Now().UTC().Add(-olderThan)
+	for id, entry := range m.captchas {
+		if entry.createdAt.Before(cutoff) {
+			delete(m.captchas, id)
+			count++
+		}
+	}
+	return count, nil
 }

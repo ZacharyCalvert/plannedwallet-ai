@@ -29,6 +29,7 @@
 ├── backend-api/            # Golang backend microservice
 │   ├── internal/
 │   │   ├── auth/          # JWT issuing, TOTP (RFC 6238) generation and validation
+│   │   ├── captcha/       # Visual CAPTCHA challenge generation and verification
 │   │   ├── controller/    # Business logic, access control, validation (MVC controller)
 │   │   ├── cors/          # CORS origin and host validation middleware
 │   │   ├── database/      # SQL DDL migrations (init.sql) and connection pooling

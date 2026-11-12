@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"log"
 	"os"
 	"strconv"
@@ -9,6 +10,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/plannedwallet/internal/auth"
+	"github.com/plannedwallet/internal/captcha"
 	"github.com/plannedwallet/internal/controller"
 	"github.com/plannedwallet/internal/cors"
 	"github.com/plannedwallet/internal/database"
@@ -65,6 +67,9 @@ func initDatabase() repository.Repository {
 
 func addHandlers(r *gin.Engine, repo repository.Repository, authService *auth.Service) {
 	ctrl := controller.NewController(repo, authService)
+	if getEnv("REQUIRE_CAPTCHA", "false") == "true" {
+		ctrl.SetRequireCaptcha(true)
+	}
 	handler := handlers.NewHandler(ctrl, authService)
 	handler.RegisterRoutes(r)
 }
@@ -74,6 +79,11 @@ func main() {
 
 	authService := initJWTService()
 	repo := initDatabase()
+
+	captcha.SetCustomStore(captcha.NewRepoStore(repo))
+	if _, err := captcha.RunStartupCleanup(context.Background(), repo); err != nil {
+		log.Printf("Warning: Startup CAPTCHA cleanup failed: %v", err)
+	}
 
 	r := gin.New()
 	r.Use(trace.Middleware())

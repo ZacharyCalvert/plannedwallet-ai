@@ -105,6 +105,42 @@ func TestRegisterUser_PreValidationAndRules(t *testing.T) {
 	}
 }
 
+func TestRegisterUser_CaptchaEnforcement(t *testing.T) {
+	ctrl, _ := setupController()
+	ctx := context.Background()
+
+	ctrl.SetRequireCaptcha(true)
+
+	// 1. Missing captcha ID & solution when required
+	_, err := ctrl.RegisterUser(ctx, models.UserRegistrationRequest{
+		Username: "need_captcha_user",
+		Email:    "need_captcha@example.com",
+		Password: "ValidPassword123!",
+	})
+	if err == nil {
+		t.Fatal("expected error on missing captcha, got nil")
+	}
+	var appErr *controller.AppError
+	if !errors.As(err, &appErr) || appErr.Code != "CAPTCHA_REQUIRED" {
+		t.Errorf("expected CAPTCHA_REQUIRED, got %v", err)
+	}
+
+	// 2. Invalid captcha solution
+	_, err = ctrl.RegisterUser(ctx, models.UserRegistrationRequest{
+		Username:        "bad_captcha_user",
+		Email:           "bad_captcha@example.com",
+		Password:        "ValidPassword123!",
+		CaptchaID:       "dummy_id",
+		CaptchaSolution: "wrong",
+	})
+	if err == nil {
+		t.Fatal("expected error on invalid captcha, got nil")
+	}
+	if !errors.As(err, &appErr) || appErr.Code != "INVALID_CAPTCHA" {
+		t.Errorf("expected INVALID_CAPTCHA, got %v", err)
+	}
+}
+
 func TestExchangeToken_TOTP(t *testing.T) {
 	ctrl, _ := setupController()
 	ctx := context.Background()

@@ -213,3 +213,37 @@ func TestMemoryRepo_AccountSnapshotOperations(t *testing.T) {
 		t.Fatalf("failed to delete snapshot: %v", err)
 	}
 }
+
+func TestMemoryRepo_CaptchaLifecycleAndExpiration(t *testing.T) {
+	repo := repository.NewMemoryRepository()
+	ctx := context.Background()
+
+	// 1. Set and Get (clear=false)
+	digits := []byte{1, 2, 3, 4, 5, 6}
+	if err := repo.SetCaptcha(ctx, "c-1", digits); err != nil {
+		t.Fatalf("SetCaptcha failed: %v", err)
+	}
+	got, err := repo.GetCaptcha(ctx, "c-1", false)
+	if err != nil || len(got) != 6 {
+		t.Fatalf("GetCaptcha (clear=false) failed: %v, got %v", err, got)
+	}
+
+	// 2. Get (clear=true)
+	got2, err := repo.GetCaptcha(ctx, "c-1", true)
+	if err != nil || len(got2) != 6 {
+		t.Fatalf("GetCaptcha (clear=true) failed: %v, got %v", err, got2)
+	}
+
+	// 3. Subsequent Get should return nil (consumed)
+	got3, err := repo.GetCaptcha(ctx, "c-1", false)
+	if err != nil || got3 != nil {
+		t.Fatalf("expected nil for consumed captcha, got %v (%v)", got3, err)
+	}
+
+	// 4. DeleteExpiredCaptchas
+	_ = repo.SetCaptcha(ctx, "c-2", digits)
+	deleted, err := repo.DeleteExpiredCaptchas(ctx, -1*time.Second)
+	if err != nil || deleted != 1 {
+		t.Fatalf("expected 1 deleted expired captcha, got %d (%v)", deleted, err)
+	}
+}

@@ -40,18 +40,27 @@ var (
 	ErrInvalidTOTP        = NewAppError(http.StatusUnauthorized, "INVALID_TOTP", "Invalid or expired two-factor authentication code.")
 	ErrAccountNotFound    = NewAppError(http.StatusNotFound, "ACCOUNT_NOT_FOUND", "No checking account found matching the provided accountId.")
 	ErrRecordNotFound     = NewAppError(http.StatusNotFound, "RECORD_NOT_FOUND", "Checking record not found.")
+	ErrCaptchaRequired    = NewAppError(http.StatusBadRequest, "CAPTCHA_REQUIRED", "Captcha ID and solution are required.")
+	ErrInvalidCaptcha     = NewAppError(http.StatusBadRequest, "INVALID_CAPTCHA", "Invalid or expired CAPTCHA solution.")
 )
 
 type Controller struct {
-	repo repository.Repository
-	auth *auth.Service
+	repo           repository.Repository
+	auth           *auth.Service
+	requireCaptcha bool
 }
 
 func NewController(repo repository.Repository, authService *auth.Service) *Controller {
 	return &Controller{
-		repo: repo,
-		auth: authService,
+		repo:           repo,
+		auth:           authService,
+		requireCaptcha: false,
 	}
+}
+
+// SetRequireCaptcha configures whether CAPTCHA verification is required for user registration.
+func (c *Controller) SetRequireCaptcha(require bool) {
+	c.requireCaptcha = require
 }
 
 // ListAccounts retrieves all accounts accessible to the specified user.

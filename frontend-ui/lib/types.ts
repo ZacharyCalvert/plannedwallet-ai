@@ -12,6 +12,11 @@ export interface UserRegistrationResponse {
   created_at: string;
 }
 
+export interface CaptchaResponse {
+  id: string;
+  image: string;
+}
+
 export interface Account {
   id: string;
   admin_id: string;

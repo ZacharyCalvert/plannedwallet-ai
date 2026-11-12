@@ -367,6 +367,8 @@ func (h *Handler) RegisterRoutes(r *gin.Engine) {
 	{
 		// Public endpoints
 		api.GET("/hello", h.Hello)
+		api.GET("/captcha", h.GetCaptcha)
+		api.GET("/captcha/:captchaId", h.GetCaptchaImage)
 		api.POST("/users", h.RegisterUser)
 		api.POST("/users/:username/token", h.ExchangeToken)
 

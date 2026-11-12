@@ -25,9 +25,17 @@ type User struct {
 
 // UserRegistrationRequest represents the payload to register a new user.
 type UserRegistrationRequest struct {
-	Username string `json:"username" binding:"required,min=3,max=50"`
-	Email    string `json:"email" binding:"required,email,max=255"`
-	Password string `json:"password" binding:"required,min=10"`
+	Username        string `json:"username" binding:"required,min=3,max=50"`
+	Email           string `json:"email" binding:"required,email,max=255"`
+	Password        string `json:"password" binding:"required,min=10"`
+	CaptchaID       string `json:"captcha_id,omitempty"`
+	CaptchaSolution string `json:"captcha_solution,omitempty"`
+}
+
+// CaptchaResponse represents the challenge returned to the client.
+type CaptchaResponse struct {
+	ID    string `json:"id"`
+	Image string `json:"image"`
 }
 
 // UserResponse represents the public user info returned after registration.
