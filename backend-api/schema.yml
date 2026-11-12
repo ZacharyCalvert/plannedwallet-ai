@@ -21,6 +21,12 @@ tags:
   - name: Checking Records
     summary: Checking account transaction records
     description: Endpoints for adding, editing, deleting, and viewing records for checking accounts.
+  - name: Assets
+    summary: Asset definition management
+    description: Endpoints for creating, listing, updating, and deleting assets (e.g. btc, eth, silver, gold).
+  - name: Asset Values
+    summary: Asset valuation records
+    description: Endpoints for adding, viewing, updating, and deleting daily valuation assignments for assets.
   - name: Health
     summary: Service health check
     description: Smoke test and liveness endpoints.
@@ -583,6 +589,468 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
+  /api/v1/assets:
+    parameters:
+      - $ref: '#/components/parameters/XClientId'
+    post:
+      tags:
+        - Assets
+      summary: Create an asset definition
+      description: |
+        Creates a new asset definition (e.g. btc, eth, silver, gold) owned by the authenticated user.
+      operationId: createAsset
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AssetCreateRequest'
+      responses:
+        '201':
+          description: Asset created successfully.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AssetResponse'
+        '400':
+          summary: Validation error
+          description: Missing or invalid required fields.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          summary: Unauthorized
+          description: Missing, invalid, or expired JWT.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          summary: Asset conflict
+          description: An asset with this label already exists for this user or globally.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    get:
+      tags:
+        - Assets
+      summary: List assets
+      description: |
+        Retrieves assets accessible to the authenticated user (user assets + global system assets).
+        Supports optional filtering by label.
+      operationId: listAssets
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: label
+          in: query
+          required: false
+          description: Filter assets by label (e.g. "btc", "silver").
+          schema:
+            type: string
+            example: "btc"
+      responses:
+        '200':
+          description: List of assets.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AssetResponse'
+        '401':
+          summary: Unauthorized
+          description: Missing, invalid, or expired JWT.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/assets/{assetId}:
+    parameters:
+      - $ref: '#/components/parameters/XClientId'
+      - name: assetId
+        in: path
+        required: true
+        description: Unique identifier of the asset.
+        schema:
+          type: string
+          format: uuid
+    get:
+      tags:
+        - Assets
+      summary: Get an asset
+      description: Retrieves a specific asset by ID.
+      operationId: getAsset
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Successfully retrieved asset.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AssetResponse'
+        '401':
+          summary: Unauthorized
+          description: Missing, invalid, or expired JWT.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          summary: Not Found
+          description: Asset not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    put:
+      tags:
+        - Assets
+      summary: Update an asset
+      description: Updates mutable fields of an existing user-owned asset.
+      operationId: updateAsset
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AssetUpdateRequest'
+      responses:
+        '200':
+          description: Asset updated successfully.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AssetResponse'
+        '400':
+          summary: Validation error
+          description: Invalid fields or values provided.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          summary: Unauthorized
+          description: Missing, invalid, or expired JWT.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          summary: Forbidden
+          description: System assets or assets owned by other users cannot be modified.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          summary: Not Found
+          description: Asset not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          summary: Asset conflict
+          description: An asset with this label already exists.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    delete:
+      tags:
+        - Assets
+      summary: Delete an asset
+      description: Deletes a user-owned asset and all its valuation history.
+      operationId: deleteAsset
+      security:
+        - BearerAuth: []
+      responses:
+        '204':
+          description: Asset deleted successfully.
+        '401':
+          summary: Unauthorized
+          description: Missing, invalid, or expired JWT.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          summary: Forbidden
+          description: System assets or assets owned by other users cannot be deleted.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          summary: Not Found
+          description: Asset not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/assets/{assetId}/values:
+    parameters:
+      - $ref: '#/components/parameters/XClientId'
+      - name: assetId
+        in: path
+        required: true
+        description: Unique identifier of the asset.
+        schema:
+          type: string
+          format: uuid
+    post:
+      tags:
+        - Asset Values
+      summary: Add an asset valuation record
+      description: |
+        Records a USD valuation assignment for an asset on a specific date.
+      operationId: createAssetValue
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AssetValueCreateRequest'
+      responses:
+        '201':
+          description: Asset value record created successfully.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AssetValueResponse'
+        '400':
+          summary: Validation error
+          description: Missing or invalid required fields.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          summary: Unauthorized
+          description: Missing, invalid, or expired JWT.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          summary: Forbidden
+          description: Cannot add values to system-defined assets or assets owned by other users.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          summary: Not Found
+          description: Asset not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          summary: Conflict
+          description: A value for this asset on this date already exists.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    get:
+      tags:
+        - Asset Values
+      summary: List asset valuation records
+      description: |
+        Retrieves valuation records for an asset, ordered by date descending.
+        Supports optional date range filtering.
+      operationId: listAssetValues
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: start_date
+          in: query
+          required: false
+          description: Filter records with value_date on or after this date (inclusive).
+          schema:
+            type: string
+            format: date
+            example: "2025-01-01"
+        - name: end_date
+          in: query
+          required: false
+          description: Filter records with value_date on or before this date (inclusive).
+          schema:
+            type: string
+            format: date
+            example: "2025-01-31"
+      responses:
+        '200':
+          description: List of asset valuation records.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AssetValueResponse'
+        '401':
+          summary: Unauthorized
+          description: Missing, invalid, or expired JWT.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          summary: Not Found
+          description: Asset not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/assets/{assetId}/values/{valueId}:
+    parameters:
+      - $ref: '#/components/parameters/XClientId'
+      - name: assetId
+        in: path
+        required: true
+        description: Unique identifier of the asset.
+        schema:
+          type: string
+          format: uuid
+      - name: valueId
+        in: path
+        required: true
+        description: Unique identifier of the valuation record.
+        schema:
+          type: string
+          format: uuid
+    get:
+      tags:
+        - Asset Values
+      summary: Get an asset valuation record
+      description: Retrieves a specific asset valuation record by ID.
+      operationId: getAssetValue
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Successfully retrieved asset valuation record.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AssetValueResponse'
+        '401':
+          summary: Unauthorized
+          description: Missing, invalid, or expired JWT.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          summary: Not Found
+          description: Asset or valuation record not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    put:
+      tags:
+        - Asset Values
+      summary: Update an asset valuation record
+      description: Updates the value and value_date of an existing valuation record for an owned asset.
+      operationId: updateAssetValue
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AssetValueUpdateRequest'
+      responses:
+        '200':
+          description: Asset valuation record updated successfully.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AssetValueResponse'
+        '400':
+          summary: Validation error
+          description: Invalid fields or values provided.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          summary: Unauthorized
+          description: Missing, invalid, or expired JWT.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          summary: Forbidden
+          description: System asset values or records owned by other users cannot be modified.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          summary: Not Found
+          description: Asset or valuation record not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          summary: Conflict
+          description: A value for this asset on this date already exists.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    delete:
+      tags:
+        - Asset Values
+      summary: Delete an asset valuation record
+      description: Deletes an asset valuation record.
+      operationId: deleteAssetValue
+      security:
+        - BearerAuth: []
+      responses:
+        '204':
+          description: Asset valuation record deleted successfully.
+        '401':
+          summary: Unauthorized
+          description: Missing, invalid, or expired JWT.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          summary: Forbidden
+          description: System asset values or records owned by other users cannot be deleted.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          summary: Not Found
+          description: Asset or valuation record not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
 components:
   securitySchemes:
     BearerAuth:
@@ -1004,3 +1472,151 @@ components:
           format: date-time
           description: Timestamp when the record was last updated.
           example: "2026-11-09T19:25:00Z"
+
+    AssetCreateRequest:
+      type: object
+      required:
+        - label
+      properties:
+        label:
+          type: string
+          minLength: 1
+          maxLength: 100
+          description: Unique identifier or symbol for the asset (e.g. btc, eth, silver, gold, tx-gas).
+          example: "btc"
+        description:
+          type: string
+          maxLength: 200
+          description: Optional description of the asset (up to 200 characters).
+          example: "Bitcoin cryptocurrency"
+
+    AssetUpdateRequest:
+      type: object
+      required:
+        - label
+      properties:
+        label:
+          type: string
+          minLength: 1
+          maxLength: 100
+          description: Unique identifier or symbol for the asset (e.g. btc, eth, silver, gold, tx-gas).
+          example: "btc"
+        description:
+          type: string
+          maxLength: 200
+          description: Optional description of the asset (up to 200 characters).
+          example: "Bitcoin cryptocurrency"
+
+    AssetResponse:
+      type: object
+      required:
+        - id
+        - label
+        - description
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique identifier for the asset.
+          example: "a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d"
+        user_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: Identifier of the user who owns this asset, or null if system/global.
+          example: "3bf40ddb-9c1d-4b83-b1df-714c7941c9cc"
+        label:
+          type: string
+          description: Identifier or symbol for the asset (e.g. btc, eth, silver, gold, tx-gas).
+          example: "btc"
+        description:
+          type: string
+          description: Description of the asset.
+          example: "Bitcoin cryptocurrency"
+        created_at:
+          type: string
+          format: date-time
+          description: Timestamp when the asset was created.
+          example: "2026-11-12T10:00:00Z"
+        updated_at:
+          type: string
+          format: date-time
+          description: Timestamp when the asset was last updated.
+          example: "2026-11-12T10:00:00Z"
+
+    AssetValueCreateRequest:
+      type: object
+      required:
+        - value
+        - value_date
+      properties:
+        value:
+          type: number
+          format: double
+          description: USD value assignment for the asset on the given date.
+          example: 95400.50
+        value_date:
+          type: string
+          format: date
+          description: The date the value is assigned (YYYY-MM-DD).
+          example: "2025-01-01"
+
+    AssetValueUpdateRequest:
+      type: object
+      required:
+        - value
+        - value_date
+      properties:
+        value:
+          type: number
+          format: double
+          description: USD value assignment for the asset on the given date.
+          example: 95400.50
+        value_date:
+          type: string
+          format: date
+          description: The date the value is assigned (YYYY-MM-DD).
+          example: "2025-01-01"
+
+    AssetValueResponse:
+      type: object
+      required:
+        - id
+        - asset_id
+        - value
+        - value_date
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique identifier for the asset valuation record.
+          example: "c1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d"
+        asset_id:
+          type: string
+          format: uuid
+          description: Identifier of the asset this valuation belongs to.
+          example: "a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d"
+        value:
+          type: number
+          format: double
+          description: USD value assignment.
+          example: 95400.50
+        value_date:
+          type: string
+          format: date
+          description: The date the value is assigned.
+          example: "2025-01-01"
+        created_at:
+          type: string
+          format: date-time
+          description: Timestamp when the record was created.
+          example: "2026-11-12T10:00:00Z"
+        updated_at:
+          type: string
+          format: date-time
+          description: Timestamp when the record was last updated.
+          example: "2026-11-12T10:00:00Z"

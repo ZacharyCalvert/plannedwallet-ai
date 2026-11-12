@@ -385,6 +385,20 @@ func (h *Handler) RegisterRoutes(r *gin.Engine) {
 			protected.PUT("/accounts/:accountId/records/:recordId", h.UpdateCheckingRecord)
 			protected.PATCH("/accounts/:accountId/records/:recordId", h.PatchCheckingRecord)
 			protected.DELETE("/accounts/:accountId/records/:recordId", h.DeleteCheckingRecord)
+
+			// Assets
+			protected.POST("/assets", h.CreateAsset)
+			protected.GET("/assets", h.ListAssets)
+			protected.GET("/assets/:assetId", h.GetAsset)
+			protected.PUT("/assets/:assetId", h.UpdateAsset)
+			protected.DELETE("/assets/:assetId", h.DeleteAsset)
+
+			// Asset Values
+			protected.POST("/assets/:assetId/values", h.CreateAssetValue)
+			protected.GET("/assets/:assetId/values", h.ListAssetValues)
+			protected.GET("/assets/:assetId/values/:valueId", h.GetAssetValue)
+			protected.PUT("/assets/:assetId/values/:valueId", h.UpdateAssetValue)
+			protected.DELETE("/assets/:assetId/values/:valueId", h.DeleteAssetValue)
 		}
 	}
 }

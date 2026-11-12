@@ -17,6 +17,8 @@ type MemoryRepository struct {
 	accounts        map[string]*models.Account        // id -> Account
 	accountAccess   map[string]*models.AccountAccess  // accountID:userID -> AccountAccess
 	checkingRecords map[string]*models.CheckingRecord // id -> CheckingRecord
+	assets          map[string]*models.Asset          // id -> Asset
+	assetValues     map[string]*models.AssetValue     // id -> AssetValue
 }
 
 func NewMemoryRepository() *MemoryRepository {
@@ -27,6 +29,8 @@ func NewMemoryRepository() *MemoryRepository {
 		accounts:        make(map[string]*models.Account),
 		accountAccess:   make(map[string]*models.AccountAccess),
 		checkingRecords: make(map[string]*models.CheckingRecord),
+		assets:          make(map[string]*models.Asset),
+		assetValues:     make(map[string]*models.AssetValue),
 	}
 }
 
@@ -254,5 +258,215 @@ func (m *MemoryRepository) DeleteCheckingRecord(_ context.Context, accountID, re
 		return ErrNotFound
 	}
 	delete(m.checkingRecords, recordID)
+	return nil
+}
+
+func sameUser(u1, u2 *string) bool {
+	if u1 == nil && u2 == nil {
+		return true
+	}
+	if u1 != nil && u2 != nil {
+		return *u1 == *u2
+	}
+	return false
+}
+
+func (m *MemoryRepository) hasAssetConflict(asset *models.Asset) bool {
+	for _, a := range m.assets {
+		if a.ID == asset.ID {
+			continue
+		}
+		if sameUser(a.UserID, asset.UserID) && strings.EqualFold(a.Label, asset.Label) {
+			return true
+		}
+	}
+	return false
+}
+
+func (m *MemoryRepository) CreateAsset(_ context.Context, asset *models.Asset) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if m.hasAssetConflict(asset) {
+		return ErrConflict
+	}
+	copied := *asset
+	m.assets[asset.ID] = &copied
+	return nil
+}
+
+func (m *MemoryRepository) GetAssetByID(_ context.Context, id string) (*models.Asset, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	asset, ok := m.assets[id]
+	if !ok {
+		return nil, ErrNotFound
+	}
+	copied := *asset
+	return &copied, nil
+}
+
+func matchesAsset(a *models.Asset, userID, label *string) bool {
+	if userID != nil && *userID != "" {
+		if a.UserID != nil && *a.UserID != *userID {
+			return false
+		}
+	}
+	if label != nil && *label != "" && !strings.EqualFold(a.Label, *label) {
+		return false
+	}
+	return true
+}
+
+func (m *MemoryRepository) ListAssets(_ context.Context, userID, label *string) ([]*models.Asset, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	var result []*models.Asset
+	for _, a := range m.assets {
+		if matchesAsset(a, userID, label) {
+			copied := *a
+			result = append(result, &copied)
+		}
+	}
+
+	sort.Slice(result, func(i, j int) bool {
+		return strings.ToLower(result[i].Label) < strings.ToLower(result[j].Label)
+	})
+
+	return result, nil
+}
+
+func (m *MemoryRepository) UpdateAsset(_ context.Context, asset *models.Asset) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if _, ok := m.assets[asset.ID]; !ok {
+		return ErrNotFound
+	}
+	if m.hasAssetConflict(asset) {
+		return ErrConflict
+	}
+	copied := *asset
+	m.assets[asset.ID] = &copied
+	return nil
+}
+
+func (m *MemoryRepository) DeleteAsset(_ context.Context, id string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if _, ok := m.assets[id]; !ok {
+		return ErrNotFound
+	}
+	delete(m.assets, id)
+	for vid, v := range m.assetValues {
+		if v.AssetID == id {
+			delete(m.assetValues, vid)
+		}
+	}
+	return nil
+}
+
+func (m *MemoryRepository) hasAssetValueConflict(av *models.AssetValue) bool {
+	for _, v := range m.assetValues {
+		if v.ID == av.ID {
+			continue
+		}
+		if v.AssetID == av.AssetID && v.ValueDate == av.ValueDate {
+			return true
+		}
+	}
+	return false
+}
+
+func (m *MemoryRepository) CreateAssetValue(_ context.Context, av *models.AssetValue) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if _, ok := m.assets[av.AssetID]; !ok {
+		return ErrNotFound
+	}
+	if m.hasAssetValueConflict(av) {
+		return ErrConflict
+	}
+	copied := *av
+	m.assetValues[av.ID] = &copied
+	return nil
+}
+
+func (m *MemoryRepository) GetAssetValueByID(_ context.Context, assetID, valueID string) (*models.AssetValue, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	av, ok := m.assetValues[valueID]
+	if !ok || av.AssetID != assetID {
+		return nil, ErrNotFound
+	}
+	copied := *av
+	return &copied, nil
+}
+
+func matchesAssetValue(av *models.AssetValue, assetID string, startDate, endDate *string) bool {
+	if av.AssetID != assetID {
+		return false
+	}
+	if startDate != nil && *startDate != "" && av.ValueDate < *startDate {
+		return false
+	}
+	if endDate != nil && *endDate != "" && av.ValueDate > *endDate {
+		return false
+	}
+	return true
+}
+
+func (m *MemoryRepository) ListAssetValues(_ context.Context, assetID string, startDate, endDate *string) ([]*models.AssetValue, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	var result []*models.AssetValue
+	for _, av := range m.assetValues {
+		if matchesAssetValue(av, assetID, startDate, endDate) {
+			copied := *av
+			result = append(result, &copied)
+		}
+	}
+
+	sort.Slice(result, func(i, j int) bool {
+		if result[i].ValueDate == result[j].ValueDate {
+			return result[i].CreatedAt.After(result[j].CreatedAt)
+		}
+		return result[i].ValueDate > result[j].ValueDate
+	})
+
+	return result, nil
+}
+
+func (m *MemoryRepository) UpdateAssetValue(_ context.Context, av *models.AssetValue) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	existing, ok := m.assetValues[av.ID]
+	if !ok || existing.AssetID != av.AssetID {
+		return ErrNotFound
+	}
+	if m.hasAssetValueConflict(av) {
+		return ErrConflict
+	}
+	copied := *av
+	m.assetValues[av.ID] = &copied
+	return nil
+}
+
+func (m *MemoryRepository) DeleteAssetValue(_ context.Context, assetID, valueID string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	av, ok := m.assetValues[valueID]
+	if !ok || av.AssetID != assetID {
+		return ErrNotFound
+	}
+	delete(m.assetValues, valueID)
 	return nil
 }

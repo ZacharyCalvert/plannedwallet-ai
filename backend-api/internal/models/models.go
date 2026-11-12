@@ -169,6 +169,70 @@ type CheckingRecordResponse struct {
 	UpdatedAt   time.Time `json:"updated_at"`
 }
 
+// Asset represents a tracked financial asset definition (e.g. btc, eth, silver, gold, tx-gas).
+type Asset struct {
+	ID          string    `json:"id"`
+	UserID      *string   `json:"user_id"`
+	Label       string    `json:"label"`
+	Description string    `json:"description"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
+}
+
+// AssetCreateRequest represents payload to define a new asset.
+type AssetCreateRequest struct {
+	Label       string `json:"label" binding:"required,min=1,max=100"`
+	Description string `json:"description" binding:"max=200"`
+}
+
+// AssetUpdateRequest represents payload to update an existing asset definition.
+type AssetUpdateRequest struct {
+	Label       string `json:"label" binding:"required,min=1,max=100"`
+	Description string `json:"description" binding:"max=200"`
+}
+
+// AssetResponse represents the asset definition returned by the API.
+type AssetResponse struct {
+	ID          string    `json:"id"`
+	UserID      *string   `json:"user_id"`
+	Label       string    `json:"label"`
+	Description string    `json:"description"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
+}
+
+// AssetValue represents a recorded USD valuation of an asset on a particular date.
+type AssetValue struct {
+	ID        string    `json:"id"`
+	AssetID   string    `json:"asset_id"`
+	Value     float64   `json:"value"`
+	ValueDate string    `json:"value_date"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+// AssetValueCreateRequest represents payload to record an asset value on a date.
+type AssetValueCreateRequest struct {
+	Value     *float64 `json:"value" binding:"required"`
+	ValueDate string   `json:"value_date" binding:"required"`
+}
+
+// AssetValueUpdateRequest represents payload to update an asset valuation.
+type AssetValueUpdateRequest struct {
+	Value     *float64 `json:"value" binding:"required"`
+	ValueDate string   `json:"value_date" binding:"required"`
+}
+
+// AssetValueResponse represents the valuation record returned by the API.
+type AssetValueResponse struct {
+	ID        string    `json:"id"`
+	AssetID   string    `json:"asset_id"`
+	Value     float64   `json:"value"`
+	ValueDate string    `json:"value_date"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
 // ErrorResponse represents standardized API error responses.
 type ErrorResponse struct {
 	Error     string    `json:"error"`

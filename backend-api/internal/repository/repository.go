@@ -36,4 +36,18 @@ type Repository interface {
 	ListCheckingRecords(ctx context.Context, accountID string, cleared *bool, startDate, endDate *string) ([]*models.CheckingRecord, error)
 	UpdateCheckingRecord(ctx context.Context, record *models.CheckingRecord) error
 	DeleteCheckingRecord(ctx context.Context, accountID, recordID string) error
+
+	// Asset operations
+	CreateAsset(ctx context.Context, asset *models.Asset) error
+	GetAssetByID(ctx context.Context, id string) (*models.Asset, error)
+	ListAssets(ctx context.Context, userID, label *string) ([]*models.Asset, error)
+	UpdateAsset(ctx context.Context, asset *models.Asset) error
+	DeleteAsset(ctx context.Context, id string) error
+
+	// Asset Value operations
+	CreateAssetValue(ctx context.Context, av *models.AssetValue) error
+	GetAssetValueByID(ctx context.Context, assetID, valueID string) (*models.AssetValue, error)
+	ListAssetValues(ctx context.Context, assetID string, startDate, endDate *string) ([]*models.AssetValue, error)
+	UpdateAssetValue(ctx context.Context, av *models.AssetValue) error
+	DeleteAssetValue(ctx context.Context, assetID, valueID string) error
 }

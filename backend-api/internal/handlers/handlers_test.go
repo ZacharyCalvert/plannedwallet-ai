@@ -548,3 +548,76 @@ func TestCreditCardAccountAPI(t *testing.T) {
 		t.Fatalf("expected 201 on cc record create, got %d: %s", w.Code, w.Body.String())
 	}
 }
+
+func createTestAsset(t *testing.T, r *gin.Engine, token, label, desc string) string {
+	t.Helper()
+	body, _ := json.Marshal(models.AssetCreateRequest{Label: label, Description: desc})
+	req := newTestRequest(http.MethodPost, "/api/v1/assets", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+token)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("expected 201 on asset create, got %d: %s", w.Code, w.Body.String())
+	}
+	var res models.AssetResponse
+	_ = json.Unmarshal(w.Body.Bytes(), &res)
+	return res.ID
+}
+
+func TestAssetsAPI(t *testing.T) {
+	r, _ := setupTestRouter()
+	token := registerAndGetToken(t, r, "assetapi_u", "apiu@example.com", "Password123!")
+	assetID := createTestAsset(t, r, token, "btc", "Bitcoin")
+
+	// Verify conflict on duplicate label
+	body, _ := json.Marshal(models.AssetCreateRequest{Label: "BTC", Description: "Duplicate"})
+	req := newTestRequest(http.MethodPost, "/api/v1/assets", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+token)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusConflict {
+		t.Fatalf("expected 409 conflict, got %d: %s", w.Code, w.Body.String())
+	}
+
+	getReq := newTestRequest(http.MethodGet, "/api/v1/assets/"+assetID, nil)
+	getReq.Header.Set("Authorization", "Bearer "+token)
+	wGet := httptest.NewRecorder()
+	r.ServeHTTP(wGet, getReq)
+	if wGet.Code != http.StatusOK {
+		t.Fatalf("expected 200 on get asset, got %d", wGet.Code)
+	}
+}
+
+func TestAssetValuesMultiDayAPI(t *testing.T) {
+	r, _ := setupTestRouter()
+	token := registerAndGetToken(t, r, "multival_u", "multival@example.com", "Password123!")
+	assetID := createTestAsset(t, r, token, "eth", "Ethereum")
+
+	dates := []string{"2026-11-09", "2026-11-10", "2026-11-11"}
+	for _, d := range dates {
+		val := 3200.0
+		body, _ := json.Marshal(models.AssetValueCreateRequest{Value: &val, ValueDate: d})
+		req := newTestRequest(http.MethodPost, fmt.Sprintf("/api/v1/assets/%s/values", assetID), bytes.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer "+token)
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+		if w.Code != http.StatusCreated {
+			t.Fatalf("expected 201 on asset value create for %s, got %d: %s", d, w.Code, w.Body.String())
+		}
+	}
+
+	// Duplicate date conflict test
+	dupVal := 3250.0
+	body, _ := json.Marshal(models.AssetValueCreateRequest{Value: &dupVal, ValueDate: "2026-11-10"})
+	req := newTestRequest(http.MethodPost, fmt.Sprintf("/api/v1/assets/%s/values", assetID), bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+token)
+	wDup := httptest.NewRecorder()
+	r.ServeHTTP(wDup, req)
+	if wDup.Code != http.StatusConflict {
+		t.Fatalf("expected 409 conflict on duplicate date, got %d", wDup.Code)
+	}
+}

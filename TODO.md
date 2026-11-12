@@ -5,14 +5,18 @@ Top features:
 - [x] API review / plan
 - [x] Database review / plan
 - [x] add / update / reconcile checking records
-Add credit card account types
+- [x] Add credit card account types
 snapshot account inputs - this account is worth x at this time
+CAPTCHA for account setup
 asset account -> like X bitcoin / total worth of the account
+Add categories (expense categories)
 
 Top priority:
 Infrastructure + auto deploy to staging
 
 Medium priority:
+Add dependabot monitoring of npm, docker images, golang dependencies
+branch protections, code owners, etc.
 Captcha on account creation - creation only
 Infrastructure + auto deploy to production
 Disaster recovery / backups / automation reload of data
@@ -52,6 +56,7 @@ Earmark / planning (5k for property taxes, earmark it for savings based on month
 payment plans (like buying an iPhone split up by 12 months)
 
 Low priority:
+Allow to rename account
 Add sql injection test cases
 Help text / features on hover
 Cookie retention removing need for TOTP
@@ -66,6 +71,12 @@ Login attempt throttling (1 attempt per minute after 10 failed attempts)
 cpi / dow jones / sp500 / nasdaq indexes
 gold / silver
 bitcoin / etherum
+Reconcile mode (let me reconcile a month)
+STRICT reconcile mode (force me to enter a full value and select the one that isn't available for reconcile yet)
+Reconcile month records (aggregate view of these were reconciled on X date from starting value X, ending Y)
+account deletion
+record deletion
+asset deletion
 
 Follow up:
 scale postgres / review native eventual consistency models

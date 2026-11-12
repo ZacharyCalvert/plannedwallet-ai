@@ -135,7 +135,7 @@ func (p *PostgresRepository) GrantAccountAccess(ctx context.Context, access *mod
 	          VALUES ($1, $2, $3, $4, $5, $6)
 	          ON CONFLICT (account_id, user_id)
 	          DO UPDATE SET access_level = EXCLUDED.access_level, updated_at = EXCLUDED.updated_at`
-	_, err := p.db.ExecContext(ctx, query, access.ID, access.AccountID, access.UserID, string(access.AccessLevel), access.CreatedAt, access.UpdatedAt)
+	_, err := p.db.ExecContext(ctx, query, access.ID, access.AccountID, access.UserID, access.AccessLevel, access.CreatedAt, access.UpdatedAt)
 	return err
 }
 
@@ -159,8 +159,7 @@ func (p *PostgresRepository) GetAccountAccess(ctx context.Context, accountID, us
 func (p *PostgresRepository) ListAccountAccess(ctx context.Context, accountID string) ([]*models.AccountAccess, error) {
 	query := `SELECT id, account_id, user_id, access_level, created_at, updated_at
 	          FROM account_access
-	          WHERE account_id = $1
-	          ORDER BY created_at ASC`
+	          WHERE account_id = $1`
 	rows, err := p.db.QueryContext(ctx, query, accountID)
 	if err != nil {
 		return nil, err
@@ -314,6 +313,226 @@ func (p *PostgresRepository) UpdateCheckingRecord(ctx context.Context, record *m
 func (p *PostgresRepository) DeleteCheckingRecord(ctx context.Context, accountID, recordID string) error {
 	query := `DELETE FROM checking_records WHERE id = $1 AND account_id = $2`
 	res, err := p.db.ExecContext(ctx, query, recordID, accountID)
+	if err != nil {
+		return err
+	}
+	rowsAffected, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rowsAffected == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+func (p *PostgresRepository) CreateAsset(ctx context.Context, asset *models.Asset) error {
+	query := `INSERT INTO assets (id, user_id, label, description, created_at, updated_at)
+	          VALUES ($1, $2, $3, $4, $5, $6)`
+	_, err := p.db.ExecContext(ctx, query, asset.ID, asset.UserID, asset.Label, asset.Description, asset.CreatedAt, asset.UpdatedAt)
+	if err != nil {
+		if isUniqueViolation(err) {
+			return ErrConflict
+		}
+		return err
+	}
+	return nil
+}
+
+func (p *PostgresRepository) GetAssetByID(ctx context.Context, id string) (*models.Asset, error) {
+	query := `SELECT id, user_id, label, description, created_at, updated_at
+	          FROM assets
+	          WHERE id = $1`
+	row := p.db.QueryRowContext(ctx, query, id)
+	var a models.Asset
+	var userID sql.NullString
+	if err := row.Scan(&a.ID, &userID, &a.Label, &a.Description, &a.CreatedAt, &a.UpdatedAt); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrNotFound
+		}
+		return nil, err
+	}
+	if userID.Valid {
+		uid := userID.String
+		a.UserID = &uid
+	}
+	return &a, nil
+}
+
+func buildAssetsQuery(userID, label *string) (string, []interface{}) {
+	var sb strings.Builder
+	sb.WriteString(`SELECT id, user_id, label, description, created_at, updated_at FROM assets WHERE 1=1`)
+	var args []interface{}
+	paramIdx := 1
+	if userID != nil && *userID != "" {
+		sb.WriteString(fmt.Sprintf(" AND (user_id = $%d OR user_id IS NULL)", paramIdx))
+		args = append(args, *userID)
+		paramIdx++
+	}
+	if label != nil && *label != "" {
+		sb.WriteString(fmt.Sprintf(" AND LOWER(label) = LOWER($%d)", paramIdx))
+		args = append(args, *label)
+	}
+	sb.WriteString(" ORDER BY LOWER(label) ASC, created_at ASC")
+	return sb.String(), args
+}
+
+func scanAssetRows(rows *sql.Rows) ([]*models.Asset, error) {
+	var records []*models.Asset
+	for rows.Next() {
+		var a models.Asset
+		var uid sql.NullString
+		if err := rows.Scan(&a.ID, &uid, &a.Label, &a.Description, &a.CreatedAt, &a.UpdatedAt); err != nil {
+			return nil, err
+		}
+		if uid.Valid {
+			u := uid.String
+			a.UserID = &u
+		}
+		records = append(records, &a)
+	}
+	return records, rows.Err()
+}
+
+func (p *PostgresRepository) ListAssets(ctx context.Context, userID, label *string) ([]*models.Asset, error) {
+	query, args := buildAssetsQuery(userID, label)
+	rows, err := p.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	return scanAssetRows(rows)
+}
+
+func (p *PostgresRepository) UpdateAsset(ctx context.Context, asset *models.Asset) error {
+	query := `UPDATE assets
+	          SET label = $1, description = $2, updated_at = $3
+	          WHERE id = $4`
+	res, err := p.db.ExecContext(ctx, query, asset.Label, asset.Description, asset.UpdatedAt, asset.ID)
+	if err != nil {
+		if isUniqueViolation(err) {
+			return ErrConflict
+		}
+		return err
+	}
+	rowsAffected, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rowsAffected == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+func (p *PostgresRepository) DeleteAsset(ctx context.Context, id string) error {
+	query := `DELETE FROM assets WHERE id = $1`
+	res, err := p.db.ExecContext(ctx, query, id)
+	if err != nil {
+		return err
+	}
+	rowsAffected, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rowsAffected == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+func (p *PostgresRepository) CreateAssetValue(ctx context.Context, av *models.AssetValue) error {
+	query := `INSERT INTO asset_values (id, asset_id, value, value_date, created_at, updated_at)
+	          VALUES ($1, $2, $3, $4::date, $5, $6)`
+	_, err := p.db.ExecContext(ctx, query, av.ID, av.AssetID, av.Value, av.ValueDate, av.CreatedAt, av.UpdatedAt)
+	if err != nil {
+		if isUniqueViolation(err) {
+			return ErrConflict
+		}
+		return err
+	}
+	return nil
+}
+
+func (p *PostgresRepository) GetAssetValueByID(ctx context.Context, assetID, valueID string) (*models.AssetValue, error) {
+	query := `SELECT id, asset_id, value, TO_CHAR(value_date, 'YYYY-MM-DD'), created_at, updated_at
+	          FROM asset_values
+	          WHERE id = $1 AND asset_id = $2`
+	row := p.db.QueryRowContext(ctx, query, valueID, assetID)
+	var av models.AssetValue
+	if err := row.Scan(&av.ID, &av.AssetID, &av.Value, &av.ValueDate, &av.CreatedAt, &av.UpdatedAt); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrNotFound
+		}
+		return nil, err
+	}
+	return &av, nil
+}
+
+func buildAssetValuesQuery(assetID string, startDate, endDate *string) (string, []interface{}) {
+	var sb strings.Builder
+	sb.WriteString(`SELECT id, asset_id, value, TO_CHAR(value_date, 'YYYY-MM-DD'), created_at, updated_at FROM asset_values WHERE asset_id = $1`)
+	args := []interface{}{assetID}
+	paramIdx := 2
+	if startDate != nil && *startDate != "" {
+		sb.WriteString(fmt.Sprintf(" AND value_date >= $%d::date", paramIdx))
+		args = append(args, *startDate)
+		paramIdx++
+	}
+	if endDate != nil && *endDate != "" {
+		sb.WriteString(fmt.Sprintf(" AND value_date <= $%d::date", paramIdx))
+		args = append(args, *endDate)
+	}
+	sb.WriteString(" ORDER BY value_date DESC, created_at DESC")
+	return sb.String(), args
+}
+
+func scanAssetValueRows(rows *sql.Rows) ([]*models.AssetValue, error) {
+	var records []*models.AssetValue
+	for rows.Next() {
+		var av models.AssetValue
+		if err := rows.Scan(&av.ID, &av.AssetID, &av.Value, &av.ValueDate, &av.CreatedAt, &av.UpdatedAt); err != nil {
+			return nil, err
+		}
+		records = append(records, &av)
+	}
+	return records, rows.Err()
+}
+
+func (p *PostgresRepository) ListAssetValues(ctx context.Context, assetID string, startDate, endDate *string) ([]*models.AssetValue, error) {
+	query, args := buildAssetValuesQuery(assetID, startDate, endDate)
+	rows, err := p.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	return scanAssetValueRows(rows)
+}
+
+func (p *PostgresRepository) UpdateAssetValue(ctx context.Context, av *models.AssetValue) error {
+	query := `UPDATE asset_values
+	          SET value = $1, value_date = $2::date, updated_at = $3
+	          WHERE id = $4 AND asset_id = $5`
+	res, err := p.db.ExecContext(ctx, query, av.Value, av.ValueDate, av.UpdatedAt, av.ID, av.AssetID)
+	if err != nil {
+		if isUniqueViolation(err) {
+			return ErrConflict
+		}
+		return err
+	}
+	rowsAffected, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rowsAffected == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+func (p *PostgresRepository) DeleteAssetValue(ctx context.Context, assetID, valueID string) error {
+	query := `DELETE FROM asset_values WHERE id = $1 AND asset_id = $2`
+	res, err := p.db.ExecContext(ctx, query, valueID, assetID)
 	if err != nil {
 		return err
 	}

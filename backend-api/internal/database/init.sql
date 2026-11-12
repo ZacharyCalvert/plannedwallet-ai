@@ -43,3 +43,29 @@ CREATE TABLE IF NOT EXISTS checking_records (
 );
 
 CREATE INDEX IF NOT EXISTS idx_checking_records_account_datesent ON checking_records(account_id, date_sent DESC);
+
+CREATE TABLE IF NOT EXISTS assets (
+    id UUID PRIMARY KEY,
+    user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    label VARCHAR(100) NOT NULL,
+    description VARCHAR(200) NOT NULL DEFAULT '',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT uq_assets_user_label UNIQUE NULLS NOT DISTINCT (user_id, label)
+);
+
+CREATE INDEX IF NOT EXISTS idx_assets_user_id ON assets(user_id);
+CREATE INDEX IF NOT EXISTS idx_assets_label ON assets(label);
+
+CREATE TABLE IF NOT EXISTS asset_values (
+    id UUID PRIMARY KEY,
+    asset_id UUID NOT NULL REFERENCES assets(id) ON DELETE CASCADE,
+    value DOUBLE PRECISION NOT NULL,
+    value_date DATE NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT uq_asset_values_asset_date UNIQUE (asset_id, value_date)
+);
+
+CREATE INDEX IF NOT EXISTS idx_asset_values_asset_date ON asset_values(asset_id, value_date DESC);
+

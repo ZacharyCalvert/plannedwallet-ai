@@ -377,3 +377,137 @@ func TestCreditCardAccountWorkflow(t *testing.T) {
 		t.Errorf("unexpected record value: %v", recRes.Value)
 	}
 }
+
+func TestAssetCreateAndConflict(t *testing.T) {
+	ctrl, _ := setupController()
+	ctx := context.Background()
+
+	u1, _ := ctrl.RegisterUser(ctx, models.UserRegistrationRequest{
+		Username: "asset_u1", Email: "u1@example.com", Password: "ValidPass123!",
+	})
+	u2, _ := ctrl.RegisterUser(ctx, models.UserRegistrationRequest{
+		Username: "asset_u2", Email: "u2@example.com", Password: "ValidPass123!",
+	})
+
+	asset1, err := ctrl.CreateAsset(ctx, u1.ID, models.AssetCreateRequest{
+		Label: "btc", Description: "Bitcoin crypto",
+	})
+	if err != nil || asset1.Label != "btc" {
+		t.Fatalf("failed to create asset: %v", err)
+	}
+
+	// Conflict for same user and label (case-insensitive)
+	_, err = ctrl.CreateAsset(ctx, u1.ID, models.AssetCreateRequest{
+		Label: "BTC", Description: "Duplicate Bitcoin",
+	})
+	if err == nil {
+		t.Fatal("expected conflict for duplicate asset label on same user, got nil")
+	}
+
+	// Different user can use the same label
+	asset2, err := ctrl.CreateAsset(ctx, u2.ID, models.AssetCreateRequest{
+		Label: "btc", Description: "U2 Bitcoin",
+	})
+	if err != nil || asset2.ID == asset1.ID {
+		t.Fatalf("different user should be able to create asset with same label: %v", err)
+	}
+}
+
+func TestAssetValuesMultiDay(t *testing.T) {
+	ctrl, _ := setupController()
+	ctx := context.Background()
+
+	u, _ := ctrl.RegisterUser(ctx, models.UserRegistrationRequest{
+		Username: "multiday_u", Email: "multiday@example.com", Password: "ValidPass123!",
+	})
+
+	asset, err := ctrl.CreateAsset(ctx, u.ID, models.AssetCreateRequest{
+		Label: "btc", Description: "Bitcoin crypto asset",
+	})
+	if err != nil {
+		t.Fatalf("failed to create asset: %v", err)
+	}
+
+	days := []struct {
+		date string
+		val  float64
+	}{
+		{"2026-11-09", 90000.0},
+		{"2026-11-10", 91000.0},
+		{"2026-11-11", 92000.0},
+	}
+	for _, d := range days {
+		v := d.val
+		_, err := ctrl.CreateAssetValue(ctx, u.ID, asset.ID, models.AssetValueCreateRequest{
+			Value: &v, ValueDate: d.date,
+		})
+		if err != nil {
+			t.Fatalf("failed to set value for %s: %v", d.date, err)
+		}
+	}
+
+	values, err := ctrl.ListAssetValues(ctx, u.ID, asset.ID, nil, nil)
+	if err != nil || len(values) != 3 {
+		t.Fatalf("expected 3 values for asset, got %d (%v)", len(values), err)
+	}
+}
+
+func TestAssetValuesDateConflict(t *testing.T) {
+	ctrl, _ := setupController()
+	ctx := context.Background()
+
+	u, _ := ctrl.RegisterUser(ctx, models.UserRegistrationRequest{
+		Username: "conflict_u", Email: "conflict@example.com", Password: "ValidPass123!",
+	})
+	asset, _ := ctrl.CreateAsset(ctx, u.ID, models.AssetCreateRequest{
+		Label: "silver", Description: "Silver ounce",
+	})
+
+	val1, val2 := 32.50, 33.00
+	_, err := ctrl.CreateAssetValue(ctx, u.ID, asset.ID, models.AssetValueCreateRequest{
+		Value: &val1, ValueDate: "2026-11-10",
+	})
+	if err != nil {
+		t.Fatalf("first value creation failed: %v", err)
+	}
+
+	// Duplicate date for same asset must fail
+	_, err = ctrl.CreateAssetValue(ctx, u.ID, asset.ID, models.AssetValueCreateRequest{
+		Value: &val2, ValueDate: "2026-11-10",
+	})
+	if err == nil {
+		t.Fatal("expected conflict on duplicate date for asset, got nil")
+	}
+}
+
+func TestAssetValueUpdateAndDelete(t *testing.T) {
+	ctrl, _ := setupController()
+	ctx := context.Background()
+
+	u, _ := ctrl.RegisterUser(ctx, models.UserRegistrationRequest{
+		Username: "updel_u", Email: "updel@example.com", Password: "ValidPass123!",
+	})
+	asset, _ := ctrl.CreateAsset(ctx, u.ID, models.AssetCreateRequest{
+		Label: "gold", Description: "Gold ounce",
+	})
+
+	val := 2700.0
+	created, err := ctrl.CreateAssetValue(ctx, u.ID, asset.ID, models.AssetValueCreateRequest{
+		Value: &val, ValueDate: "2026-11-09",
+	})
+	if err != nil {
+		t.Fatalf("failed to create asset value: %v", err)
+	}
+
+	newVal := 2750.0
+	updated, err := ctrl.UpdateAssetValue(ctx, u.ID, asset.ID, created.ID, models.AssetValueUpdateRequest{
+		Value: &newVal, ValueDate: "2026-11-09",
+	})
+	if err != nil || updated.Value != 2750.0 {
+		t.Fatalf("update failed: %v", err)
+	}
+
+	if err := ctrl.DeleteAssetValue(ctx, u.ID, asset.ID, created.ID); err != nil {
+		t.Fatalf("delete failed: %v", err)
+	}
+}
