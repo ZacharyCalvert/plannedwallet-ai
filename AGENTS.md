@@ -9,6 +9,7 @@
   - Maximum cyclomatic complexity per function: **6**.
 - **Observability**: User operations and API interactions log using W3C Trace Context (`traceparent` header). All HTTP requests require the `X-Client-ID` header.
 - **Integration Tests**: Integration tests in `itests` execute against a backend with a completely fresh (wiped) database every time (`make refresh` or removing `./data` before test runs).
+- **No Registered Business / Brand Names**: Avoid adding registered business, financial institution, or trademarked company names in the codebase. This applies to UI placeholders, input labels, descriptions, sample data, mocks, seed fixtures, unit tests, integration tests, OpenAPI contracts, and documentation. Apply preference to generic, descriptive, or fictional names (e.g., "Primary Everyday Checking", "Emergency Reserve Savings", "Day Trading Portfolio", "Brokerage Snapshot", "Supermarket", "Corner Grocery", "Employer Payroll").
 
 ---
 
@@ -122,5 +123,8 @@ All account endpoints enforce permissions via the `account_access` table:
    - Do NOT modify front-end files unless the user explicitly requests UI changes.
 6. **Integration Test Hygiene**:
    - Every test run must be reproducible against a clean database. Use `make refresh` (which executes `docker compose down`, `rm -rf ./data`, `mkdir -p data`, `docker compose up -d --build`) to wipe the database volume before verifying integration suites.
+7. **No Trademarked or Registered Business Names**:
+   - Do not add additional real business or brand names into source code, comments, test assertions, seed scripts, OpenAPI examples, or UI placeholders/memos.
+   - Use generic descriptors instead (e.g., "Brokerage Account", "Trading Portfolio", "Retail Bank", "Payroll Deposit", "Coffee Shop", "Supermarket").
 
 

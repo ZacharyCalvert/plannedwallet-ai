@@ -357,7 +357,7 @@ func TestCheckingRecordsCRUD(t *testing.T) {
 		Value:       &val1,
 		DateSent:    "2026-11-01",
 		DateCleared: nil,
-		Entity:      "Target",
+		Entity:      "Supermarket",
 		Description: "Household supplies",
 	})
 	req := newTestRequest(http.MethodPost, fmt.Sprintf("/api/v1/accounts/%s/records", accountID), bytes.NewReader(createPayload))
@@ -374,7 +374,7 @@ func TestCheckingRecordsCRUD(t *testing.T) {
 	if err := json.Unmarshal(w.Body.Bytes(), &rec1); err != nil {
 		t.Fatalf("failed to parse record response: %v", err)
 	}
-	if rec1.ID == "" || rec1.Value != -85.25 || rec1.DateCleared != nil || rec1.Entity != "Target" {
+	if rec1.ID == "" || rec1.Value != -85.25 || rec1.DateCleared != nil || rec1.Entity != "Supermarket" {
 		t.Errorf("unexpected record1 data: %+v", rec1)
 	}
 
@@ -422,7 +422,7 @@ func TestCheckingRecordsCRUD(t *testing.T) {
 	var pendingList []models.CheckingRecordResponse
 	_ = json.Unmarshal(wFilter.Body.Bytes(), &pendingList)
 	if len(pendingList) != 1 || pendingList[0].ID != rec1.ID {
-		t.Errorf("expected 1 pending record (Target), got: %+v", pendingList)
+		t.Errorf("expected 1 pending record (Supermarket), got: %+v", pendingList)
 	}
 
 	// 5. Get checking record by ID
@@ -459,7 +459,7 @@ func TestCheckingRecordsCRUD(t *testing.T) {
 		Value:       &updatedVal,
 		DateSent:    "2026-11-01",
 		DateCleared: &clearedDate,
-		Entity:      "Super Target Store",
+		Entity:      "Supermarket Plus",
 		Description: "Groceries and clothes",
 	})
 	putReq := newTestRequest(http.MethodPut, fmt.Sprintf("/api/v1/accounts/%s/records/%s", accountID, rec1.ID), bytes.NewReader(putBody))
@@ -472,7 +472,7 @@ func TestCheckingRecordsCRUD(t *testing.T) {
 	}
 	var putRec models.CheckingRecordResponse
 	_ = json.Unmarshal(wPut.Body.Bytes(), &putRec)
-	if putRec.Value != -90.00 || putRec.Entity != "Super Target Store" {
+	if putRec.Value != -90.00 || putRec.Entity != "Supermarket Plus" {
 		t.Errorf("unexpected updated record: %+v", putRec)
 	}
 
