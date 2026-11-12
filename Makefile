@@ -1,4 +1,4 @@
-.PHONY: start stop build build-api build-frontend build-gateway test refresh
+.PHONY: start stop clean build build-api build-frontend build-gateway test refresh
 
 DATA_DIR := data
 
@@ -8,11 +8,12 @@ start: stop
 	mkdir -p $(DATA_DIR)
 	docker compose up -d --build
 
-clean:
+clean: stop
 	rm -rf ./$(DATA_DIR)
 
 stop:
 	docker compose down
+	sleep 5 # issues pending file locks being released
 
 build: build-api build-frontend build-gateway
 
