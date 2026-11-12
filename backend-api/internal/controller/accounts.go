@@ -20,6 +20,9 @@ func validateAccountRequest(req models.AccountCreationRequest) (string, string, 
 	if accType == "credit_card" {
 		accType = "credit card"
 	}
+	if accType == "assets" {
+		accType = "asset"
+	}
 	if name == "" {
 		return "", "", "", NewAppError(http.StatusBadRequest, "MISSING_NAME", "Account name cannot be empty.")
 	}

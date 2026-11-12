@@ -545,3 +545,110 @@ func (p *PostgresRepository) DeleteAssetValue(ctx context.Context, assetID, valu
 	}
 	return nil
 }
+
+func (p *PostgresRepository) AddAccountAsset(ctx context.Context, aa *models.AccountAsset) error {
+	query := `INSERT INTO account_assets (id, account_id, asset_id, quantity, created_at, updated_at)
+	          VALUES ($1, $2, $3, $4, $5, $6)`
+	_, err := p.db.ExecContext(ctx, query, aa.ID, aa.AccountID, aa.AssetID, aa.Quantity, aa.CreatedAt, aa.UpdatedAt)
+	if err != nil {
+		if isUniqueViolation(err) {
+			return ErrConflict
+		}
+		return err
+	}
+	return nil
+}
+
+func (p *PostgresRepository) GetAccountAsset(ctx context.Context, accountID, identifier string) (*models.AccountAsset, error) {
+	query := `SELECT id, account_id, asset_id, quantity, created_at, updated_at
+	          FROM account_assets
+	          WHERE account_id = $1 AND (asset_id = $2 OR id = $2)`
+	row := p.db.QueryRowContext(ctx, query, accountID, identifier)
+	var aa models.AccountAsset
+	if err := row.Scan(&aa.ID, &aa.AccountID, &aa.AssetID, &aa.Quantity, &aa.CreatedAt, &aa.UpdatedAt); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrNotFound
+		}
+		return nil, err
+	}
+	return &aa, nil
+}
+
+func scanAccountAssetDetailRows(rows *sql.Rows) ([]*models.AccountAssetDetail, error) {
+	var details []*models.AccountAssetDetail
+	for rows.Next() {
+		var d models.AccountAssetDetail
+		var valDate sql.NullString
+		err := rows.Scan(
+			&d.ID, &d.AccountID, &d.AssetID, &d.Quantity, &d.CreatedAt, &d.UpdatedAt,
+			&d.Label, &d.Description, &d.LatestValue, &valDate,
+		)
+		if err != nil {
+			return nil, err
+		}
+		if valDate.Valid {
+			d.LatestValueDate = valDate.String
+		}
+		details = append(details, &d)
+	}
+	return details, rows.Err()
+}
+
+func (p *PostgresRepository) ListAccountAssets(ctx context.Context, accountID string) ([]*models.AccountAssetDetail, error) {
+	query := `SELECT 
+	            aa.id, aa.account_id, aa.asset_id, aa.quantity, aa.created_at, aa.updated_at,
+	            a.label, a.description,
+	            COALESCE(latest_val.value, 0.0) AS latest_value,
+	            TO_CHAR(latest_val.value_date, 'YYYY-MM-DD') AS latest_value_date
+	          FROM account_assets aa
+	          JOIN assets a ON aa.asset_id = a.id
+	          LEFT JOIN LATERAL (
+	            SELECT av.value, av.value_date
+	            FROM asset_values av
+	            WHERE av.asset_id = aa.asset_id
+	            ORDER BY av.value_date DESC, av.created_at DESC
+	            LIMIT 1
+	          ) latest_val ON true
+	          WHERE aa.account_id = $1
+	          ORDER BY LOWER(a.label) ASC`
+	rows, err := p.db.QueryContext(ctx, query, accountID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	return scanAccountAssetDetailRows(rows)
+}
+
+func (p *PostgresRepository) UpdateAccountAsset(ctx context.Context, aa *models.AccountAsset) error {
+	query := `UPDATE account_assets
+	          SET quantity = $1, updated_at = $2
+	          WHERE id = $3 AND account_id = $4`
+	res, err := p.db.ExecContext(ctx, query, aa.Quantity, aa.UpdatedAt, aa.ID, aa.AccountID)
+	if err != nil {
+		return err
+	}
+	rowsAffected, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rowsAffected == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+func (p *PostgresRepository) DeleteAccountAsset(ctx context.Context, accountID, identifier string) error {
+	query := `DELETE FROM account_assets WHERE account_id = $1 AND (asset_id = $2 OR id = $2)`
+	res, err := p.db.ExecContext(ctx, query, accountID, identifier)
+	if err != nil {
+		return err
+	}
+	rowsAffected, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rowsAffected == 0 {
+		return ErrNotFound
+	}
+	return nil
+}

@@ -621,3 +621,82 @@ func TestAssetValuesMultiDayAPI(t *testing.T) {
 		t.Fatalf("expected 409 conflict on duplicate date, got %d", wDup.Code)
 	}
 }
+
+func TestAccountAssetsAPI(t *testing.T) {
+	r, _ := setupTestRouter()
+	token := registerAndGetToken(t, r, "pm_user", "pm@example.com", "Password123!")
+	accountID := createAccount(t, r, token, "Precious Metals", "asset", "Metals Holdings")
+	assetID := createTestAsset(t, r, token, "slv-oz", "Silver Ounce")
+
+	// Set valuation
+	val := 32.50
+	valBody, _ := json.Marshal(models.AssetValueCreateRequest{Value: &val, ValueDate: "2026-11-10"})
+	reqVal := newTestRequest(http.MethodPost, fmt.Sprintf("/api/v1/assets/%s/values", assetID), bytes.NewReader(valBody))
+	reqVal.Header.Set("Content-Type", "application/json")
+	reqVal.Header.Set("Authorization", "Bearer "+token)
+	wVal := httptest.NewRecorder()
+	r.ServeHTTP(wVal, reqVal)
+
+	// Add asset to account
+	qty := 45.209
+	addBody, _ := json.Marshal(models.AccountAssetAddRequest{AssetID: assetID, Quantity: &qty})
+	reqAdd := newTestRequest(http.MethodPost, fmt.Sprintf("/api/v1/accounts/%s/assets", accountID), bytes.NewReader(addBody))
+	reqAdd.Header.Set("Content-Type", "application/json")
+	reqAdd.Header.Set("Authorization", "Bearer "+token)
+	wAdd := httptest.NewRecorder()
+	r.ServeHTTP(wAdd, reqAdd)
+	if wAdd.Code != http.StatusCreated {
+		t.Fatalf("expected 201 on add account asset, got %d: %s", wAdd.Code, wAdd.Body.String())
+	}
+
+	// List assets in account
+	reqList := newTestRequest(http.MethodGet, fmt.Sprintf("/api/v1/accounts/%s/assets", accountID), nil)
+	reqList.Header.Set("Authorization", "Bearer "+token)
+	wList := httptest.NewRecorder()
+	r.ServeHTTP(wList, reqList)
+	if wList.Code != http.StatusOK {
+		t.Fatalf("expected 200 on list account assets, got %d", wList.Code)
+	}
+
+	// Summary endpoint
+	reqSum := newTestRequest(http.MethodGet, fmt.Sprintf("/api/v1/accounts/%s/assets/summary", accountID), nil)
+	reqSum.Header.Set("Authorization", "Bearer "+token)
+	wSum := httptest.NewRecorder()
+	r.ServeHTTP(wSum, reqSum)
+	if wSum.Code != http.StatusOK {
+		t.Fatalf("expected 200 on asset account summary, got %d", wSum.Code)
+	}
+}
+
+func TestAccountAccessAPI(t *testing.T) {
+	r, _ := setupTestRouter()
+	tokenA := registerAndGetToken(t, r, "access_admin", "access_admin@example.com", "Password123!")
+
+	regB, _ := json.Marshal(models.UserRegistrationRequest{Username: "collab_b", Email: "collab_b@example.com", Password: "Password123!"})
+	reqB := newTestRequest(http.MethodPost, "/api/v1/users", bytes.NewReader(regB))
+	reqB.Header.Set("Content-Type", "application/json")
+	wB := httptest.NewRecorder()
+	r.ServeHTTP(wB, reqB)
+	var userB models.UserResponse
+	_ = json.Unmarshal(wB.Body.Bytes(), &userB)
+
+	accID := createAccount(t, r, tokenA, "Shared Vault", "asset", "Shared Holdings")
+
+	grantBody, _ := json.Marshal(models.AccountAccessGrantRequest{UserID: userB.ID, AccessLevel: models.AccessLevelRead})
+	reqGrant := newTestRequest(http.MethodPost, fmt.Sprintf("/api/v1/accounts/%s/access", accID), bytes.NewReader(grantBody))
+	reqGrant.Header.Set("Content-Type", "application/json")
+	reqGrant.Header.Set("Authorization", "Bearer "+tokenA)
+	wGrant := httptest.NewRecorder()
+	r.ServeHTTP(wGrant, reqGrant)
+	if wGrant.Code != http.StatusOK {
+		t.Fatalf("expected 200 on grant access, got %d: %s", wGrant.Code, wGrant.Body.String())
+	}
+
+	reqRevoke := newTestRequest(http.MethodDelete, fmt.Sprintf("/api/v1/accounts/%s/access/%s", accID, userB.ID), nil)
+	reqRevoke.Header.Set("Authorization", "Bearer "+tokenA)
+	wRevoke := httptest.NewRecorder()
+	r.ServeHTTP(wRevoke, reqRevoke)
+	if wRevoke.Code != http.StatusNoContent {
+		t.Fatalf("expected 204 on revoke access, got %d", wRevoke.Code)
+	}
+}

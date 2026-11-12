@@ -121,3 +121,49 @@ func TestMemoryRepo_AssetCascadeDelete(t *testing.T) {
 		t.Fatalf("expected 0 asset values after cascade delete, got %d", len(vals))
 	}
 }
+
+func TestMemoryRepo_AccountAssetOperations(t *testing.T) {
+	repo := repository.NewMemoryRepository()
+	ctx := context.Background()
+	now := time.Now().UTC()
+
+	u := "user-1"
+	acc := &models.Account{
+		ID: "acc-pm", AdminID: u, Name: "Precious Metals", Type: "asset", Description: "Metals", CreatedAt: now, UpdatedAt: now,
+	}
+	_ = repo.CreateAccount(ctx, acc)
+
+	asset := &models.Asset{
+		ID: "asset-slv", UserID: &u, Label: "slv-oz", Description: "Silver ounce", CreatedAt: now, UpdatedAt: now,
+	}
+	_ = repo.CreateAsset(ctx, asset)
+	_ = repo.CreateAssetValue(ctx, &models.AssetValue{
+		ID: "v-slv-1", AssetID: asset.ID, Value: 30.0, ValueDate: "2026-11-09", CreatedAt: now, UpdatedAt: now,
+	})
+	_ = repo.CreateAssetValue(ctx, &models.AssetValue{
+		ID: "v-slv-2", AssetID: asset.ID, Value: 32.50, ValueDate: "2026-11-10", CreatedAt: now, UpdatedAt: now,
+	})
+
+	aa := &models.AccountAsset{
+		ID: "aa-1", AccountID: acc.ID, AssetID: asset.ID, Quantity: 45.209, CreatedAt: now, UpdatedAt: now,
+	}
+	if err := repo.AddAccountAsset(ctx, aa); err != nil {
+		t.Fatalf("failed to add account asset: %v", err)
+	}
+
+	// Conflict on duplicate asset in same account
+	aaDup := &models.AccountAsset{
+		ID: "aa-dup", AccountID: acc.ID, AssetID: asset.ID, Quantity: 10.0, CreatedAt: now, UpdatedAt: now,
+	}
+	if err := repo.AddAccountAsset(ctx, aaDup); !errors.Is(err, repository.ErrConflict) {
+		t.Fatalf("expected ErrConflict on duplicate asset in account, got %v", err)
+	}
+
+	details, err := repo.ListAccountAssets(ctx, acc.ID)
+	if err != nil || len(details) != 1 {
+		t.Fatalf("expected 1 detail, got %d (%v)", len(details), err)
+	}
+	if details[0].LatestValue != 32.50 || details[0].Quantity != 45.209 {
+		t.Errorf("unexpected detail: %+v", details[0])
+	}
+}

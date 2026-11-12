@@ -70,3 +70,16 @@ CREATE TABLE IF NOT EXISTS asset_values (
 
 CREATE INDEX IF NOT EXISTS idx_asset_values_asset_date ON asset_values(asset_id, value_date DESC);
 
+CREATE TABLE IF NOT EXISTS account_assets (
+    id UUID PRIMARY KEY,
+    account_id UUID NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+    asset_id UUID NOT NULL REFERENCES assets(id) ON DELETE CASCADE,
+    quantity DOUBLE PRECISION NOT NULL CHECK (quantity > 0),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT uq_account_assets_account_asset UNIQUE (account_id, asset_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_account_assets_account_id ON account_assets(account_id);
+CREATE INDEX IF NOT EXISTS idx_account_assets_asset_id ON account_assets(asset_id);
+

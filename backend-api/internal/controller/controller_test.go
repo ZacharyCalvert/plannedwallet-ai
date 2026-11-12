@@ -511,3 +511,126 @@ func TestAssetValueUpdateAndDelete(t *testing.T) {
 		t.Fatalf("delete failed: %v", err)
 	}
 }
+
+func setupPreciousMetalsAccount(ctx context.Context, ctrl *controller.Controller) (string, string, string, string) {
+	u, _ := ctrl.RegisterUser(ctx, models.UserRegistrationRequest{
+		Username: "metals_owner", Email: "owner@metals.com", Password: "ValidPass123!",
+	})
+	acc, _ := ctrl.CreateAccount(ctx, u.ID, models.AccountCreationRequest{
+		Name: "Precious Metals", Type: "asset", Description: "Metals portfolio",
+	})
+	slv, _ := ctrl.CreateAsset(ctx, u.ID, models.AssetCreateRequest{Label: "slv-oz", Description: "Silver"})
+	gld, _ := ctrl.CreateAsset(ctx, u.ID, models.AssetCreateRequest{Label: "gld-oz", Description: "Gold"})
+
+	valSlv, valGld := 32.0, 2700.0
+	_, _ = ctrl.CreateAssetValue(ctx, u.ID, slv.ID, models.AssetValueCreateRequest{Value: &valSlv, ValueDate: "2026-11-10"})
+	_, _ = ctrl.CreateAssetValue(ctx, u.ID, gld.ID, models.AssetValueCreateRequest{Value: &valGld, ValueDate: "2026-11-10"})
+	return u.ID, acc.ID, slv.ID, gld.ID
+}
+
+func TestAssetAccountLifecycleAndValuation(t *testing.T) {
+	ctrl, _ := setupController()
+	ctx := context.Background()
+	uID, accID, slvID, gldID := setupPreciousMetalsAccount(ctx, ctrl)
+
+	qSlv, qGld := 45.209, 2.5
+	item1, err := ctrl.AddAccountAsset(ctx, uID, accID, models.AccountAssetAddRequest{AssetID: slvID, Quantity: &qSlv})
+	if err != nil || item1.TotalValue != 45.209*32.0 {
+		t.Fatalf("unexpected silver item: %+v, err: %v", item1, err)
+	}
+	item2, err := ctrl.AddAccountAsset(ctx, uID, accID, models.AccountAssetAddRequest{AssetID: gldID, Quantity: &qGld})
+	if err != nil || item2.TotalValue != 2.5*2700.0 {
+		t.Fatalf("unexpected gold item: %+v, err: %v", item2, err)
+	}
+
+	summary, err := ctrl.GetAssetAccountSummary(ctx, uID, accID)
+	expectedTotal := 45.209*32.0 + 2.5*2700.0
+	if err != nil || summary.TotalValue != expectedTotal {
+		t.Fatalf("expected total %v, got %v (err: %v)", expectedTotal, summary.TotalValue, err)
+	}
+
+	newQ := 50.0
+	updated, err := ctrl.UpdateAccountAsset(ctx, uID, accID, slvID, models.AccountAssetUpdateRequest{Quantity: &newQ})
+	if err != nil || updated.Quantity != 50.0 || updated.TotalValue != 1600.0 {
+		t.Fatalf("update failed: %+v (err: %v)", updated, err)
+	}
+
+	if err := ctrl.DeleteAccountAsset(ctx, uID, accID, gldID); err != nil {
+		t.Fatalf("delete failed: %v", err)
+	}
+}
+
+func TestAssetAccountAccessControl_Permissions(t *testing.T) {
+	ctrl, repo := setupController()
+	ctx := context.Background()
+	_, accID, slvID, _ := setupPreciousMetalsAccount(ctx, ctrl)
+
+	uEdit, _ := ctrl.RegisterUser(ctx, models.UserRegistrationRequest{
+		Username: "editor_user", Email: "editor@test.com", Password: "ValidPass123!",
+	})
+	uRead, _ := ctrl.RegisterUser(ctx, models.UserRegistrationRequest{
+		Username: "reader_user", Email: "reader@test.com", Password: "ValidPass123!",
+	})
+
+	now := time.Now().UTC()
+	_ = repo.GrantAccountAccess(ctx, &models.AccountAccess{
+		ID: "acc-edit", AccountID: accID, UserID: uEdit.ID, AccessLevel: models.AccessLevelEdit, CreatedAt: now, UpdatedAt: now,
+	})
+	_ = repo.GrantAccountAccess(ctx, &models.AccountAccess{
+		ID: "acc-read", AccountID: accID, UserID: uRead.ID, AccessLevel: models.AccessLevelRead, CreatedAt: now, UpdatedAt: now,
+	})
+
+	// Editor can add asset
+	q := 10.0
+	_, err := ctrl.AddAccountAsset(ctx, uEdit.ID, accID, models.AccountAssetAddRequest{AssetID: slvID, Quantity: &q})
+	if err != nil {
+		t.Fatalf("editor should be allowed to add asset: %v", err)
+	}
+
+	// Reader can list assets
+	list, err := ctrl.ListAccountAssets(ctx, uRead.ID, accID)
+	if err != nil || len(list) != 1 {
+		t.Fatalf("reader should be allowed to list assets: %v", err)
+	}
+
+	// Reader cannot add asset (403 Forbidden)
+	_, err = ctrl.AddAccountAsset(ctx, uRead.ID, accID, models.AccountAssetAddRequest{AssetID: slvID, Quantity: &q})
+	var appErr *controller.AppError
+	if !errors.As(err, &appErr) || appErr.Status != http.StatusForbidden {
+		t.Fatalf("expected 403 Forbidden for reader add asset, got: %v", err)
+	}
+}
+
+func TestAssetAccountNegativeCases(t *testing.T) {
+	ctrl, _ := setupController()
+	ctx := context.Background()
+	ownerID, accID, slvID, _ := setupPreciousMetalsAccount(ctx, ctrl)
+
+	uNoAccess, _ := ctrl.RegisterUser(ctx, models.UserRegistrationRequest{
+		Username: "no_access", Email: "noaccess@test.com", Password: "ValidPass123!",
+	})
+
+	// Non-member cannot access account (404)
+	_, err := ctrl.ListAccountAssets(ctx, uNoAccess.ID, accID)
+	var appErr *controller.AppError
+	if !errors.As(err, &appErr) || appErr.Status != http.StatusNotFound {
+		t.Fatalf("expected 404 for unshared user, got: %v", err)
+	}
+
+	// Negative/zero quantity rejected (400)
+	negQ := -5.0
+	_, err = ctrl.AddAccountAsset(ctx, ownerID, accID, models.AccountAssetAddRequest{AssetID: slvID, Quantity: &negQ})
+	if !errors.As(err, &appErr) || appErr.Status != http.StatusBadRequest {
+		t.Fatalf("expected 400 for negative quantity, got: %v", err)
+	}
+
+	// Non-asset account rejects asset operations (400)
+	chkAcc, _ := ctrl.CreateAccount(ctx, ownerID, models.AccountCreationRequest{
+		Name: "Checking", Type: "checking", Description: "Personal checking",
+	})
+	posQ := 1.0
+	_, err = ctrl.AddAccountAsset(ctx, ownerID, chkAcc.ID, models.AccountAssetAddRequest{AssetID: slvID, Quantity: &posQ})
+	if !errors.As(err, &appErr) || appErr.Status != http.StatusBadRequest {
+		t.Fatalf("expected 400 for adding asset to checking account, got: %v", err)
+	}
+}

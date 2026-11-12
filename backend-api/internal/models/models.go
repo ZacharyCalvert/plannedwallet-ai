@@ -8,6 +8,7 @@ var ValidAccountTypes = map[string]bool{
 	"savings":     true,
 	"credit card": true,
 	"credit_card": true,
+	"asset":       true,
 	"assets":      true,
 	"snapshot":    true,
 }
@@ -114,6 +115,12 @@ type AccountAccessResponse struct {
 	AccessLevel AccessLevel `json:"access_level"`
 	CreatedAt   time.Time   `json:"created_at"`
 	UpdatedAt   time.Time   `json:"updated_at"`
+}
+
+// AccountAccessGrantRequest represents the request to grant or update user access to an account.
+type AccountAccessGrantRequest struct {
+	UserID      string      `json:"user_id" binding:"required"`
+	AccessLevel AccessLevel `json:"access_level" binding:"required"`
 }
 
 // CheckingRecord domain model
@@ -231,6 +238,63 @@ type AssetValueResponse struct {
 	ValueDate string    `json:"value_date"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
+}
+
+// AccountAsset represents an asset holding assigned to an asset account.
+type AccountAsset struct {
+	ID        string    `json:"id"`
+	AccountID string    `json:"account_id"`
+	AssetID   string    `json:"asset_id"`
+	Quantity  float64   `json:"quantity"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+// AccountAssetDetail contains holding info enriched with asset metadata and latest valuation.
+type AccountAssetDetail struct {
+	ID              string
+	AccountID       string
+	AssetID         string
+	Label           string
+	Description     string
+	Quantity        float64
+	LatestValue     float64
+	LatestValueDate string
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
+}
+
+// AccountAssetAddRequest represents payload to add an asset with quantity to an account.
+type AccountAssetAddRequest struct {
+	AssetID  string   `json:"asset_id" binding:"required"`
+	Quantity *float64 `json:"quantity" binding:"required"`
+}
+
+// AccountAssetUpdateRequest represents payload to update the quantity of an asset in an account.
+type AccountAssetUpdateRequest struct {
+	Quantity *float64 `json:"quantity" binding:"required"`
+}
+
+// AccountAssetResponse represents an asset holding returned by the API with calculated values.
+type AccountAssetResponse struct {
+	ID              string    `json:"id"`
+	AccountID       string    `json:"account_id"`
+	AssetID         string    `json:"asset_id"`
+	Label           string    `json:"label"`
+	Description     string    `json:"description"`
+	Quantity        float64   `json:"quantity"`
+	LatestValue     float64   `json:"latest_value"`
+	LatestValueDate string    `json:"latest_value_date,omitempty"`
+	TotalValue      float64   `json:"total_value"`
+	CreatedAt       time.Time `json:"created_at"`
+	UpdatedAt       time.Time `json:"updated_at"`
+}
+
+// AssetAccountSummaryResponse represents the account summary with total portfolio value.
+type AssetAccountSummaryResponse struct {
+	AccountID  string                  `json:"account_id"`
+	TotalValue float64                 `json:"total_value"`
+	Assets     []*AccountAssetResponse `json:"assets"`
 }
 
 // ErrorResponse represents standardized API error responses.

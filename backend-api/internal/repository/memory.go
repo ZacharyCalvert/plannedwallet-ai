@@ -5,6 +5,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/plannedwallet/internal/models"
 )
@@ -19,6 +20,7 @@ type MemoryRepository struct {
 	checkingRecords map[string]*models.CheckingRecord // id -> CheckingRecord
 	assets          map[string]*models.Asset          // id -> Asset
 	assetValues     map[string]*models.AssetValue     // id -> AssetValue
+	accountAssets   map[string]*models.AccountAsset   // id -> AccountAsset
 }
 
 func NewMemoryRepository() *MemoryRepository {
@@ -31,6 +33,7 @@ func NewMemoryRepository() *MemoryRepository {
 		checkingRecords: make(map[string]*models.CheckingRecord),
 		assets:          make(map[string]*models.Asset),
 		assetValues:     make(map[string]*models.AssetValue),
+		accountAssets:   make(map[string]*models.AccountAsset),
 	}
 }
 
@@ -468,5 +471,132 @@ func (m *MemoryRepository) DeleteAssetValue(_ context.Context, assetID, valueID 
 		return ErrNotFound
 	}
 	delete(m.assetValues, valueID)
+	return nil
+}
+
+func (m *MemoryRepository) hasAccountAssetConflict(aa *models.AccountAsset) bool {
+	for _, item := range m.accountAssets {
+		if item.ID == aa.ID {
+			continue
+		}
+		if item.AccountID == aa.AccountID && item.AssetID == aa.AssetID {
+			return true
+		}
+	}
+	return false
+}
+
+func (m *MemoryRepository) AddAccountAsset(_ context.Context, aa *models.AccountAsset) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if _, ok := m.accounts[aa.AccountID]; !ok {
+		return ErrNotFound
+	}
+	if _, ok := m.assets[aa.AssetID]; !ok {
+		return ErrNotFound
+	}
+	if m.hasAccountAssetConflict(aa) {
+		return ErrConflict
+	}
+	copied := *aa
+	m.accountAssets[aa.ID] = &copied
+	return nil
+}
+
+func (m *MemoryRepository) findAccountAsset(accountID, identifier string) *models.AccountAsset {
+	for _, item := range m.accountAssets {
+		if item.AccountID == accountID && (item.ID == identifier || item.AssetID == identifier) {
+			return item
+		}
+	}
+	return nil
+}
+
+func (m *MemoryRepository) GetAccountAsset(_ context.Context, accountID, identifier string) (*models.AccountAsset, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	item := m.findAccountAsset(accountID, identifier)
+	if item == nil {
+		return nil, ErrNotFound
+	}
+	copied := *item
+	return &copied, nil
+}
+
+func (m *MemoryRepository) getLatestAssetValue(assetID string) (float64, string) {
+	var latestVal float64
+	var latestDate string
+	var latestCreated time.Time
+
+	for _, v := range m.assetValues {
+		if v.AssetID != assetID {
+			continue
+		}
+		if v.ValueDate > latestDate || (v.ValueDate == latestDate && v.CreatedAt.After(latestCreated)) {
+			latestDate = v.ValueDate
+			latestVal = v.Value
+			latestCreated = v.CreatedAt
+		}
+	}
+	return latestVal, latestDate
+}
+
+func (m *MemoryRepository) ListAccountAssets(_ context.Context, accountID string) ([]*models.AccountAssetDetail, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	var details []*models.AccountAssetDetail
+	for _, item := range m.accountAssets {
+		if item.AccountID != accountID {
+			continue
+		}
+		asset, ok := m.assets[item.AssetID]
+		if !ok {
+			continue
+		}
+		val, date := m.getLatestAssetValue(item.AssetID)
+		details = append(details, &models.AccountAssetDetail{
+			ID:              item.ID,
+			AccountID:       item.AccountID,
+			AssetID:         item.AssetID,
+			Label:           asset.Label,
+			Description:     asset.Description,
+			Quantity:        item.Quantity,
+			LatestValue:     val,
+			LatestValueDate: date,
+			CreatedAt:       item.CreatedAt,
+			UpdatedAt:       item.UpdatedAt,
+		})
+	}
+	sort.Slice(details, func(i, j int) bool {
+		return strings.ToLower(details[i].Label) < strings.ToLower(details[j].Label)
+	})
+	return details, nil
+}
+
+func (m *MemoryRepository) UpdateAccountAsset(_ context.Context, aa *models.AccountAsset) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	existing, ok := m.accountAssets[aa.ID]
+	if !ok || existing.AccountID != aa.AccountID {
+		return ErrNotFound
+	}
+	copied := *aa
+	m.accountAssets[aa.ID] = &copied
+	return nil
+}
+
+func (m *MemoryRepository) DeleteAccountAsset(_ context.Context, accountID, identifier string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	item := m.findAccountAsset(accountID, identifier)
+	if item == nil {
+		return ErrNotFound
+	}
+	delete(m.accountAssets, item.ID)
 	return nil
 }

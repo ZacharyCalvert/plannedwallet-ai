@@ -15,6 +15,7 @@ def create_authenticated_user(api_context: APIRequestContext) -> tuple[dict, str
     }
     create_res = api_context.post("/api/v1/users", data=user_data)
     assert create_res.status == 201, f"User creation failed: {create_res.text()}"
+    user_data["id"] = create_res.json()["id"]
     totp_secret = create_res.json()["totp_secret"]
     totp_code = compute_totp_code(totp_secret)
 

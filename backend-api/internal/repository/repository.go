@@ -50,4 +50,11 @@ type Repository interface {
 	ListAssetValues(ctx context.Context, assetID string, startDate, endDate *string) ([]*models.AssetValue, error)
 	UpdateAssetValue(ctx context.Context, av *models.AssetValue) error
 	DeleteAssetValue(ctx context.Context, assetID, valueID string) error
+
+	// Account Asset operations
+	AddAccountAsset(ctx context.Context, aa *models.AccountAsset) error
+	GetAccountAsset(ctx context.Context, accountID, identifier string) (*models.AccountAsset, error)
+	ListAccountAssets(ctx context.Context, accountID string) ([]*models.AccountAssetDetail, error)
+	UpdateAccountAsset(ctx context.Context, aa *models.AccountAsset) error
+	DeleteAccountAsset(ctx context.Context, accountID, identifier string) error
 }

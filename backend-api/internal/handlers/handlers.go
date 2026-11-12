@@ -378,6 +378,11 @@ func (h *Handler) RegisterRoutes(r *gin.Engine) {
 			protected.GET("/accounts", h.ListAccounts)
 			protected.GET("/accounts/:accountId", h.GetAccount)
 
+			// Account Access
+			protected.POST("/accounts/:accountId/access", h.GrantAccountAccess)
+			protected.GET("/accounts/:accountId/access/:userId", h.GetAccountAccess)
+			protected.DELETE("/accounts/:accountId/access/:userId", h.RevokeAccountAccess)
+
 			// Records
 			protected.POST("/accounts/:accountId/records", h.CreateCheckingRecord)
 			protected.GET("/accounts/:accountId/records", h.ListCheckingRecords)
@@ -385,6 +390,14 @@ func (h *Handler) RegisterRoutes(r *gin.Engine) {
 			protected.PUT("/accounts/:accountId/records/:recordId", h.UpdateCheckingRecord)
 			protected.PATCH("/accounts/:accountId/records/:recordId", h.PatchCheckingRecord)
 			protected.DELETE("/accounts/:accountId/records/:recordId", h.DeleteCheckingRecord)
+
+			// Account Assets
+			protected.POST("/accounts/:accountId/assets", h.AddAccountAsset)
+			protected.GET("/accounts/:accountId/assets", h.ListAccountAssets)
+			protected.GET("/accounts/:accountId/assets/summary", h.GetAssetAccountSummary)
+			protected.GET("/accounts/:accountId/assets/:assetId", h.GetAccountAsset)
+			protected.PUT("/accounts/:accountId/assets/:assetId", h.UpdateAccountAsset)
+			protected.DELETE("/accounts/:accountId/assets/:assetId", h.DeleteAccountAsset)
 
 			// Assets
 			protected.POST("/assets", h.CreateAsset)
