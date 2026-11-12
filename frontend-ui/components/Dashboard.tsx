@@ -6,6 +6,7 @@ import { fetchAccounts } from '../lib/api';
 import { AccountsPane } from './AccountsPane';
 import { NewAccountForm } from './NewAccountForm';
 import { AccountDetail } from './AccountDetail';
+import { SnapshotAccountDetail } from './SnapshotAccountDetail';
 
 interface DashboardProps {
   session: UserSession;
@@ -57,7 +58,11 @@ export function Dashboard({ session }: DashboardProps) {
             onCancel={() => setIsCreating(false)}
           />
         ) : selected ? (
-          <AccountDetail account={selected} token={session.token} />
+          selected.type === 'snapshot' ? (
+            <SnapshotAccountDetail account={selected} token={session.token} />
+          ) : (
+            <AccountDetail account={selected} token={session.token} />
+          )
         ) : (
           <div className="card empty-prompt">
             <p>Select an account from the left pane or click <strong>+</strong> to create an account.</p>

@@ -1,4 +1,12 @@
-import { Account, AccountRecord, CreateRecordRequest, UserRegistrationResponse } from './types';
+import {
+  Account,
+  AccountRecord,
+  AccountSnapshot,
+  CreateRecordRequest,
+  CreateSnapshotRequest,
+  UpdateSnapshotRequest,
+  UserRegistrationResponse,
+} from './types';
 import { createTraceparent, logTraceError, logTraceInfo } from './trace';
 
 async function tracedFetch(url: string, init: RequestInit = {}): Promise<Response> {
@@ -181,4 +189,93 @@ export async function patchAccountRecord(
     throw new Error(err.message || 'Failed to update record');
   }
   return res.json();
+}
+
+export async function fetchAccountSnapshots(
+  token: string,
+  accountId: string,
+  startDate?: string,
+  endDate?: string
+): Promise<AccountSnapshot[]> {
+  const query = new URLSearchParams();
+  if (startDate) query.set('start_date', startDate);
+  if (endDate) query.set('end_date', endDate);
+  const qs = query.toString() ? `?${query.toString()}` : '';
+
+  const res = await tracedFetch(
+    `/api/v1/accounts/${encodeURIComponent(accountId)}/snapshots${qs}`,
+    {
+      headers: { Authorization: `Bearer ${token}` },
+    }
+  );
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || 'Failed to load snapshots');
+  }
+  return res.json();
+}
+
+export async function createAccountSnapshot(
+  token: string,
+  accountId: string,
+  data: CreateSnapshotRequest
+): Promise<AccountSnapshot> {
+  const res = await tracedFetch(
+    `/api/v1/accounts/${encodeURIComponent(accountId)}/snapshots`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(data),
+    }
+  );
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || 'Failed to record snapshot');
+  }
+  return res.json();
+}
+
+export async function updateAccountSnapshot(
+  token: string,
+  accountId: string,
+  snapshotId: string,
+  data: UpdateSnapshotRequest
+): Promise<AccountSnapshot> {
+  const res = await tracedFetch(
+    `/api/v1/accounts/${encodeURIComponent(accountId)}/snapshots/${encodeURIComponent(snapshotId)}`,
+    {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(data),
+    }
+  );
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || 'Failed to update snapshot');
+  }
+  return res.json();
+}
+
+export async function deleteAccountSnapshot(
+  token: string,
+  accountId: string,
+  snapshotId: string
+): Promise<void> {
+  const res = await tracedFetch(
+    `/api/v1/accounts/${encodeURIComponent(accountId)}/snapshots/${encodeURIComponent(snapshotId)}`,
+    {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${token}` },
+    }
+  );
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || 'Failed to delete snapshot');
+  }
 }

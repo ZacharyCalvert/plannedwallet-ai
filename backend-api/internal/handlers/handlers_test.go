@@ -704,7 +704,7 @@ func TestAccountAccessAPI(t *testing.T) {
 func TestAccountSnapshotsAPI(t *testing.T) {
 	r, _ := setupTestRouter()
 	token := registerAndGetToken(t, r, "snapshot_api_user", "snapshot_api@example.com", "Password123!")
-	accountID := createAccount(t, r, token, "Robinhood Trading", "snapshot", "Stock trading portfolio")
+	accountID := createAccount(t, r, token, "Day Trading", "snapshot", "Stock trading portfolio")
 
 	// Create snapshot
 	val := 1200.00

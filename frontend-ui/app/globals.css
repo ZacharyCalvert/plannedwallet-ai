@@ -17,6 +17,9 @@
   --credit-card: #e11d48;
   --credit-card-bg: #ffe4e6;
   --credit-card-border: #fecdd3;
+  --snapshot: #7c3aed;
+  --snapshot-bg: #f5f3ff;
+  --snapshot-border: #ddd6fe;
 }
 
 * {
@@ -461,6 +464,28 @@ body {
   border-color: var(--credit-card);
   background-color: #fff1f2;
   box-shadow: 0 0 0 1px var(--credit-card);
+}
+
+.badge-snapshot {
+  background-color: var(--snapshot-bg);
+  color: var(--snapshot);
+  border: 1px solid var(--snapshot-border);
+}
+
+.account-card-snapshot {
+  border-color: #e9d5ff;
+  background-color: #faf5ff;
+}
+
+.account-card-snapshot:hover {
+  border-color: #c084fc;
+  background-color: #f3e8ff;
+}
+
+.account-card-snapshot.selected {
+  border-color: var(--snapshot);
+  background-color: #f3e8ff;
+  box-shadow: 0 0 0 1px var(--snapshot);
 }
 
 /* Dashboard Main Content */
@@ -966,3 +991,333 @@ body {
   text-align: center;
   color: var(--muted);
 }
+
+/* ==========================================================================
+   Snapshot Account Tabs & Views
+   ========================================================================== */
+
+.snapshot-tabs-bar {
+  display: flex;
+  gap: 0.5rem;
+  border-bottom: 2px solid var(--border);
+  margin-bottom: 1.5rem;
+}
+
+.snapshot-tab-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.65rem 1.25rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--muted);
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  cursor: pointer;
+  transition: all 0.15s ease-in-out;
+}
+
+.snapshot-tab-button:hover {
+  color: var(--foreground);
+}
+
+.snapshot-tab-button.active {
+  color: var(--snapshot);
+  border-bottom-color: var(--snapshot);
+  background-color: #faf5ff;
+}
+
+.tab-count-pill {
+  display: inline-block;
+  padding: 0.1rem 0.45rem;
+  font-size: 0.75rem;
+  border-radius: 9999px;
+  background-color: #ede9fe;
+  color: var(--snapshot);
+  font-weight: 700;
+}
+
+/* Snapshot Table Details */
+.snapshot-date-badge {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.snapshot-timestamp {
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.snapshot-action-buttons {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.btn-edit-snapshot {
+  background-color: #f1f5f9;
+  color: #334155;
+  border: 1px solid var(--border);
+  padding: 0.25rem 0.55rem;
+  border-radius: 0.375rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease-in-out;
+}
+
+.btn-edit-snapshot:hover {
+  background-color: #e2e8f0;
+  color: #0f172a;
+}
+
+.btn-delete-snapshot {
+  background-color: #fff1f2;
+  color: var(--danger);
+  border: 1px solid #fecdd3;
+  padding: 0.25rem 0.55rem;
+  border-radius: 0.375rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease-in-out;
+}
+
+.btn-delete-snapshot:hover {
+  background-color: var(--danger);
+  color: #ffffff;
+  border-color: var(--danger);
+}
+
+/* ==========================================================================
+   Snapshot Trend Line Graph
+   ========================================================================== */
+
+.trend-graph-section {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.graph-controls-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.graph-title {
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: #0f172a;
+  margin-bottom: 0.15rem;
+}
+
+.graph-subtitle {
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.graph-range-pills {
+  display: flex;
+  gap: 0.35rem;
+  background-color: #f1f5f9;
+  padding: 0.25rem;
+  border-radius: 0.375rem;
+  border: 1px solid var(--border);
+}
+
+.pill-btn {
+  background: transparent;
+  border: none;
+  border-radius: 0.25rem;
+  padding: 0.25rem 0.65rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--muted);
+  cursor: pointer;
+  transition: all 0.15s ease-in-out;
+}
+
+.pill-btn:hover {
+  color: var(--foreground);
+}
+
+.pill-btn.active {
+  background: #ffffff;
+  color: var(--snapshot);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+/* Metrics Grid */
+.graph-metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0.85rem;
+}
+
+.metric-tile {
+  background-color: #f8fafc;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  padding: 0.75rem 1rem;
+  display: flex;
+  flex-direction: column;
+}
+
+.metric-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--muted);
+  margin-bottom: 0.2rem;
+}
+
+.metric-val {
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: #0f172a;
+  font-variant-numeric: tabular-nums;
+}
+
+.metric-sub {
+  font-size: 0.75rem;
+  color: var(--muted);
+  margin-top: 0.15rem;
+}
+
+.text-positive {
+  color: #15803d;
+}
+
+.text-negative {
+  color: #b91c1c;
+}
+
+/* Graph Canvas & SVG */
+.graph-canvas-wrapper {
+  position: relative;
+  background: #ffffff;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  padding: 1rem 0.5rem 0.5rem 0.5rem;
+  overflow: hidden;
+}
+
+.trend-svg {
+  width: 100%;
+  height: 320px;
+  display: block;
+}
+
+.point-hit-target {
+  cursor: pointer;
+}
+
+.point-circle {
+  transition: r 0.15s ease, stroke-width 0.15s ease;
+  cursor: pointer;
+}
+
+/* Floating Tooltip */
+.graph-floating-tooltip {
+  position: absolute;
+  transform: translate(-50%, -120%);
+  background-color: #1e293b;
+  color: #ffffff;
+  padding: 0.45rem 0.75rem;
+  border-radius: 0.375rem;
+  font-size: 0.8rem;
+  pointer-events: none;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.15), 0 2px 4px -2px rgba(0, 0, 0, 0.15);
+  white-space: nowrap;
+  z-index: 10;
+}
+
+.graph-floating-tooltip::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border-width: 5px;
+  border-style: solid;
+  border-color: #1e293b transparent transparent transparent;
+}
+
+.tooltip-date {
+  font-size: 0.75rem;
+  color: #94a3b8;
+  font-weight: 500;
+}
+
+.tooltip-value {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #ffffff;
+}
+
+.tooltip-diff {
+  font-size: 0.7rem;
+  color: #c4b5fd;
+  margin-top: 0.1rem;
+}
+
+/* Graph Empty States */
+.graph-empty-card,
+.graph-single-card {
+  background: #ffffff;
+  border: 1px dashed var(--border);
+  border-radius: 0.5rem;
+  padding: 3rem 1.5rem;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+.graph-empty-icon {
+  font-size: 2.25rem;
+  margin-bottom: 0.25rem;
+}
+
+.graph-empty-card h4 {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #334155;
+}
+
+.graph-empty-card p,
+.single-subtext {
+  font-size: 0.9rem;
+  color: var(--muted);
+  max-width: 440px;
+}
+
+.graph-single-callout {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+  margin-bottom: 0.5rem;
+}
+
+.single-val {
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: var(--snapshot);
+}
+
+.single-date {
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+

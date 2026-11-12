@@ -41,3 +41,22 @@ export interface CreateRecordRequest {
   entity: string;
   description?: string;
 }
+
+export interface AccountSnapshot {
+  id: string;
+  account_id: string;
+  value: number;
+  snapshot_date: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreateSnapshotRequest {
+  value: number;
+  snapshot_date: string;
+}
+
+export interface UpdateSnapshotRequest {
+  value: number;
+  snapshot_date?: string;
+}

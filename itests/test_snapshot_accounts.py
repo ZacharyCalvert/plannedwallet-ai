@@ -24,7 +24,7 @@ def test_snapshot_account_lifecycle_and_trending(api_context: APIRequestContext)
         data={
             "name": "Trading Account",
             "type": "snapshot",
-            "description": "Robinhood & Interactive Brokers manual valuations",
+            "description": "Manual valuations",
         },
         headers=headers,
     )
