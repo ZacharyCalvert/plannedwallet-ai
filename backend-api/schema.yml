@@ -18,6 +18,12 @@ tags:
   - name: Accounts
     summary: Financial account management
     description: Endpoints for creating and managing financial accounts stored in PostgreSQL.
+  - name: Account Access
+    summary: Account sharing and permissions
+    description: Endpoints for granting, viewing, and revoking user permissions on accounts per the account_access table.
+  - name: Account Assets
+    summary: Asset account holdings management
+    description: Endpoints for managing asset holdings, quantities, and valuations within asset accounts.
   - name: Checking Records
     summary: Checking account transaction records
     description: Endpoints for adding, editing, deleting, and viewing records for checking accounts.
@@ -589,6 +595,460 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
+  /api/v1/accounts/{accountId}/access:
+    parameters:
+      - $ref: '#/components/parameters/XClientId'
+      - name: accountId
+        in: path
+        required: true
+        description: Unique identifier of the account.
+        schema:
+          type: string
+          format: uuid
+    post:
+      tags:
+        - Account Access
+      summary: Grant or update access permissions for a user
+      description: |
+        Allows the account admin to grant or update permissions (read, edit, admin)
+        for a collaborator on the account, recorded in the account_access table.
+      operationId: grantAccountAccess
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AccountAccessGrantRequest'
+      responses:
+        '200':
+          summary: Access permissions granted or updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountAccessResponse'
+        '400':
+          summary: Validation or client error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          summary: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          summary: Forbidden
+          description: Only the account admin can grant access permissions.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          summary: Not found
+          description: Account or target user not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/accounts/{accountId}/access/{userId}:
+    parameters:
+      - $ref: '#/components/parameters/XClientId'
+      - name: accountId
+        in: path
+        required: true
+        description: Unique identifier of the account.
+        schema:
+          type: string
+          format: uuid
+      - name: userId
+        in: path
+        required: true
+        description: Unique identifier of the target user.
+        schema:
+          type: string
+          format: uuid
+    get:
+      tags:
+        - Account Access
+      summary: Get access permissions for a user
+      description: Retrieves the permission level for a given user on the specified account.
+      operationId: getAccountAccess
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          summary: Access details retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountAccessResponse'
+        '400':
+          summary: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          summary: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          summary: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          summary: Not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    delete:
+      tags:
+        - Account Access
+      summary: Revoke access permissions for a user
+      description: Allows the account admin to revoke another user's access to the account.
+      operationId: revokeAccountAccess
+      security:
+        - BearerAuth: []
+      responses:
+        '204':
+          summary: Access permissions revoked
+        '400':
+          summary: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          summary: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          summary: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          summary: Not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/accounts/{accountId}/assets:
+    parameters:
+      - $ref: '#/components/parameters/XClientId'
+      - name: accountId
+        in: path
+        required: true
+        description: Unique identifier of the asset account.
+        schema:
+          type: string
+          format: uuid
+    post:
+      tags:
+        - Account Assets
+      summary: Add an asset holding to an asset account
+      description: |
+        Associates an asset with an asset account with a specified positive quantity.
+        Enforces access control (admin or edit required).
+        Returns the holding with the latest valuation and calculated total value.
+      operationId: addAccountAsset
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AccountAssetAddRequest'
+      responses:
+        '201':
+          summary: Asset holding added to account
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountAssetResponse'
+        '400':
+          summary: Invalid request or account type
+          description: Account is not an asset account, or quantity is <= 0.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          summary: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          summary: Forbidden
+          description: User lacks edit/admin permission on this account.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          summary: Account or asset not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          summary: Asset already added
+          description: Asset already exists in this account.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    get:
+      tags:
+        - Account Assets
+      summary: List all asset holdings in an asset account
+      description: |
+        Returns all asset holdings with their held quantities, latest valuations,
+        and calculated total values (quantity * latest_value).
+      operationId: listAccountAssets
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          summary: Asset holdings retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AccountAssetResponse'
+        '400':
+          summary: Invalid account type
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          summary: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          summary: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          summary: Account not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/accounts/{accountId}/assets/summary:
+    parameters:
+      - $ref: '#/components/parameters/XClientId'
+      - name: accountId
+        in: path
+        required: true
+        description: Unique identifier of the asset account.
+        schema:
+          type: string
+          format: uuid
+    get:
+      tags:
+        - Account Assets
+      summary: Get asset account summary and aggregated worth
+      description: |
+        Retrieves an asset account summary, aggregating the total account worth
+        computed from the latest valuations multiplied by the held quantities.
+      operationId: getAssetAccountSummary
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          summary: Account summary retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AssetAccountSummaryResponse'
+        '400':
+          summary: Invalid account type
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          summary: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          summary: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          summary: Account not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/accounts/{accountId}/assets/{assetId}:
+    parameters:
+      - $ref: '#/components/parameters/XClientId'
+      - name: accountId
+        in: path
+        required: true
+        description: Unique identifier of the asset account.
+        schema:
+          type: string
+          format: uuid
+      - name: assetId
+        in: path
+        required: true
+        description: Unique identifier of the asset or holding record.
+        schema:
+          type: string
+          format: uuid
+    get:
+      tags:
+        - Account Assets
+      summary: Get an asset holding from an account
+      description: Retrieves a specific asset holding with latest valuation and calculated total worth.
+      operationId: getAccountAsset
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          summary: Asset holding retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountAssetResponse'
+        '400':
+          summary: Invalid account type
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          summary: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          summary: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          summary: Asset holding or account not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    put:
+      tags:
+        - Account Assets
+      summary: Update the held quantity of an asset in an account
+      description: |
+        Updates the held quantity of an asset in an account. Requires edit or admin permission.
+      operationId: updateAccountAsset
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AccountAssetUpdateRequest'
+      responses:
+        '200':
+          summary: Asset holding updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountAssetResponse'
+        '400':
+          summary: Invalid quantity or account type
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          summary: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          summary: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          summary: Asset holding or account not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    delete:
+      tags:
+        - Account Assets
+      summary: Remove an asset holding from an account
+      description: |
+        Removes an asset holding from an account. Requires edit or admin permission.
+      operationId: deleteAccountAsset
+      security:
+        - BearerAuth: []
+      responses:
+        '204':
+          summary: Asset holding removed from account
+        '400':
+          summary: Invalid account type
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          summary: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          summary: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          summary: Asset holding or account not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
   /api/v1/assets:
     parameters:
       - $ref: '#/components/parameters/XClientId'
@@ -1079,9 +1539,10 @@ components:
         - checking
         - savings
         - credit card
+        - asset
         - assets
         - snapshot
-      example: "checking"
+      example: "asset"
 
     UserRegistrationRequest:
       type: object
@@ -1620,3 +2081,135 @@ components:
           format: date-time
           description: Timestamp when the record was last updated.
           example: "2026-11-12T10:00:00Z"
+
+    AccountAccessGrantRequest:
+      type: object
+      required:
+        - user_id
+        - access_level
+      properties:
+        user_id:
+          type: string
+          format: uuid
+          description: Unique identifier of the user to grant access to.
+          example: "e5f6a1b2-c3d4-e5f6-a1b2-c3d4e5f6a1b2"
+        access_level:
+          $ref: '#/components/schemas/AccessLevel'
+
+    AccountAssetAddRequest:
+      type: object
+      required:
+        - asset_id
+        - quantity
+      properties:
+        asset_id:
+          type: string
+          format: uuid
+          description: Identifier of the asset to add to the account.
+          example: "a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d"
+        quantity:
+          type: number
+          format: double
+          minimum: 0.00000001
+          description: Held quantity of the asset (must be greater than 0).
+          example: 45.209
+
+    AccountAssetUpdateRequest:
+      type: object
+      required:
+        - quantity
+      properties:
+        quantity:
+          type: number
+          format: double
+          minimum: 0.00000001
+          description: New held quantity of the asset (must be greater than 0).
+          example: 50.0
+
+    AccountAssetResponse:
+      type: object
+      required:
+        - id
+        - account_id
+        - asset_id
+        - label
+        - description
+        - quantity
+        - latest_value
+        - total_value
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique identifier for the account asset holding record.
+          example: "f1a2b3c4-d5e6-7f8a-9b0c-1d2e3f4a5b6c"
+        account_id:
+          type: string
+          format: uuid
+          description: Identifier of the asset account.
+          example: "7e954536-4ec8-490b-9304-4b52b217d84b"
+        asset_id:
+          type: string
+          format: uuid
+          description: Identifier of the asset.
+          example: "a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d"
+        label:
+          type: string
+          description: Label of the asset (e.g. slv-oz, btc, gld-oz).
+          example: "slv-oz"
+        description:
+          type: string
+          description: Description of the asset.
+          example: "Silver 1 Troy Ounce"
+        quantity:
+          type: number
+          format: double
+          description: Quantity held in the account.
+          example: 45.209
+        latest_value:
+          type: number
+          format: double
+          description: Latest known per-unit valuation of the asset in USD.
+          example: 32.50
+        latest_value_date:
+          type: string
+          format: date
+          nullable: true
+          description: Date of the latest valuation.
+          example: "2026-11-12"
+        total_value:
+          type: number
+          format: double
+          description: Computed total worth (quantity * latest_value).
+          example: 1469.2925
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    AssetAccountSummaryResponse:
+      type: object
+      required:
+        - account_id
+        - total_value
+        - assets
+      properties:
+        account_id:
+          type: string
+          format: uuid
+          description: Identifier of the asset account.
+          example: "7e954536-4ec8-490b-9304-4b52b217d84b"
+        total_value:
+          type: number
+          format: double
+          description: Aggregated current value of all assets in the account.
+          example: 1469.2925
+        assets:
+          type: array
+          description: List of asset holdings with their latest valuations.
+          items:
+            $ref: '#/components/schemas/AccountAssetResponse'
