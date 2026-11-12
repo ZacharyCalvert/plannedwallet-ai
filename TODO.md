@@ -10,9 +10,13 @@ snapshot account inputs - this account is worth x at this time
 CAPTCHA for account setup
 asset account -> like X bitcoin / total worth of the account
 Add categories (expense categories)
+Enforce uniqueness of email as well as user
+Update user agent to enforce 12 factor behaviors
 
 Top priority:
 Infrastructure + auto deploy to staging
+enforce REQUIRE_CAPTCHA set to true as environment variable
+Create JWT secret and mount as required field for JWT issuance / signing
 
 Medium priority:
 Add dependabot monitoring of npm, docker images, golang dependencies
