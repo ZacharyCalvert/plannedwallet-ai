@@ -7,6 +7,8 @@ CREATE TABLE IF NOT EXISTS users (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+CREATE UNIQUE INDEX IF NOT EXISTS uq_users_lower_email ON users (LOWER(email));
+
 CREATE TABLE IF NOT EXISTS accounts (
     id UUID PRIMARY KEY,
     admin_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
