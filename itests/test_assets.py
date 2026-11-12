@@ -32,6 +32,13 @@ def test_asset_lifecycle_and_multiday_values(api_context: APIRequestContext):
     )
     assert dup_asset_res.status == 409, f"Expected 409 conflict on duplicate asset label, got {dup_asset_res.status}"
 
+    dup_exact_res = api_context.post(
+        "/api/v1/assets",
+        data={"label": asset_label, "description": "Duplicate Bitcoin exact"},
+        headers=headers,
+    )
+    assert dup_exact_res.status == 409, f"Expected 409 conflict on exact duplicate asset label, got {dup_exact_res.status}"
+
     # 3. Add values for Nov 9th, Nov 10th, and Nov 11th
     dates_and_values = [
         ("2026-11-09", 91000.50),

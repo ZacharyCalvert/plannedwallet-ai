@@ -56,6 +56,7 @@ CREATE TABLE IF NOT EXISTS assets (
 
 CREATE INDEX IF NOT EXISTS idx_assets_user_id ON assets(user_id);
 CREATE INDEX IF NOT EXISTS idx_assets_label ON assets(label);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_assets_user_lower_label ON assets (user_id, LOWER(label)) NULLS NOT DISTINCT;
 
 CREATE TABLE IF NOT EXISTS asset_values (
     id UUID PRIMARY KEY,
