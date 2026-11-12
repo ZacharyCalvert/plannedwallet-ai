@@ -24,6 +24,9 @@ tags:
   - name: Account Assets
     summary: Asset account holdings management
     description: Endpoints for managing asset holdings, quantities, and valuations within asset accounts.
+  - name: Account Snapshots
+    summary: Snapshot account value records
+    description: Endpoints for recording, listing, updating, and deleting point-in-time valuations for snapshot accounts.
   - name: Checking Records
     summary: Checking account transaction records
     description: Endpoints for adding, editing, deleting, and viewing records for checking accounts.
@@ -1044,6 +1047,276 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
         '404':
           summary: Asset holding or account not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/accounts/{accountId}/snapshots:
+    parameters:
+      - $ref: '#/components/parameters/XClientId'
+      - name: accountId
+        in: path
+        required: true
+        description: Unique identifier of the snapshot account.
+        schema:
+          type: string
+          format: uuid
+    post:
+      tags:
+        - Account Snapshots
+      summary: Record an account value snapshot
+      description: |
+        Records a manual point-in-time valuation for a snapshot account on a specific date.
+        Enforces access control (admin or edit required).
+      operationId: createAccountSnapshot
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AccountSnapshotCreateRequest'
+      responses:
+        '201':
+          summary: Snapshot recorded successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountSnapshotResponse'
+        '400':
+          summary: Bad request
+          description: Missing or invalid value/date, or account is not a snapshot account.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          summary: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          summary: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          summary: Account not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          summary: Conflict
+          description: A snapshot for this account on this date already exists.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    get:
+      tags:
+        - Account Snapshots
+      summary: List snapshots for an account to trend over time
+      description: |
+        Retrieves point-in-time valuations for a snapshot account ordered chronologically by snapshot_date ASC.
+        Supports optional filtering by start_date and end_date.
+      operationId: listAccountSnapshots
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: start_date
+          in: query
+          required: false
+          description: Filter snapshots on or after this date (YYYY-MM-DD).
+          schema:
+            type: string
+            format: date
+            example: "2026-11-01"
+        - name: end_date
+          in: query
+          required: false
+          description: Filter snapshots on or before this date (YYYY-MM-DD).
+          schema:
+            type: string
+            format: date
+            example: "2026-11-30"
+      responses:
+        '200':
+          summary: Snapshots retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AccountSnapshotResponse'
+        '400':
+          summary: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          summary: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          summary: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          summary: Account not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/accounts/{accountId}/snapshots/{snapshotId}:
+    parameters:
+      - $ref: '#/components/parameters/XClientId'
+      - name: accountId
+        in: path
+        required: true
+        description: Unique identifier of the snapshot account.
+        schema:
+          type: string
+          format: uuid
+      - name: snapshotId
+        in: path
+        required: true
+        description: Unique identifier of the snapshot record.
+        schema:
+          type: string
+          format: uuid
+    get:
+      tags:
+        - Account Snapshots
+      summary: Get a specific snapshot record
+      description: Retrieves a single snapshot record by ID.
+      operationId: getAccountSnapshot
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          summary: Snapshot retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountSnapshotResponse'
+        '400':
+          summary: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          summary: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          summary: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          summary: Snapshot or account not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    put:
+      tags:
+        - Account Snapshots
+      summary: Update a snapshot record
+      description: Updates the valuation or date of an existing snapshot record. Requires edit or admin permission.
+      operationId: updateAccountSnapshot
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AccountSnapshotUpdateRequest'
+      responses:
+        '200':
+          summary: Snapshot updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountSnapshotResponse'
+        '400':
+          summary: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          summary: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          summary: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          summary: Snapshot or account not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          summary: Conflict
+          description: A snapshot for this account on this date already exists.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    delete:
+      tags:
+        - Account Snapshots
+      summary: Delete a snapshot record
+      description: Removes a snapshot record from the account. Requires edit or admin permission.
+      operationId: deleteAccountSnapshot
+      security:
+        - BearerAuth: []
+      responses:
+        '204':
+          summary: Snapshot deleted successfully
+        '400':
+          summary: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          summary: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          summary: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          summary: Snapshot or account not found
           content:
             application/json:
               schema:
@@ -2213,3 +2486,77 @@ components:
           description: List of asset holdings with their latest valuations.
           items:
             $ref: '#/components/schemas/AccountAssetResponse'
+
+    AccountSnapshotCreateRequest:
+      type: object
+      required:
+        - value
+        - snapshot_date
+      properties:
+        value:
+          type: number
+          format: double
+          description: Manual valuation of the account on the specified date in USD.
+          example: 1200.00
+        snapshot_date:
+          type: string
+          format: date
+          description: Date of the snapshot (YYYY-MM-DD).
+          example: "2026-11-11"
+
+    AccountSnapshotUpdateRequest:
+      type: object
+      required:
+        - value
+        - snapshot_date
+      properties:
+        value:
+          type: number
+          format: double
+          description: Updated valuation of the account in USD.
+          example: 1210.00
+        snapshot_date:
+          type: string
+          format: date
+          description: Updated date of the snapshot (YYYY-MM-DD).
+          example: "2026-11-12"
+
+    AccountSnapshotResponse:
+      type: object
+      required:
+        - id
+        - account_id
+        - value
+        - snapshot_date
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique identifier of the snapshot record.
+          example: "b1c2d3e4-f5a6-7b8c-9d0e-1f2a3b4c5d6e"
+        account_id:
+          type: string
+          format: uuid
+          description: Unique identifier of the snapshot account.
+          example: "7e954536-4ec8-490b-9304-4b52b217d84b"
+        value:
+          type: number
+          format: double
+          description: Valuation of the account on the specified date in USD.
+          example: 1200.00
+        snapshot_date:
+          type: string
+          format: date
+          description: Date of the valuation (YYYY-MM-DD).
+          example: "2026-11-11"
+        created_at:
+          type: string
+          format: date-time
+          description: Timestamp when the snapshot was recorded.
+        updated_at:
+          type: string
+          format: date-time
+          description: Timestamp when the snapshot was last updated.
+

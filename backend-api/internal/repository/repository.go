@@ -57,4 +57,11 @@ type Repository interface {
 	ListAccountAssets(ctx context.Context, accountID string) ([]*models.AccountAssetDetail, error)
 	UpdateAccountAsset(ctx context.Context, aa *models.AccountAsset) error
 	DeleteAccountAsset(ctx context.Context, accountID, identifier string) error
+
+	// Account Snapshot operations
+	CreateAccountSnapshot(ctx context.Context, snapshot *models.AccountSnapshot) error
+	GetAccountSnapshotByID(ctx context.Context, accountID, snapshotID string) (*models.AccountSnapshot, error)
+	ListAccountSnapshots(ctx context.Context, accountID string, startDate, endDate *string) ([]*models.AccountSnapshot, error)
+	UpdateAccountSnapshot(ctx context.Context, snapshot *models.AccountSnapshot) error
+	DeleteAccountSnapshot(ctx context.Context, accountID, snapshotID string) error
 }

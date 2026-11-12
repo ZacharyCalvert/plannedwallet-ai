@@ -634,3 +634,53 @@ func TestAssetAccountNegativeCases(t *testing.T) {
 		t.Fatalf("expected 400 for adding asset to checking account, got: %v", err)
 	}
 }
+
+func TestSnapshotAccountWorkflow(t *testing.T) {
+	ctrl, _ := setupController()
+	ctx := context.Background()
+	user, _ := ctrl.RegisterUser(ctx, models.UserRegistrationRequest{
+		Username: "trader_user", Email: "trader@example.com", Password: "ValidPass123!",
+	})
+
+	acc, err := ctrl.CreateAccount(ctx, user.ID, models.AccountCreationRequest{
+		Name: "Trading Account", Type: "snapshot", Description: "Portfolio trending",
+	})
+	if err != nil {
+		t.Fatalf("failed to create snapshot account: %v", err)
+	}
+
+	val1 := 1200.00
+	snap1, err := ctrl.CreateAccountSnapshot(ctx, user.ID, acc.ID, models.AccountSnapshotCreateRequest{
+		Value: &val1, SnapshotDate: "2026-11-11",
+	})
+	if err != nil || snap1.Value != 1200.00 {
+		t.Fatalf("failed to create snapshot 1: %v", err)
+	}
+
+	val2 := 1210.00
+	snap2, err := ctrl.CreateAccountSnapshot(ctx, user.ID, acc.ID, models.AccountSnapshotCreateRequest{
+		Value: &val2, SnapshotDate: "2026-11-12",
+	})
+	if err != nil || snap2.Value != 1210.00 {
+		t.Fatalf("failed to create snapshot 2: %v", err)
+	}
+
+	// Conflict on duplicate date
+	valDup := 1215.00
+	_, err = ctrl.CreateAccountSnapshot(ctx, user.ID, acc.ID, models.AccountSnapshotCreateRequest{
+		Value: &valDup, SnapshotDate: "2026-11-12",
+	})
+	var appErr *controller.AppError
+	if !errors.As(err, &appErr) || appErr.Status != http.StatusConflict {
+		t.Fatalf("expected 409 conflict on duplicate snapshot date, got: %v", err)
+	}
+
+	// List trending snapshots
+	list, err := ctrl.ListAccountSnapshots(ctx, user.ID, acc.ID, nil, nil)
+	if err != nil || len(list) != 2 {
+		t.Fatalf("expected 2 snapshots, got %d (%v)", len(list), err)
+	}
+	if list[0].Value != 1200.00 || list[1].Value != 1210.00 {
+		t.Errorf("unexpected snapshot ordering: %+v", list)
+	}
+}

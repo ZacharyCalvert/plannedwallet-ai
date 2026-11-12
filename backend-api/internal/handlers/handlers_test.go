@@ -700,3 +700,30 @@ func TestAccountAccessAPI(t *testing.T) {
 		t.Fatalf("expected 204 on revoke access, got %d", wRevoke.Code)
 	}
 }
+
+func TestAccountSnapshotsAPI(t *testing.T) {
+	r, _ := setupTestRouter()
+	token := registerAndGetToken(t, r, "snapshot_api_user", "snapshot_api@example.com", "Password123!")
+	accountID := createAccount(t, r, token, "Robinhood Trading", "snapshot", "Stock trading portfolio")
+
+	// Create snapshot
+	val := 1200.00
+	snapBody, _ := json.Marshal(models.AccountSnapshotCreateRequest{Value: &val, SnapshotDate: "2026-11-11"})
+	req := newTestRequest(http.MethodPost, fmt.Sprintf("/api/v1/accounts/%s/snapshots", accountID), bytes.NewReader(snapBody))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+token)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("expected 201 on snapshot create, got %d: %s", w.Code, w.Body.String())
+	}
+
+	// List snapshots
+	reqList := newTestRequest(http.MethodGet, fmt.Sprintf("/api/v1/accounts/%s/snapshots", accountID), nil)
+	reqList.Header.Set("Authorization", "Bearer "+token)
+	wList := httptest.NewRecorder()
+	r.ServeHTTP(wList, reqList)
+	if wList.Code != http.StatusOK {
+		t.Fatalf("expected 200 on list snapshots, got %d: %s", wList.Code, wList.Body.String())
+	}
+}

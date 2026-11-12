@@ -75,15 +75,19 @@ The backend classifies financial accounts under the `type` column in the `accoun
      $$\text{Account Total Value} = \sum_{i} \left( \text{quantity}_i \times \text{latest\_value}_i \right)$$
      where `latest_value` is resolved from the most recent valuation in `asset_values` (`value_date DESC, created_at DESC LIMIT 1`).
 5. **`snapshot`**:
-   - Dedicated account type for point-in-time account valuations over time.
+   - Dedicated account type for point-in-time account valuations over time (e.g. trading accounts, net worth tracking).
+   - Valuations are manually assigned per date via `account_snapshots` (`value`, `snapshot_date`).
+   - Trends account worth over time (`snapshot_date ASC, created_at ASC`) without holding checking records or asset holdings.
+   - Non-snapshot accounts reject snapshot operations with `400 Bad Request` (`INVALID_ACCOUNT_TYPE`).
+   - Mutating snapshots requires `admin` or `edit` access; `read` access permits viewing/trending.
 
 ---
 
 ## 4. Multi-User Access Control (`account_access`)
 All account endpoints enforce permissions via the `account_access` table:
-- **Owner / Admin (`accounts.admin_id == user_id` or `access_level == "admin"`)**: Full permissions to view, mutate records/assets, and grant or revoke access.
-- **Editor (`access_level == "edit"`)**: Permitted to view and mutate account records and asset holdings (`POST`, `PUT`, `DELETE`). Denied from altering account access settings (`403 Forbidden`).
-- **Reader (`access_level == "read"`)**: Permitted read-only access (`GET` records, assets, summaries). Any mutation attempt returns `403 Forbidden`.
+- **Owner / Admin (`accounts.admin_id == user_id` or `access_level == "admin"`)**: Full permissions to view, mutate records/assets/snapshots, and grant or revoke access.
+- **Editor (`access_level == "edit"`)**: Permitted to view and mutate account records, asset holdings, and snapshots (`POST`, `PUT`, `DELETE`). Denied from altering account access settings (`403 Forbidden`).
+- **Reader (`access_level == "read"`)**: Permitted read-only access (`GET` records, assets, snapshots, summaries). Any mutation attempt returns `403 Forbidden`.
 - **Unauthorized (no access entry)**: Returns `404 Not Found` (`ACCOUNT_NOT_FOUND`) to prevent enumeration or leaking the existence of private accounts.
 
 ---
@@ -97,6 +101,9 @@ All account endpoints enforce permissions via the `account_access` table:
 - **`account_assets` Table**: Maps assets into asset accounts (`id`, `account_id`, `asset_id`, `quantity`).
   - Quantity must be strictly positive (`CHECK (quantity > 0)`).
   - Unique constraint prevents duplicate asset entries within the same account: `UNIQUE (account_id, asset_id)`.
+- **`account_snapshots` Table**: Stores point-in-time valuations for snapshot accounts (`id`, `account_id`, `value`, `snapshot_date`, `created_at`, `updated_at`).
+  - Enforces one valuation per snapshot account per date: `CONSTRAINT uq_account_snapshots_account_date UNIQUE (account_id, snapshot_date)`.
+  - Ordered chronologically by `snapshot_date ASC, created_at ASC` to provide time-series trending over time.
 
 ---
 

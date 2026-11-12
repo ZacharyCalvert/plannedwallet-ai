@@ -83,3 +83,16 @@ CREATE TABLE IF NOT EXISTS account_assets (
 CREATE INDEX IF NOT EXISTS idx_account_assets_account_id ON account_assets(account_id);
 CREATE INDEX IF NOT EXISTS idx_account_assets_asset_id ON account_assets(asset_id);
 
+CREATE TABLE IF NOT EXISTS account_snapshots (
+    id UUID PRIMARY KEY,
+    account_id UUID NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+    value DOUBLE PRECISION NOT NULL,
+    snapshot_date DATE NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT uq_account_snapshots_account_date UNIQUE (account_id, snapshot_date)
+);
+
+CREATE INDEX IF NOT EXISTS idx_account_snapshots_account_date ON account_snapshots(account_id, snapshot_date ASC);
+
+

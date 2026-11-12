@@ -132,8 +132,12 @@ func (c *Controller) verifyCheckingAccount(ctx context.Context, userID, accountI
 		return nil, NewAppError(http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to verify account.")
 	}
 
-	if !isRecordSupportedAccount(account.Type) || !c.userHasAccountAccess(ctx, account, userID) {
+	if !c.userHasAccountAccess(ctx, account, userID) {
 		return nil, ErrAccountNotFound
+	}
+
+	if !isRecordSupportedAccount(account.Type) {
+		return nil, NewAppError(http.StatusBadRequest, "INVALID_ACCOUNT_TYPE", "Account does not support checking records.")
 	}
 
 	return account, nil

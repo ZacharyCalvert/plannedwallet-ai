@@ -61,7 +61,24 @@ def test_user_isolation_default_denial(api_context: APIRequestContext):
     assert holding_res.status == 201
     holding_a_id = holding_res.json()["id"]
 
-    # 3. User B creates their own account
+    # 3. User A creates a snapshot account and snapshot record
+    snp_acc_res = api_context.post(
+        "/api/v1/accounts",
+        data={"name": "User A Snapshot", "type": "snapshot", "description": "Secret snapshot account"},
+        headers=headers_a,
+    )
+    assert snp_acc_res.status == 201
+    snp_a_id = snp_acc_res.json()["id"]
+
+    snap_rec_res = api_context.post(
+        f"/api/v1/accounts/{snp_a_id}/snapshots",
+        data={"value": 12000.0, "snapshot_date": "2026-11-12"},
+        headers=headers_a,
+    )
+    assert snap_rec_res.status == 201
+    snap_a_id = snap_rec_res.json()["id"]
+
+    # 4. User B creates their own account
     b_chk = api_context.post(
         "/api/v1/accounts",
         data={"name": "User B Checking", "type": "checking", "description": "User B personal"},
@@ -133,6 +150,30 @@ def test_user_isolation_default_denial(api_context: APIRequestContext):
         f"/api/v1/accounts/{ast_a_id}/access/{user_b['id']}",
         headers=headers_b,
     ).status in [403, 404]
+
+    # --- VERIFY USER B CANNOT ACCESS USER A'S SNAPSHOT ACCOUNT OR SNAPSHOTS ---
+    assert snp_a_id not in b_account_ids
+    assert api_context.get(f"/api/v1/accounts/{snp_a_id}", headers=headers_b).status == 404
+    assert api_context.get(f"/api/v1/accounts/{snp_a_id}/snapshots", headers=headers_b).status == 404
+    assert api_context.get(f"/api/v1/accounts/{snp_a_id}/snapshots/{snap_a_id}", headers=headers_b).status == 404
+
+    # Mutations on User A's snapshot account by User B: 404
+    assert api_context.post(
+        f"/api/v1/accounts/{snp_a_id}/snapshots",
+        data={"value": 15000.0, "snapshot_date": "2026-11-13"},
+        headers=headers_b,
+    ).status == 404
+
+    assert api_context.put(
+        f"/api/v1/accounts/{snp_a_id}/snapshots/{snap_a_id}",
+        data={"value": 1.0, "snapshot_date": "2026-11-12"},
+        headers=headers_b,
+    ).status == 404
+
+    assert api_context.delete(
+        f"/api/v1/accounts/{snp_a_id}/snapshots/{snap_a_id}",
+        headers=headers_b,
+    ).status == 404
 
 
 def test_sql_injection_attempts_have_no_impact(api_context: APIRequestContext):

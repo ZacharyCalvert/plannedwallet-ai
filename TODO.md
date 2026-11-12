@@ -77,6 +77,7 @@ Reconcile month records (aggregate view of these were reconciled on X date from 
 account deletion
 record deletion
 asset deletion
+support sale / revenue tracking on snapshot accounts and asset accounts (win/loss)
 
 Follow up:
 scale postgres / review native eventual consistency models

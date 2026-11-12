@@ -297,6 +297,38 @@ type AssetAccountSummaryResponse struct {
 	Assets     []*AccountAssetResponse `json:"assets"`
 }
 
+// AccountSnapshot represents a point-in-time valuation for a snapshot account.
+type AccountSnapshot struct {
+	ID           string    `json:"id"`
+	AccountID    string    `json:"account_id"`
+	Value        float64   `json:"value"`
+	SnapshotDate string    `json:"snapshot_date"`
+	CreatedAt    time.Time `json:"created_at"`
+	UpdatedAt    time.Time `json:"updated_at"`
+}
+
+// AccountSnapshotCreateRequest represents payload to create a snapshot valuation.
+type AccountSnapshotCreateRequest struct {
+	Value        *float64 `json:"value" binding:"required"`
+	SnapshotDate string   `json:"snapshot_date" binding:"required"`
+}
+
+// AccountSnapshotUpdateRequest represents payload to update a snapshot valuation.
+type AccountSnapshotUpdateRequest struct {
+	Value        *float64 `json:"value" binding:"required"`
+	SnapshotDate *string  `json:"snapshot_date,omitempty"`
+}
+
+// AccountSnapshotResponse represents a snapshot valuation returned by the API.
+type AccountSnapshotResponse struct {
+	ID           string    `json:"id"`
+	AccountID    string    `json:"account_id"`
+	Value        float64   `json:"value"`
+	SnapshotDate string    `json:"snapshot_date"`
+	CreatedAt    time.Time `json:"created_at"`
+	UpdatedAt    time.Time `json:"updated_at"`
+}
+
 // ErrorResponse represents standardized API error responses.
 type ErrorResponse struct {
 	Error     string    `json:"error"`

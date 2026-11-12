@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/lib/pq"
 	"github.com/plannedwallet/internal/models"
@@ -640,6 +641,110 @@ func (p *PostgresRepository) UpdateAccountAsset(ctx context.Context, aa *models.
 func (p *PostgresRepository) DeleteAccountAsset(ctx context.Context, accountID, identifier string) error {
 	query := `DELETE FROM account_assets WHERE account_id = $1 AND (asset_id = $2 OR id = $2)`
 	res, err := p.db.ExecContext(ctx, query, accountID, identifier)
+	if err != nil {
+		return err
+	}
+	rowsAffected, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rowsAffected == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+func (p *PostgresRepository) CreateAccountSnapshot(ctx context.Context, snapshot *models.AccountSnapshot) error {
+	query := `INSERT INTO account_snapshots (id, account_id, value, snapshot_date, created_at, updated_at)
+	          VALUES ($1, $2, $3, $4, $5, $6)`
+	_, err := p.db.ExecContext(ctx, query, snapshot.ID, snapshot.AccountID, snapshot.Value, snapshot.SnapshotDate, snapshot.CreatedAt, snapshot.UpdatedAt)
+	if err != nil {
+		if isUniqueViolation(err) {
+			return ErrConflict
+		}
+		return err
+	}
+	return nil
+}
+
+func (p *PostgresRepository) GetAccountSnapshotByID(ctx context.Context, accountID, snapshotID string) (*models.AccountSnapshot, error) {
+	query := `SELECT id, account_id, value, snapshot_date, created_at, updated_at
+	          FROM account_snapshots
+	          WHERE account_id = $1 AND id = $2`
+	var s models.AccountSnapshot
+	var snapDate time.Time
+	err := p.db.QueryRowContext(ctx, query, accountID, snapshotID).Scan(
+		&s.ID, &s.AccountID, &s.Value, &snapDate, &s.CreatedAt, &s.UpdatedAt,
+	)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrNotFound
+		}
+		return nil, err
+	}
+	s.SnapshotDate = snapDate.Format("2006-01-02")
+	return &s, nil
+}
+
+func (p *PostgresRepository) ListAccountSnapshots(ctx context.Context, accountID string, startDate, endDate *string) ([]*models.AccountSnapshot, error) {
+	var sb strings.Builder
+	sb.WriteString(`SELECT id, account_id, value, snapshot_date, created_at, updated_at FROM account_snapshots WHERE account_id = $1`)
+	args := []interface{}{accountID}
+	paramIdx := 2
+	if startDate != nil && *startDate != "" {
+		sb.WriteString(fmt.Sprintf(" AND snapshot_date >= $%d::date", paramIdx))
+		args = append(args, *startDate)
+		paramIdx++
+	}
+	if endDate != nil && *endDate != "" {
+		sb.WriteString(fmt.Sprintf(" AND snapshot_date <= $%d::date", paramIdx))
+		args = append(args, *endDate)
+	}
+	sb.WriteString(" ORDER BY snapshot_date ASC, created_at ASC")
+
+	rows, err := p.db.QueryContext(ctx, sb.String(), args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var result []*models.AccountSnapshot
+	for rows.Next() {
+		var s models.AccountSnapshot
+		var snapDate time.Time
+		if err := rows.Scan(&s.ID, &s.AccountID, &s.Value, &snapDate, &s.CreatedAt, &s.UpdatedAt); err != nil {
+			return nil, err
+		}
+		s.SnapshotDate = snapDate.Format("2006-01-02")
+		result = append(result, &s)
+	}
+	return result, rows.Err()
+}
+
+func (p *PostgresRepository) UpdateAccountSnapshot(ctx context.Context, snapshot *models.AccountSnapshot) error {
+	query := `UPDATE account_snapshots
+	          SET value = $1, snapshot_date = $2, updated_at = $3
+	          WHERE account_id = $4 AND id = $5`
+	res, err := p.db.ExecContext(ctx, query, snapshot.Value, snapshot.SnapshotDate, snapshot.UpdatedAt, snapshot.AccountID, snapshot.ID)
+	if err != nil {
+		if isUniqueViolation(err) {
+			return ErrConflict
+		}
+		return err
+	}
+	rowsAffected, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rowsAffected == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+func (p *PostgresRepository) DeleteAccountSnapshot(ctx context.Context, accountID, snapshotID string) error {
+	query := `DELETE FROM account_snapshots WHERE account_id = $1 AND id = $2`
+	res, err := p.db.ExecContext(ctx, query, accountID, snapshotID)
 	if err != nil {
 		return err
 	}

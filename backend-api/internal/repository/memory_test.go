@@ -167,3 +167,49 @@ func TestMemoryRepo_AccountAssetOperations(t *testing.T) {
 		t.Errorf("unexpected detail: %+v", details[0])
 	}
 }
+
+func TestMemoryRepo_AccountSnapshotOperations(t *testing.T) {
+	repo := repository.NewMemoryRepository()
+	ctx := context.Background()
+	now := time.Now().UTC()
+
+	acc := &models.Account{
+		ID: "acc-snap", AdminID: "u1", Name: "Trading Account", Type: "snapshot", Description: "Brokerage", CreatedAt: now, UpdatedAt: now,
+	}
+	_ = repo.CreateAccount(ctx, acc)
+
+	s1 := &models.AccountSnapshot{
+		ID: "snap-1", AccountID: acc.ID, Value: 1200.0, SnapshotDate: "2026-11-11", CreatedAt: now, UpdatedAt: now,
+	}
+	if err := repo.CreateAccountSnapshot(ctx, s1); err != nil {
+		t.Fatalf("failed to create snapshot: %v", err)
+	}
+
+	s2 := &models.AccountSnapshot{
+		ID: "snap-2", AccountID: acc.ID, Value: 1210.0, SnapshotDate: "2026-11-12", CreatedAt: now, UpdatedAt: now,
+	}
+	if err := repo.CreateAccountSnapshot(ctx, s2); err != nil {
+		t.Fatalf("failed to create snapshot 2: %v", err)
+	}
+
+	// Duplicate date conflict
+	sDup := &models.AccountSnapshot{
+		ID: "snap-dup", AccountID: acc.ID, Value: 1215.0, SnapshotDate: "2026-11-12", CreatedAt: now, UpdatedAt: now,
+	}
+	if err := repo.CreateAccountSnapshot(ctx, sDup); !errors.Is(err, repository.ErrConflict) {
+		t.Fatalf("expected ErrConflict on duplicate snapshot date, got %v", err)
+	}
+
+	list, err := repo.ListAccountSnapshots(ctx, acc.ID, nil, nil)
+	if err != nil || len(list) != 2 {
+		t.Fatalf("expected 2 snapshots, got %d (%v)", len(list), err)
+	}
+	if list[0].Value != 1200.0 || list[1].Value != 1210.0 {
+		t.Errorf("unexpected list ordering or values: %+v", list)
+	}
+
+	// Delete
+	if err := repo.DeleteAccountSnapshot(ctx, acc.ID, s1.ID); err != nil {
+		t.Fatalf("failed to delete snapshot: %v", err)
+	}
+}

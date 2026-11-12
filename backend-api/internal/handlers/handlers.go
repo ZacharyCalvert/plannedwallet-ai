@@ -399,6 +399,13 @@ func (h *Handler) RegisterRoutes(r *gin.Engine) {
 			protected.PUT("/accounts/:accountId/assets/:assetId", h.UpdateAccountAsset)
 			protected.DELETE("/accounts/:accountId/assets/:assetId", h.DeleteAccountAsset)
 
+			// Account Snapshots
+			protected.POST("/accounts/:accountId/snapshots", h.CreateAccountSnapshot)
+			protected.GET("/accounts/:accountId/snapshots", h.ListAccountSnapshots)
+			protected.GET("/accounts/:accountId/snapshots/:snapshotId", h.GetAccountSnapshot)
+			protected.PUT("/accounts/:accountId/snapshots/:snapshotId", h.UpdateAccountSnapshot)
+			protected.DELETE("/accounts/:accountId/snapshots/:snapshotId", h.DeleteAccountSnapshot)
+
 			// Assets
 			protected.POST("/assets", h.CreateAsset)
 			protected.GET("/assets", h.ListAssets)

@@ -21,6 +21,7 @@ type MemoryRepository struct {
 	assets          map[string]*models.Asset          // id -> Asset
 	assetValues     map[string]*models.AssetValue     // id -> AssetValue
 	accountAssets   map[string]*models.AccountAsset   // id -> AccountAsset
+	accountSnapshots map[string]*models.AccountSnapshot // id -> AccountSnapshot
 }
 
 func NewMemoryRepository() *MemoryRepository {
@@ -34,6 +35,7 @@ func NewMemoryRepository() *MemoryRepository {
 		assets:          make(map[string]*models.Asset),
 		assetValues:     make(map[string]*models.AssetValue),
 		accountAssets:   make(map[string]*models.AccountAsset),
+		accountSnapshots: make(map[string]*models.AccountSnapshot),
 	}
 }
 
@@ -598,5 +600,105 @@ func (m *MemoryRepository) DeleteAccountAsset(_ context.Context, accountID, iden
 		return ErrNotFound
 	}
 	delete(m.accountAssets, item.ID)
+	return nil
+}
+
+func (m *MemoryRepository) hasAccountSnapshotConflict(s *models.AccountSnapshot) bool {
+	for _, item := range m.accountSnapshots {
+		if item.ID == s.ID {
+			continue
+		}
+		if item.AccountID == s.AccountID && item.SnapshotDate == s.SnapshotDate {
+			return true
+		}
+	}
+	return false
+}
+
+func (m *MemoryRepository) CreateAccountSnapshot(_ context.Context, s *models.AccountSnapshot) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if _, ok := m.accounts[s.AccountID]; !ok {
+		return ErrNotFound
+	}
+	if m.hasAccountSnapshotConflict(s) {
+		return ErrConflict
+	}
+	copied := *s
+	m.accountSnapshots[s.ID] = &copied
+	return nil
+}
+
+func (m *MemoryRepository) GetAccountSnapshotByID(_ context.Context, accountID, snapshotID string) (*models.AccountSnapshot, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	item, ok := m.accountSnapshots[snapshotID]
+	if !ok || item.AccountID != accountID {
+		return nil, ErrNotFound
+	}
+	copied := *item
+	return &copied, nil
+}
+
+func matchesSnapshot(s *models.AccountSnapshot, accountID string, startDate, endDate *string) bool {
+	if s.AccountID != accountID {
+		return false
+	}
+	if startDate != nil && *startDate != "" && s.SnapshotDate < *startDate {
+		return false
+	}
+	if endDate != nil && *endDate != "" && s.SnapshotDate > *endDate {
+		return false
+	}
+	return true
+}
+
+func (m *MemoryRepository) ListAccountSnapshots(_ context.Context, accountID string, startDate, endDate *string) ([]*models.AccountSnapshot, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	var result []*models.AccountSnapshot
+	for _, s := range m.accountSnapshots {
+		if matchesSnapshot(s, accountID, startDate, endDate) {
+			copied := *s
+			result = append(result, &copied)
+		}
+	}
+	sort.Slice(result, func(i, j int) bool {
+		if result[i].SnapshotDate == result[j].SnapshotDate {
+			return result[i].CreatedAt.Before(result[j].CreatedAt)
+		}
+		return result[i].SnapshotDate < result[j].SnapshotDate
+	})
+	return result, nil
+}
+
+func (m *MemoryRepository) UpdateAccountSnapshot(_ context.Context, s *models.AccountSnapshot) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	existing, ok := m.accountSnapshots[s.ID]
+	if !ok || existing.AccountID != s.AccountID {
+		return ErrNotFound
+	}
+	if m.hasAccountSnapshotConflict(s) {
+		return ErrConflict
+	}
+	copied := *s
+	m.accountSnapshots[s.ID] = &copied
+	return nil
+}
+
+func (m *MemoryRepository) DeleteAccountSnapshot(_ context.Context, accountID, snapshotID string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	existing, ok := m.accountSnapshots[snapshotID]
+	if !ok || existing.AccountID != accountID {
+		return ErrNotFound
+	}
+	delete(m.accountSnapshots, snapshotID)
 	return nil
 }

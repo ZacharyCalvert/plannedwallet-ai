@@ -10,11 +10,15 @@ func TestInitSQLEmbedded(t *testing.T) {
 		t.Fatal("expected embedded initSQL to be non-empty")
 	}
 
-	expectedTables := []string{"users", "accounts", "account_access", "checking_records", "assets", "asset_values", "account_assets"}
+	expectedTables := []string{"users", "accounts", "account_access", "checking_records", "assets", "asset_values", "account_assets", "account_snapshots"}
 	for _, table := range expectedTables {
 		if !strings.Contains(initSQL, "CREATE TABLE IF NOT EXISTS "+table) {
 			t.Errorf("expected initSQL to contain CREATE TABLE IF NOT EXISTS for %s", table)
 		}
+	}
+
+	if !strings.Contains(initSQL, "uq_account_snapshots_account_date UNIQUE (account_id, snapshot_date)") {
+		t.Error("expected initSQL to contain uq_account_snapshots_account_date constraint")
 	}
 
 	if !strings.Contains(initSQL, "uq_account_assets_account_asset UNIQUE (account_id, asset_id)") {
