@@ -7,14 +7,21 @@ import {
   Asset,
   AssetAccountSummary,
   AssetAccountTrendPoint,
+  AssetStore,
+  AssetStoreRecord,
+  AssetStoreTrendPoint,
   AssetValue,
   CaptchaResponse,
   CreateAssetRequest,
+  CreateAssetStoreRequest,
   CreateAssetValueRequest,
   CreateRecordRequest,
   CreateSnapshotRequest,
+  CreateStoreRecordRequest,
   UpdateAccountAssetRequest,
+  UpdateAssetStoreRequest,
   UpdateSnapshotRequest,
+  UpdateStoreRecordRequest,
   UserRegistrationResponse,
 } from './types';
 import { createTraceparent, logTraceError, logTraceInfo } from './trace';
@@ -312,7 +319,8 @@ export async function fetchAssets(token: string, label?: string): Promise<Asset[
   if (!res.ok) {
     throw new Error('Failed to load assets');
   }
-  return res.json();
+  const data = await res.json();
+  return Array.isArray(data) ? data : [];
 }
 
 export async function createAsset(token: string, data: CreateAssetRequest): Promise<Asset> {
@@ -351,6 +359,20 @@ export async function updateAsset(
   return res.json();
 }
 
+export async function deleteAsset(
+  token: string,
+  assetId: string
+): Promise<void> {
+  const res = await tracedFetch(`/api/v1/assets/${encodeURIComponent(assetId)}`, {
+    method: 'DELETE',
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || 'Failed to delete asset definition');
+  }
+}
+
 export async function fetchAssetValues(
   token: string,
   assetId: string,
@@ -371,7 +393,8 @@ export async function fetchAssetValues(
   if (!res.ok) {
     throw new Error('Failed to load asset valuation history');
   }
-  return res.json();
+  const data = await res.json();
+  return Array.isArray(data) ? data : [];
 }
 
 export async function createAssetValue(
@@ -452,7 +475,8 @@ export async function fetchAccountAssets(
   if (!res.ok) {
     throw new Error('Failed to load account assets');
   }
-  return res.json();
+  const data = await res.json();
+  return Array.isArray(data) ? data : [];
 }
 
 export async function fetchAssetAccountSummary(
@@ -490,7 +514,8 @@ export async function fetchAssetAccountTrend(
   if (!res.ok) {
     throw new Error('Failed to load asset account trend');
   }
-  return res.json();
+  const data = await res.json();
+  return Array.isArray(data) ? data : [];
 }
 
 export async function addAccountAsset(
@@ -556,4 +581,190 @@ export async function deleteAccountAsset(
     const err = await res.json().catch(() => ({}));
     throw new Error(err.message || 'Failed to remove asset from account');
   }
+}
+
+export async function fetchAssetStores(
+  token: string,
+  accountId: string
+): Promise<AssetStore[]> {
+  const res = await tracedFetch(
+    `/api/v1/accounts/${encodeURIComponent(accountId)}/stores`,
+    {
+      headers: { Authorization: `Bearer ${token}` },
+    }
+  );
+  if (!res.ok) {
+    throw new Error('Failed to load asset stores');
+  }
+  const data = await res.json();
+  return Array.isArray(data) ? data : [];
+}
+
+export async function createAssetStore(
+  token: string,
+  accountId: string,
+  data: CreateAssetStoreRequest
+): Promise<AssetStore> {
+  const res = await tracedFetch(
+    `/api/v1/accounts/${encodeURIComponent(accountId)}/stores`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(data),
+    }
+  );
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || 'Failed to create asset store');
+  }
+  return res.json();
+}
+
+export async function updateAssetStore(
+  token: string,
+  accountId: string,
+  storeId: string,
+  data: UpdateAssetStoreRequest
+): Promise<AssetStore> {
+  const res = await tracedFetch(
+    `/api/v1/accounts/${encodeURIComponent(accountId)}/stores/${encodeURIComponent(storeId)}`,
+    {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(data),
+    }
+  );
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || 'Failed to update asset store');
+  }
+  return res.json();
+}
+
+export async function deleteAssetStore(
+  token: string,
+  accountId: string,
+  storeId: string
+): Promise<void> {
+  const res = await tracedFetch(
+    `/api/v1/accounts/${encodeURIComponent(accountId)}/stores/${encodeURIComponent(storeId)}`,
+    {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${token}` },
+    }
+  );
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || 'Failed to delete asset store');
+  }
+}
+
+export async function fetchAssetStoreRecords(
+  token: string,
+  accountId: string,
+  storeId: string
+): Promise<AssetStoreRecord[]> {
+  const res = await tracedFetch(
+    `/api/v1/accounts/${encodeURIComponent(accountId)}/stores/${encodeURIComponent(storeId)}/records`,
+    {
+      headers: { Authorization: `Bearer ${token}` },
+    }
+  );
+  if (!res.ok) {
+    throw new Error('Failed to load store records');
+  }
+  const data = await res.json();
+  return Array.isArray(data) ? data : [];
+}
+
+export async function createAssetStoreRecord(
+  token: string,
+  accountId: string,
+  storeId: string,
+  data: CreateStoreRecordRequest
+): Promise<AssetStoreRecord> {
+  const res = await tracedFetch(
+    `/api/v1/accounts/${encodeURIComponent(accountId)}/stores/${encodeURIComponent(storeId)}/records`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(data),
+    }
+  );
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || 'Failed to add store record');
+  }
+  return res.json();
+}
+
+export async function updateAssetStoreRecord(
+  token: string,
+  accountId: string,
+  storeId: string,
+  recordId: string,
+  data: UpdateStoreRecordRequest
+): Promise<AssetStoreRecord> {
+  const res = await tracedFetch(
+    `/api/v1/accounts/${encodeURIComponent(accountId)}/stores/${encodeURIComponent(storeId)}/records/${encodeURIComponent(recordId)}`,
+    {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(data),
+    }
+  );
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || 'Failed to update store record');
+  }
+  return res.json();
+}
+
+export async function deleteAssetStoreRecord(
+  token: string,
+  accountId: string,
+  storeId: string,
+  recordId: string
+): Promise<void> {
+  const res = await tracedFetch(
+    `/api/v1/accounts/${encodeURIComponent(accountId)}/stores/${encodeURIComponent(storeId)}/records/${encodeURIComponent(recordId)}`,
+    {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${token}` },
+    }
+  );
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || 'Failed to delete store record');
+  }
+}
+
+export async function fetchAssetStoreTrend(
+  token: string,
+  accountId: string,
+  storeId: string
+): Promise<AssetStoreTrendPoint[]> {
+  const res = await tracedFetch(
+    `/api/v1/accounts/${encodeURIComponent(accountId)}/stores/${encodeURIComponent(storeId)}/trend`,
+    {
+      headers: { Authorization: `Bearer ${token}` },
+    }
+  );
+  if (!res.ok) {
+    throw new Error('Failed to load store trend');
+  }
+  const data = await res.json();
+  return Array.isArray(data) ? data : [];
 }

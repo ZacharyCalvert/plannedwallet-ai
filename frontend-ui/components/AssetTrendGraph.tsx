@@ -34,7 +34,8 @@ export function AssetTrendGraph({ points }: AssetTrendGraphProps) {
 
   // Sort points chronologically
   const sorted = useMemo(() => {
-    return [...points].sort((a, b) => a.date.localeCompare(b.date));
+    const list = Array.isArray(points) ? points : [];
+    return [...list].sort((a, b) => a.date.localeCompare(b.date));
   }, [points]);
 
   // Apply range filter

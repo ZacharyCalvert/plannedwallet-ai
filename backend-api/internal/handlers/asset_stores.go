@@ -57,6 +57,9 @@ func (h *Handler) ListAssetStores(c *gin.Context) {
 		h.handleError(c, err)
 		return
 	}
+	if res == nil {
+		res = []*models.AssetStoreDetail{}
+	}
 	c.JSON(http.StatusOK, res)
 }
 
@@ -147,6 +150,9 @@ func (h *Handler) ListAssetStoreRecords(c *gin.Context) {
 		h.handleError(c, err)
 		return
 	}
+	if res == nil {
+		res = []*models.AssetStoreRecord{}
+	}
 	c.JSON(http.StatusOK, res)
 }
 
@@ -200,6 +206,9 @@ func (h *Handler) GetAssetStoreTrend(c *gin.Context) {
 	if err != nil {
 		h.handleError(c, err)
 		return
+	}
+	if res == nil {
+		res = []models.AssetStoreTrendPoint{}
 	}
 	c.JSON(http.StatusOK, res)
 }

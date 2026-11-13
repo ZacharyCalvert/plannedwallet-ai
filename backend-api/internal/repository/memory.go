@@ -898,7 +898,7 @@ func (m *MemoryRepository) ListAssetStores(_ context.Context, accountID string) 
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	var list []*models.AssetStoreDetail
+	list := make([]*models.AssetStoreDetail, 0)
 	for _, s := range m.assetStores {
 		if s.AccountID == accountID {
 			list = append(list, m.buildStoreDetailLocked(s))
@@ -980,7 +980,7 @@ func (m *MemoryRepository) ListAssetStoreRecords(_ context.Context, storeID stri
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	var list []*models.AssetStoreRecord
+	list := make([]*models.AssetStoreRecord, 0)
 	for _, r := range m.assetStoreRecords {
 		if r.AssetStoreID == storeID {
 			copied := *r
@@ -1088,7 +1088,7 @@ func (m *MemoryRepository) GetAssetStoreTrend(_ context.Context, storeID string)
 		return nil, ErrNotFound
 	}
 	dates := m.collectStoreTrendDatesLocked(storeID, store.AssetID)
-	var points []models.AssetStoreTrendPoint
+	points := make([]models.AssetStoreTrendPoint, 0)
 	for _, d := range dates {
 		q := m.getStoreQtyAtDateLocked(storeID, d)
 		if q <= 0 {

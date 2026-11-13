@@ -273,10 +273,14 @@ func (c *Controller) GetAssetAccountSummary(ctx context.Context, userID, account
 			total += a.TotalValue
 		}
 	}
+	if latestAssets == nil {
+		latestAssets = []*models.AccountAssetResponse{}
+	}
 	return &models.AssetAccountSummaryResponse{
 		AccountID:  accountID,
 		TotalValue: total,
 		Assets:     latestAssets,
+		Stores:     []*models.AssetStoreDetail{},
 	}, nil
 }
 

@@ -904,7 +904,7 @@ func (p *PostgresRepository) GetAssetStoreByID(ctx context.Context, accountID, s
 }
 
 func scanAssetStoreDetailRows(rows *sql.Rows) ([]*models.AssetStoreDetail, error) {
-	var list []*models.AssetStoreDetail
+	list := make([]*models.AssetStoreDetail, 0)
 	for rows.Next() {
 		var d models.AssetStoreDetail
 		var recDate, valDate sql.NullString
@@ -1031,7 +1031,7 @@ func (p *PostgresRepository) GetAssetStoreRecordByID(ctx context.Context, storeI
 }
 
 func scanAssetStoreRecordRows(rows *sql.Rows) ([]*models.AssetStoreRecord, error) {
-	var list []*models.AssetStoreRecord
+	list := make([]*models.AssetStoreRecord, 0)
 	for rows.Next() {
 		var r models.AssetStoreRecord
 		if err := rows.Scan(&r.ID, &r.AssetStoreID, &r.Quantity, &r.RecordDate, &r.CreatedAt, &r.UpdatedAt); err != nil {
@@ -1122,7 +1122,7 @@ func (p *PostgresRepository) GetAssetStoreTrend(ctx context.Context, storeID str
 		return nil, err
 	}
 	defer rows.Close()
-	var points []models.AssetStoreTrendPoint
+	points := make([]models.AssetStoreTrendPoint, 0)
 	for rows.Next() {
 		var pt models.AssetStoreTrendPoint
 		if err := rows.Scan(&pt.Date, &pt.Quantity, &pt.UnitValue, &pt.TotalValue); err != nil {

@@ -43,6 +43,9 @@ func (h *Handler) ListAccountAssets(c *gin.Context) {
 		h.handleError(c, err)
 		return
 	}
+	if res == nil {
+		res = []*models.AccountAssetResponse{}
+	}
 	c.JSON(http.StatusOK, res)
 }
 
@@ -137,6 +140,9 @@ func (h *Handler) GetAssetAccountTrend(c *gin.Context) {
 	if err != nil {
 		h.handleError(c, err)
 		return
+	}
+	if res == nil {
+		res = []*models.AssetAccountTrendPoint{}
 	}
 	c.JSON(http.StatusOK, res)
 }

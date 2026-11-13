@@ -103,6 +103,64 @@ export interface AssetAccountSummary {
   account_id: string;
   total_value: number;
   assets: AccountAsset[];
+  stores?: AssetStore[];
+}
+
+export interface AssetStore {
+  id: string;
+  account_id: string;
+  asset_id: string;
+  label: string;
+  description: string;
+  asset_label: string;
+  asset_description?: string;
+  latest_quantity: number;
+  latest_record_date?: string | null;
+  latest_value: number;
+  latest_value_date?: string | null;
+  total_value: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AssetStoreRecord {
+  id: string;
+  asset_store_id: string;
+  quantity: number;
+  record_date: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreateAssetStoreRequest {
+  asset_id: string;
+  label: string;
+  description?: string;
+  quantity?: number;
+  record_date?: string;
+}
+
+export interface UpdateAssetStoreRequest {
+  label: string;
+  description?: string;
+  asset_id?: string;
+}
+
+export interface CreateStoreRecordRequest {
+  quantity: number;
+  record_date: string;
+}
+
+export interface UpdateStoreRecordRequest {
+  quantity?: number;
+  record_date?: string;
+}
+
+export interface AssetStoreTrendPoint {
+  date: string;
+  quantity: number;
+  unit_value: number;
+  total_value: number;
 }
 
 export interface AssetAccountTrendPoint {
