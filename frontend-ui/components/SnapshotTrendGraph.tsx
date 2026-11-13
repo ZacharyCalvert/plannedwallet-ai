@@ -260,7 +260,7 @@ export function SnapshotTrendGraph({ snapshots }: SnapshotTrendGraphProps) {
           {/* Floating Tooltip Display */}
           {activePoint && (
             <div
-              className="graph-floating-tooltip"
+              className={`graph-floating-tooltip ${activePoint.y < 95 ? 'tooltip-below' : ''}`}
               style={{
                 left: `${(activePoint.x / svgWidth) * 100}%`,
                 top: `${(activePoint.y / svgHeight) * 100}%`,
@@ -339,16 +339,21 @@ export function SnapshotTrendGraph({ snapshots }: SnapshotTrendGraphProps) {
             {chartData.points.map((pt) => {
               const isHovered = hoveredIndex === pt.index;
               return (
-                <g key={pt.snapshot.id}>
+                <g
+                  key={pt.snapshot.id}
+                  className="point-interactive-group"
+                  onMouseEnter={() => setHoveredIndex(pt.index)}
+                  onMouseLeave={() => setHoveredIndex(null)}
+                >
                   {/* Invisible larger target for smooth hovering */}
                   <circle
                     cx={pt.x}
                     cy={pt.y}
-                    r="16"
-                    fill="transparent"
+                    r="18"
+                    fill="#000000"
+                    opacity="0"
+                    pointerEvents="all"
                     className="point-hit-target"
-                    onMouseEnter={() => setHoveredIndex(pt.index)}
-                    onMouseLeave={() => setHoveredIndex(null)}
                   />
                   {/* Visible point circle */}
                   <circle
@@ -358,6 +363,7 @@ export function SnapshotTrendGraph({ snapshots }: SnapshotTrendGraphProps) {
                     fill={isHovered ? '#7c3aed' : '#ffffff'}
                     stroke="#7c3aed"
                     strokeWidth={isHovered ? 3 : 2}
+                    pointerEvents="none"
                     className="point-circle"
                   />
                 </g>

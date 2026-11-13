@@ -1275,7 +1275,7 @@ body {
   border: 1px solid var(--border);
   border-radius: 0.5rem;
   padding: 1rem 0.5rem 0.5rem 0.5rem;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .trend-svg {
@@ -1284,13 +1284,18 @@ body {
   display: block;
 }
 
+.point-interactive-group {
+  cursor: pointer;
+}
+
 .point-hit-target {
   cursor: pointer;
+  pointer-events: all;
 }
 
 .point-circle {
   transition: r 0.15s ease, stroke-width 0.15s ease;
-  cursor: pointer;
+  pointer-events: none !important;
 }
 
 /* Floating Tooltip */
@@ -1302,10 +1307,15 @@ body {
   padding: 0.45rem 0.75rem;
   border-radius: 0.375rem;
   font-size: 0.8rem;
-  pointer-events: none;
+  pointer-events: none !important;
+  user-select: none;
   box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.15), 0 2px 4px -2px rgba(0, 0, 0, 0.15);
   white-space: nowrap;
   z-index: 10;
+}
+
+.graph-floating-tooltip * {
+  pointer-events: none !important;
 }
 
 .graph-floating-tooltip::after {
@@ -1317,6 +1327,17 @@ body {
   border-width: 5px;
   border-style: solid;
   border-color: #1e293b transparent transparent transparent;
+}
+
+/* Tooltip positioned below bubble when point is near top of graph */
+.graph-floating-tooltip.tooltip-below {
+  transform: translate(-50%, 14px);
+}
+
+.graph-floating-tooltip.tooltip-below::after {
+  top: auto;
+  bottom: 100%;
+  border-color: transparent transparent #1e293b transparent;
 }
 
 .tooltip-date {
