@@ -32,6 +32,10 @@ The backend API supports a unified boolean environment variable: `PRODUCTION_ENV
    - In `PRODUCTION_ENV=true`, the application **skips** executing `database/init.sql` on startup.
    - Schema creation and migrations must be performed out-of-band via a dedicated migration job before deploying new container replicas, preventing concurrent DDL execution locks during multi-replica rollouts.
 
+7. **Azure Front Door ID (`EXPECTED_FDID`) Proxy Enforcement**:
+   - When `PRODUCTION_ENV=true`, the application strictly mandates `EXPECTED_FDID`. If unset or empty, the application **terminates immediately on startup** (`log.Fatalf`).
+   - Every incoming request (except OPTIONS preflight) must carry the `X-Azure-FDID` (or `X-FDID`) header matching `EXPECTED_FDID`. Direct requests bypassing Azure Front Door or originating from unauthorized proxies are immediately rejected with `403 Forbidden` (`INVALID_PROXY_HEADER`).
+
 ---
 
 ## 2. Environment Variables Reference
@@ -43,6 +47,7 @@ The backend API supports a unified boolean environment variable: `PRODUCTION_ENV
 | `GIN_MODE` | String | `debug` | `release` | Sets Gin to release mode, disabling debug route dumps and verbose request logs. |
 | `JWT_SECRET` | String | *Dev default* | `openssl rand -base64 32` | 256-bit+ random secret used for HMAC-SHA256 JWT signing. **Must be identical across all backend instances**. |
 | `JWT_EXPIRATION_SECONDS`| Integer | `3600` | `900` to `3600` | Expiration lifetime of authentication tokens (15 minutes to 1 hour recommended). |
+| `EXPECTED_FDID` | String | *None* | *Azure Front Door ID* | Required when `PRODUCTION_ENV=true`. Enforces that incoming requests carry `X-Azure-FDID` matching this ID. |
 | `REQUIRE_CAPTCHA` | Boolean | `false` | `true` (auto in prod) | Enforces CAPTCHA verification on user registration. |
 | `CORS_ALLOWED_CLIENTS` | String | `*.plannedwallet.com` | `https://app.example.com` | Comma-separated list of allowed origin URLs and hostnames. Requests from unlisted origins receive `403 Forbidden`. |
 | `POSTGRES_HOST` | String | `localhost` | *Primary DB Host* | Hostname of the PostgreSQL cluster or RDS/Cloud SQL endpoint. |
@@ -112,14 +117,19 @@ The backend API supports a unified boolean environment variable: `PRODUCTION_ENV
 ## 4. Network, Ingress & Security Hardening
 
 ### Reverse Proxy & Ingress Requirements
-1. **HTTPS / TLS Termination**:
+1. **Azure Front Door Origin Validation**:
+   - Azure Front Door injects the `X-Azure-FDID` request header containing your unique Front Door profile resource ID.
+   - Set `EXPECTED_FDID` to this profile ID. Backend instances reject any traffic missing this header or carrying a mismatched ID (`403 Forbidden`).
+   - If utilizing Nginx as an internal gateway or sidecar, ensure `proxy_set_header X-Azure-FDID $http_x_azure_fdid;` is configured to preserve this header.
+2. **HTTPS / TLS Termination**:
    - Terminate SSL/TLS on port 443 with valid certificates (e.g., Let's Encrypt / cert-manager).
    - Port 80 must return a permanent redirect (`301 Moved Permanently`) to HTTPS.
-2. **Preserve Required Headers**:
+3. **Preserve Required Headers**:
    - `X-Client-ID`: Mandatory for all mutating and non-OPTIONS backend requests. Ensure edge proxies do not strip this header.
+   - `X-Azure-FDID`: Mandatory in production for origin authentication.
    - `traceparent` and `tracestate`: W3C distributed tracing context headers. Must be forwarded upstream.
    - `X-Forwarded-For`, `X-Forwarded-Proto`, `Host`: Standard proxy headers.
-3. **Security Response Headers**:
+4. **Security Response Headers**:
    - `Strict-Transport-Security: max-age=31536000; includeSubDomains; preload` (HSTS)
    - `X-Content-Type-Options: nosniff`
    - `X-Frame-Options: DENY`
@@ -152,6 +162,7 @@ The frontend is exported as a static client application:
 Before promoting a release to production, verify each of the following items:
 
 - [ ] **`PRODUCTION_ENV` is set to `true`** on all backend containers.
+- [ ] **`EXPECTED_FDID` is configured** with your Azure Front Door profile ID.
 - [ ] **`JWT_SECRET` is set to a secure, random string** (not default) and matches across all replicas.
 - [ ] **`POSTGRES_SSLMODE` is set to `require` or `verify-full`**.
 - [ ] **`CORS_ALLOWED_CLIENTS` matches the exact production frontend domain(s)**.

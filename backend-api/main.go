@@ -21,6 +21,7 @@ import (
 	"github.com/plannedwallet/internal/cors"
 	"github.com/plannedwallet/internal/database"
 	"github.com/plannedwallet/internal/handlers"
+	"github.com/plannedwallet/internal/models"
 	"github.com/plannedwallet/internal/repository"
 	"github.com/plannedwallet/internal/trace"
 )
@@ -44,6 +45,39 @@ func isDefaultJWTSecret(secret string) bool {
 		return true
 	}
 	return strings.Contains(clean, "super-secret") || strings.Contains(clean, "super secret")
+}
+
+func validateExpectedFDID(expectedFDID string, isProd bool) {
+	if isProd && strings.TrimSpace(expectedFDID) == "" {
+		log.Fatalf("Fatal: PRODUCTION_ENV is true but EXPECTED_FDID is not configured. An expected Azure Front Door ID is required.")
+	}
+}
+
+func getIncomingFDID(c *gin.Context) string {
+	if id := c.GetHeader("X-Azure-FDID"); id != "" {
+		return strings.TrimSpace(id)
+	}
+	return strings.TrimSpace(c.GetHeader("X-FDID"))
+}
+
+func fdidMiddleware(expectedFDID string, isProd bool) gin.HandlerFunc {
+	cleanExpected := strings.TrimSpace(expectedFDID)
+	return func(c *gin.Context) {
+		if (!isProd && cleanExpected == "") || c.Request.Method == http.MethodOptions {
+			c.Next()
+			return
+		}
+		if !strings.EqualFold(getIncomingFDID(c), cleanExpected) {
+			trace.LogError(c.Request.Context(), nil, "Access denied: missing or invalid Azure Front Door ID header")
+			c.AbortWithStatusJSON(http.StatusForbidden, models.ErrorResponse{
+				Error:     "INVALID_PROXY_HEADER",
+				Message:   "Access denied: missing or invalid Azure Front Door ID.",
+				Timestamp: time.Now().UTC(),
+			})
+			return
+		}
+		c.Next()
+	}
 }
 
 func initJWTService(isProd bool) *auth.Service {
@@ -112,13 +146,14 @@ func addHandlers(r *gin.Engine, repo repository.Repository, authService *auth.Se
 	handler.RegisterRoutes(r)
 }
 
-func setupGinEngine(repo repository.Repository, authService *auth.Service, isProd bool) *gin.Engine {
+func setupGinEngine(repo repository.Repository, authService *auth.Service, isProd bool, expectedFDID string) *gin.Engine {
 	if isProd {
 		gin.SetMode(gin.ReleaseMode)
 	}
 	r := gin.New()
 	r.Use(trace.Middleware())
 	r.Use(cors.Middleware())
+	r.Use(fdidMiddleware(expectedFDID, isProd))
 	r.Use(gin.Recovery())
 	configureProxies(r, isProd)
 	addHandlers(r, repo, authService, isProd)
@@ -169,12 +204,14 @@ func runServer(srv *http.Server, isProd bool) {
 func main() {
 	isProd := isProduction()
 	port := getEnv("PORT", "8080")
+	expectedFDID := getEnv("EXPECTED_FDID", "")
+	validateExpectedFDID(expectedFDID, isProd)
 
 	authService := initJWTService(isProd)
 	repo := initDatabase(isProd)
 	cleanupStartupCaptchas(repo)
 
-	r := setupGinEngine(repo, authService, isProd)
+	r := setupGinEngine(repo, authService, isProd, expectedFDID)
 	srv := &http.Server{
 		Addr:    ":" + port,
 		Handler: r,

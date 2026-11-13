@@ -82,10 +82,10 @@ func getRequestHost(c *gin.Context) string {
 func applyCORSHeaders(c *gin.Context, origin string) {
 	c.Header("Access-Control-Allow-Origin", origin)
 	c.Header("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS, HEAD")
-	c.Header("Access-Control-Allow-Headers", "Origin, Content-Type, Accept, Authorization, X-Client-ID, traceparent, tracestate")
+	c.Header("Access-Control-Allow-Headers", "Origin, Content-Type, Accept, Authorization, X-Client-ID, traceparent, tracestate, X-Azure-FDID")
 	c.Header("Access-Control-Allow-Credentials", "true")
 	c.Header("Access-Control-Max-Age", "86400")
-	c.Header("Access-Control-Expose-Headers", "traceparent, tracestate, X-Client-ID")
+	c.Header("Access-Control-Expose-Headers", "traceparent, tracestate, X-Client-ID, X-Azure-FDID")
 }
 
 func handlePreflight(c *gin.Context, allowed []string) {

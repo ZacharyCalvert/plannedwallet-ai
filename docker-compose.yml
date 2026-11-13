@@ -32,6 +32,8 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-plannedwallet}
       POSTGRES_SSLMODE: disable
       JWT_SECRET: ${JWT_SECRET:-dev-super-secret-jwt-key}
+      PRODUCTION_ENV: ${PRODUCTION_ENV:-false}
+      EXPECTED_FDID: ${EXPECTED_FDID:-}
     ports:
       - "8080:8080"
     depends_on:
