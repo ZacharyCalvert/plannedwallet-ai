@@ -2,9 +2,15 @@ package main
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"log"
+	"net/http"
 	"os"
+	"os/signal"
 	"strconv"
+	"strings"
+	"syscall"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -19,6 +25,8 @@ import (
 	"github.com/plannedwallet/internal/trace"
 )
 
+const defaultJWTSecret = "super-secret-jwt-key-replace-in-production"
+
 func getEnv(key, defaultVal string) string {
 	if val := os.Getenv(key); val != "" {
 		return val
@@ -26,8 +34,23 @@ func getEnv(key, defaultVal string) string {
 	return defaultVal
 }
 
-func initJWTService() *auth.Service {
-	jwtSecret := getEnv("JWT_SECRET", "super-secret-jwt-key-replace-in-production")
+func isProduction() bool {
+	return strings.EqualFold(os.Getenv("PRODUCTION_ENV"), "true")
+}
+
+func isDefaultJWTSecret(secret string) bool {
+	clean := strings.ToLower(strings.TrimSpace(secret))
+	if clean == "" || clean == defaultJWTSecret || clean == "dev-super-secret-jwt-key" {
+		return true
+	}
+	return strings.Contains(clean, "super-secret") || strings.Contains(clean, "super secret")
+}
+
+func initJWTService(isProd bool) *auth.Service {
+	jwtSecret := getEnv("JWT_SECRET", defaultJWTSecret)
+	if isProd && isDefaultJWTSecret(jwtSecret) {
+		log.Fatalf("Fatal: PRODUCTION_ENV is true but default JWT secret is in use. Secure JWT_SECRET required.")
+	}
 	jwtExpStr := getEnv("JWT_EXPIRATION_SECONDS", "3600")
 	jwtExp, err := strconv.Atoi(jwtExpStr)
 	if err != nil {
@@ -36,63 +59,126 @@ func initJWTService() *auth.Service {
 	return auth.NewService(jwtSecret, jwtExp)
 }
 
-func initDatabase() repository.Repository {
-	pgHost := getEnv("POSTGRES_HOST", "localhost")
-	pgPort := getEnv("POSTGRES_PORT", "5432")
-	pgUser := getEnv("POSTGRES_USER", "postgres")
-	pgPassword := getEnv("POSTGRES_PASSWORD", "postgres")
-	pgDB := getEnv("POSTGRES_DB", "plannedwallet")
-	pgSSLMode := getEnv("POSTGRES_SSLMODE", "disable")
-
-	db, err := database.ConnectWithRetry(database.Config{
-		Host:     pgHost,
-		Port:     pgPort,
-		User:     pgUser,
-		Password: pgPassword,
-		DBName:   pgDB,
-		SSLMode:  pgSSLMode,
-	}, 5, time.Second)
-	if err != nil {
-		log.Printf("Warning: Failed to connect to PostgreSQL (%v). Falling back to In-Memory repository.", err)
-		return repository.NewMemoryRepository()
+func applyDatabaseSchema(db *sql.DB, isProd bool) {
+	if isProd {
+		log.Println("PRODUCTION_ENV is true: skipping init.sql database initialization.")
+		return
 	}
-
-	log.Println("Successfully connected to PostgreSQL. Initializing database schema...")
+	log.Println("Initializing database schema from init.sql...")
 	if err := database.InitDatabase(db); err != nil {
 		log.Fatalf("Database initialization failed: %v", err)
 	}
 	log.Println("Database initialized successfully.")
+}
+
+func initDatabase(isProd bool) repository.Repository {
+	cfg := database.Config{
+		Host:     getEnv("POSTGRES_HOST", "localhost"),
+		Port:     getEnv("POSTGRES_PORT", "5432"),
+		User:     getEnv("POSTGRES_USER", "postgres"),
+		Password: getEnv("POSTGRES_PASSWORD", "postgres"),
+		DBName:   getEnv("POSTGRES_DB", "plannedwallet"),
+		SSLMode:  getEnv("POSTGRES_SSLMODE", "disable"),
+	}
+
+	db, err := database.ConnectWithRetry(cfg, 5, time.Second)
+	if err != nil {
+		if isProd {
+			log.Fatalf("Fatal: Database connection failed in PRODUCTION_ENV: %v", err)
+		}
+		log.Printf("Warning: Failed to connect to PostgreSQL (%v). Falling back to In-Memory repository.", err)
+		return repository.NewMemoryRepository()
+	}
+
+	applyDatabaseSchema(db, isProd)
 	return repository.NewPostgresRepository(db)
 }
 
-func addHandlers(r *gin.Engine, repo repository.Repository, authService *auth.Service) {
+func configureProxies(r *gin.Engine, isProd bool) {
+	if !isProd {
+		return
+	}
+	if err := r.SetTrustedProxies([]string{"10.0.0.0/8"}); err != nil {
+		log.Fatalf("Failed to configure trusted proxies: %v", err)
+	}
+}
+
+func addHandlers(r *gin.Engine, repo repository.Repository, authService *auth.Service, isProd bool) {
 	ctrl := controller.NewController(repo, authService)
-	if getEnv("REQUIRE_CAPTCHA", "false") == "true" {
+	if isProd || getEnv("REQUIRE_CAPTCHA", "false") == "true" {
 		ctrl.SetRequireCaptcha(true)
 	}
 	handler := handlers.NewHandler(ctrl, authService)
 	handler.RegisterRoutes(r)
 }
 
-func main() {
-	port := getEnv("PORT", "8080")
-
-	authService := initJWTService()
-	repo := initDatabase()
-
-	captcha.SetCustomStore(captcha.NewRepoStore(repo))
-	if _, err := captcha.RunStartupCleanup(context.Background(), repo); err != nil {
-		log.Printf("Warning: Startup CAPTCHA cleanup failed: %v", err)
+func setupGinEngine(repo repository.Repository, authService *auth.Service, isProd bool) *gin.Engine {
+	if isProd {
+		gin.SetMode(gin.ReleaseMode)
 	}
-
 	r := gin.New()
 	r.Use(trace.Middleware())
 	r.Use(cors.Middleware())
 	r.Use(gin.Recovery())
-	addHandlers(r, repo, authService)
+	configureProxies(r, isProd)
+	addHandlers(r, repo, authService, isProd)
+	return r
+}
 
-	log.Printf("Planned Wallet API listening on port :%s", port)
-	if err := r.Run(":" + port); err != nil {
+func cleanupStartupCaptchas(repo repository.Repository) {
+	captcha.SetCustomStore(captcha.NewRepoStore(repo))
+	if _, err := captcha.RunStartupCleanup(context.Background(), repo); err != nil {
+		log.Printf("Warning: Startup CAPTCHA cleanup failed: %v", err)
+	}
+}
+
+func runGracefulServer(srv *http.Server) {
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+
+	go func() {
+		log.Printf("Planned Wallet API listening on %s (graceful shutdown enabled)", srv.Addr)
+		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			log.Fatalf("Server listen error: %v", err)
+		}
+	}()
+
+	<-quit
+	log.Println("Shutdown signal received. Shutting down server gracefully...")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	if err := srv.Shutdown(ctx); err != nil {
+		log.Fatalf("Server forced shutdown: %v", err)
+	}
+	log.Println("Server exited gracefully.")
+}
+
+func runServer(srv *http.Server, isProd bool) {
+	if isProd {
+		runGracefulServer(srv)
+		return
+	}
+	log.Printf("Planned Wallet API listening on %s (standard mode)", srv.Addr)
+	if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		log.Fatalf("Server stopped: %v", err)
 	}
+}
+
+func main() {
+	isProd := isProduction()
+	port := getEnv("PORT", "8080")
+
+	authService := initJWTService(isProd)
+	repo := initDatabase(isProd)
+	cleanupStartupCaptchas(repo)
+
+	r := setupGinEngine(repo, authService, isProd)
+	srv := &http.Server{
+		Addr:    ":" + port,
+		Handler: r,
+	}
+
+	runServer(srv, isProd)
 }
