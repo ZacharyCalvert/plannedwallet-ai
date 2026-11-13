@@ -1191,6 +1191,641 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
+  /api/v1/accounts/{accountId}/stores:
+    parameters:
+      - $ref: '#/components/parameters/XClientId'
+      - name: accountId
+        in: path
+        required: true
+        description: Unique identifier of the asset account.
+        schema:
+          type: string
+          format: uuid
+    post:
+      tags:
+        - Asset Stores
+      summary: Create an asset store location in an account
+      description: |
+        Creates a uniquely labeled asset storage location (e.g., "red private key" or "attic box")
+        associated with an asset definition within an asset account.
+      operationId: createAssetStore
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateAssetStoreRequest'
+      responses:
+        '201':
+          summary: Asset store created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AssetStoreDetail'
+        '400':
+          summary: Invalid request payload or account type
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          summary: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          summary: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          summary: Account or asset definition not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          summary: Store label already exists in this account
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    get:
+      tags:
+        - Asset Stores
+      summary: List all asset stores in an account
+      description: Retrieves all asset stores in the account with their latest quantity and calculated worth.
+      operationId: listAssetStores
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          summary: List of asset stores
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AssetStoreDetail'
+        '401':
+          summary: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          summary: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          summary: Account not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/accounts/{accountId}/stores/summary:
+    parameters:
+      - $ref: '#/components/parameters/XClientId'
+      - name: accountId
+        in: path
+        required: true
+        description: Unique identifier of the asset account.
+        schema:
+          type: string
+          format: uuid
+    get:
+      tags:
+        - Asset Stores
+      summary: Get asset account summary including all stores
+      description: Returns aggregate valuation and details of all stores in the account.
+      operationId: getAssetStoresSummary
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          summary: Asset account summary
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AssetAccountSummaryResponse'
+        '401':
+          summary: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          summary: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          summary: Account not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/accounts/{accountId}/stores/trend:
+    parameters:
+      - $ref: '#/components/parameters/XClientId'
+      - name: accountId
+        in: path
+        required: true
+        description: Unique identifier of the asset account.
+        schema:
+          type: string
+          format: uuid
+      - name: start_date
+        in: query
+        required: false
+        description: Filter trend points from this date (inclusive, YYYY-MM-DD).
+        schema:
+          type: string
+          format: date
+      - name: end_date
+        in: query
+        required: false
+        description: Filter trend points up to this date (inclusive, YYYY-MM-DD).
+        schema:
+          type: string
+          format: date
+    get:
+      tags:
+        - Asset Stores
+      summary: Get total account value trend aggregated across all stores
+      description: Collates store quantity timelines and asset valuation timelines into daily cumulative totals.
+      operationId: getAssetStoresAccountTrend
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          summary: Time-series trend of account total valuation
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AssetAccountTrendPoint'
+        '401':
+          summary: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          summary: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          summary: Account not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/accounts/{accountId}/stores/{storeId}:
+    parameters:
+      - $ref: '#/components/parameters/XClientId'
+      - name: accountId
+        in: path
+        required: true
+        description: Unique identifier of the asset account.
+        schema:
+          type: string
+          format: uuid
+      - name: storeId
+        in: path
+        required: true
+        description: Unique identifier of the asset store.
+        schema:
+          type: string
+          format: uuid
+    get:
+      tags:
+        - Asset Stores
+      summary: Get details of an asset store
+      operationId: getAssetStore
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          summary: Asset store details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AssetStoreDetail'
+        '401':
+          summary: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          summary: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          summary: Account or store not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    put:
+      tags:
+        - Asset Stores
+      summary: Update an asset store's label or description
+      operationId: updateAssetStore
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateAssetStoreRequest'
+      responses:
+        '200':
+          summary: Asset store updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AssetStoreDetail'
+        '400':
+          summary: Invalid request payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          summary: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          summary: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          summary: Account or store not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          summary: Store label already exists in this account
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    delete:
+      tags:
+        - Asset Stores
+      summary: Delete an asset store and all associated quantity records
+      operationId: deleteAssetStore
+      security:
+        - BearerAuth: []
+      responses:
+        '204':
+          summary: Asset store deleted
+        '401':
+          summary: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          summary: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          summary: Account or store not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/accounts/{accountId}/stores/{storeId}/trend:
+    parameters:
+      - $ref: '#/components/parameters/XClientId'
+      - name: accountId
+        in: path
+        required: true
+        description: Unique identifier of the asset account.
+        schema:
+          type: string
+          format: uuid
+      - name: storeId
+        in: path
+        required: true
+        description: Unique identifier of the asset store.
+        schema:
+          type: string
+          format: uuid
+      - name: start_date
+        in: query
+        required: false
+        description: Filter trend points from this date (inclusive, YYYY-MM-DD).
+        schema:
+          type: string
+          format: date
+      - name: end_date
+        in: query
+        required: false
+        description: Filter trend points up to this date (inclusive, YYYY-MM-DD).
+        schema:
+          type: string
+          format: date
+    get:
+      tags:
+        - Asset Stores
+      summary: Get trend timeline for a single asset store
+      description: Returns quantity, unit valuation, and total store value over time.
+      operationId: getAssetStoreTrend
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          summary: Time-series trend for the asset store
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AssetStoreTrendPoint'
+        '401':
+          summary: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          summary: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          summary: Account or store not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/accounts/{accountId}/stores/{storeId}/records:
+    parameters:
+      - $ref: '#/components/parameters/XClientId'
+      - name: accountId
+        in: path
+        required: true
+        description: Unique identifier of the asset account.
+        schema:
+          type: string
+          format: uuid
+      - name: storeId
+        in: path
+        required: true
+        description: Unique identifier of the asset store.
+        schema:
+          type: string
+          format: uuid
+    post:
+      tags:
+        - Asset Store Records
+      summary: Add a quantity record by date to an asset store
+      operationId: createAssetStoreRecord
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateStoreRecordRequest'
+      responses:
+        '201':
+          summary: Asset store record created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AssetStoreRecord'
+        '400':
+          summary: Invalid request payload or negative quantity
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          summary: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          summary: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          summary: Account or store not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          summary: Record date already exists for this store
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    get:
+      tags:
+        - Asset Store Records
+      summary: List all quantity records for an asset store
+      operationId: listAssetStoreRecords
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          summary: List of asset store records ordered chronologically
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AssetStoreRecord'
+        '401':
+          summary: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          summary: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          summary: Account or store not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/accounts/{accountId}/stores/{storeId}/records/{recordId}:
+    parameters:
+      - $ref: '#/components/parameters/XClientId'
+      - name: accountId
+        in: path
+        required: true
+        description: Unique identifier of the asset account.
+        schema:
+          type: string
+          format: uuid
+      - name: storeId
+        in: path
+        required: true
+        description: Unique identifier of the asset store.
+        schema:
+          type: string
+          format: uuid
+      - name: recordId
+        in: path
+        required: true
+        description: Unique identifier of the asset store record.
+        schema:
+          type: string
+          format: uuid
+    get:
+      tags:
+        - Asset Store Records
+      summary: Get details of an asset store quantity record
+      operationId: getAssetStoreRecord
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          summary: Asset store record details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AssetStoreRecord'
+        '401':
+          summary: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          summary: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          summary: Account, store, or record not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    put:
+      tags:
+        - Asset Store Records
+      summary: Update quantity or date of an asset store record
+      operationId: updateAssetStoreRecord
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateStoreRecordRequest'
+      responses:
+        '200':
+          summary: Asset store record updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AssetStoreRecord'
+        '400':
+          summary: Invalid request payload or negative quantity
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          summary: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          summary: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          summary: Account, store, or record not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          summary: Target record date conflicts with an existing record for this store
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    delete:
+      tags:
+        - Asset Store Records
+      summary: Delete an asset store quantity record
+      operationId: deleteAssetStoreRecord
+      security:
+        - BearerAuth: []
+      responses:
+        '204':
+          summary: Asset store record deleted
+        '401':
+          summary: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          summary: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          summary: Account, store, or record not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
   /api/v1/accounts/{accountId}/snapshots:
     parameters:
       - $ref: '#/components/parameters/XClientId'
@@ -2679,6 +3314,181 @@ components:
           format: double
           description: Total account valuation on this date.
           example: 13000.00
+
+    AssetStoreDetail:
+      type: object
+      required:
+        - id
+        - account_id
+        - asset_id
+        - label
+        - description
+        - asset_label
+        - latest_quantity
+        - latest_value
+        - total_value
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        account_id:
+          type: string
+          format: uuid
+        asset_id:
+          type: string
+          format: uuid
+        label:
+          type: string
+          example: "red"
+        description:
+          type: string
+          example: "Hardware key stored in office safe"
+        asset_label:
+          type: string
+          example: "Coin Alpha"
+        asset_description:
+          type: string
+        latest_quantity:
+          type: number
+          format: double
+          example: 0.5
+        latest_record_date:
+          type: string
+          format: date
+          example: "2026-10-01"
+        latest_value:
+          type: number
+          format: double
+          example: 65000.00
+        latest_value_date:
+          type: string
+          format: date
+          example: "2026-10-01"
+        total_value:
+          type: number
+          format: double
+          example: 32500.00
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    CreateAssetStoreRequest:
+      type: object
+      required:
+        - asset_id
+        - label
+      properties:
+        asset_id:
+          type: string
+          format: uuid
+        label:
+          type: string
+          example: "red"
+        description:
+          type: string
+        quantity:
+          type: number
+          format: double
+          example: 0.2
+        record_date:
+          type: string
+          format: date
+          example: "2026-01-01"
+
+    UpdateAssetStoreRequest:
+      type: object
+      required:
+        - label
+      properties:
+        label:
+          type: string
+        description:
+          type: string
+        asset_id:
+          type: string
+          format: uuid
+
+    AssetStoreRecord:
+      type: object
+      required:
+        - id
+        - asset_store_id
+        - quantity
+        - record_date
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        asset_store_id:
+          type: string
+          format: uuid
+        quantity:
+          type: number
+          format: double
+          example: 0.3
+        record_date:
+          type: string
+          format: date
+          example: "2026-02-01"
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    CreateStoreRecordRequest:
+      type: object
+      required:
+        - quantity
+        - record_date
+      properties:
+        quantity:
+          type: number
+          format: double
+          example: 0.5
+        record_date:
+          type: string
+          format: date
+          example: "2026-10-01"
+
+    UpdateStoreRecordRequest:
+      type: object
+      properties:
+        quantity:
+          type: number
+          format: double
+        record_date:
+          type: string
+          format: date
+
+    AssetStoreTrendPoint:
+      type: object
+      required:
+        - date
+        - quantity
+        - unit_value
+        - total_value
+      properties:
+        date:
+          type: string
+          format: date
+        quantity:
+          type: number
+          format: double
+        unit_value:
+          type: number
+          format: double
+        total_value:
+          type: number
+          format: double
 
     AccountSnapshotCreateRequest:
       type: object

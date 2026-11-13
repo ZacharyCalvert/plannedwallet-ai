@@ -59,6 +59,22 @@ type Repository interface {
 	UpdateAccountAsset(ctx context.Context, aa *models.AccountAsset) error
 	DeleteAccountAsset(ctx context.Context, accountID, identifier string) error
 
+	// Asset Store operations
+	CreateAssetStore(ctx context.Context, store *models.AssetStore) error
+	GetAssetStoreByID(ctx context.Context, accountID, storeID string) (*models.AssetStoreDetail, error)
+	GetAssetStoreByAccountAndLabel(ctx context.Context, accountID, label string) (*models.AssetStore, error)
+	ListAssetStores(ctx context.Context, accountID string) ([]*models.AssetStoreDetail, error)
+	UpdateAssetStore(ctx context.Context, store *models.AssetStore) error
+	DeleteAssetStore(ctx context.Context, accountID, storeID string) error
+
+	// Asset Store Record operations
+	CreateAssetStoreRecord(ctx context.Context, rec *models.AssetStoreRecord) error
+	GetAssetStoreRecordByID(ctx context.Context, storeID, recordID string) (*models.AssetStoreRecord, error)
+	ListAssetStoreRecords(ctx context.Context, storeID string) ([]*models.AssetStoreRecord, error)
+	UpdateAssetStoreRecord(ctx context.Context, rec *models.AssetStoreRecord) error
+	DeleteAssetStoreRecord(ctx context.Context, storeID, recordID string) error
+	GetAssetStoreTrend(ctx context.Context, storeID string) ([]models.AssetStoreTrendPoint, error)
+
 	// Account Snapshot operations
 	CreateAccountSnapshot(ctx context.Context, snapshot *models.AccountSnapshot) error
 	GetAccountSnapshotByID(ctx context.Context, accountID, snapshotID string) (*models.AccountSnapshot, error)

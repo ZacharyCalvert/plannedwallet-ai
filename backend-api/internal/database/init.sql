@@ -72,6 +72,34 @@ CREATE TABLE IF NOT EXISTS asset_values (
 
 CREATE INDEX IF NOT EXISTS idx_asset_values_asset_date ON asset_values(asset_id, value_date DESC);
 
+CREATE TABLE IF NOT EXISTS asset_stores (
+    id UUID PRIMARY KEY,
+    account_id UUID NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+    asset_id UUID NOT NULL REFERENCES assets(id) ON DELETE CASCADE,
+    label VARCHAR(100) NOT NULL,
+    description VARCHAR(500) NOT NULL DEFAULT '',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT uq_asset_stores_account_label UNIQUE (account_id, label)
+);
+
+CREATE INDEX IF NOT EXISTS idx_asset_stores_account_id ON asset_stores(account_id);
+CREATE INDEX IF NOT EXISTS idx_asset_stores_asset_id ON asset_stores(asset_id);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_asset_stores_account_lower_label ON asset_stores (account_id, LOWER(label));
+
+CREATE TABLE IF NOT EXISTS asset_store_records (
+    id UUID PRIMARY KEY,
+    asset_store_id UUID NOT NULL REFERENCES asset_stores(id) ON DELETE CASCADE,
+    quantity DOUBLE PRECISION NOT NULL CHECK (quantity > 0),
+    record_date DATE NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT uq_asset_store_records_store_date UNIQUE (asset_store_id, record_date)
+);
+
+CREATE INDEX IF NOT EXISTS idx_asset_store_records_store_id ON asset_store_records(asset_store_id);
+CREATE INDEX IF NOT EXISTS idx_asset_store_records_store_date ON asset_store_records(asset_store_id, record_date DESC);
+
 CREATE TABLE IF NOT EXISTS account_assets (
     id UUID PRIMARY KEY,
     account_id UUID NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,

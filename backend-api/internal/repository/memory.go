@@ -21,6 +21,8 @@ type MemoryRepository struct {
 	assets          map[string]*models.Asset          // id -> Asset
 	assetValues     map[string]*models.AssetValue     // id -> AssetValue
 	accountAssets   map[string]*models.AccountAsset   // id -> AccountAsset
+	assetStores     map[string]*models.AssetStore     // id -> AssetStore
+	assetStoreRecords map[string]*models.AssetStoreRecord // id -> AssetStoreRecord
 	accountSnapshots map[string]*models.AccountSnapshot // id -> AccountSnapshot
 	captchas        map[string]*memoryCaptcha         // id -> memoryCaptcha
 }
@@ -41,6 +43,8 @@ func NewMemoryRepository() *MemoryRepository {
 		assets:          make(map[string]*models.Asset),
 		assetValues:     make(map[string]*models.AssetValue),
 		accountAssets:   make(map[string]*models.AccountAsset),
+		assetStores:     make(map[string]*models.AssetStore),
+		assetStoreRecords: make(map[string]*models.AssetStoreRecord),
 		accountSnapshots: make(map[string]*models.AccountSnapshot),
 		captchas:        make(map[string]*memoryCaptcha),
 	}
@@ -796,4 +800,307 @@ func (m *MemoryRepository) DeleteExpiredCaptchas(_ context.Context, olderThan ti
 		}
 	}
 	return count, nil
+}
+
+func (m *MemoryRepository) findLatestStoreRecordLocked(storeID string) (float64, string) {
+	var bestDate string
+	var bestCreated time.Time
+	var qty float64
+	for _, r := range m.assetStoreRecords {
+		if r.AssetStoreID == storeID {
+			if r.RecordDate > bestDate || (r.RecordDate == bestDate && r.CreatedAt.After(bestCreated)) {
+				bestDate = r.RecordDate
+				bestCreated = r.CreatedAt
+				qty = r.Quantity
+			}
+		}
+	}
+	return qty, bestDate
+}
+
+func (m *MemoryRepository) findLatestAssetValueLocked(assetID string) (float64, string) {
+	var bestDate string
+	var bestCreated time.Time
+	var val float64
+	for _, v := range m.assetValues {
+		if v.AssetID == assetID {
+			if v.ValueDate > bestDate || (v.ValueDate == bestDate && v.CreatedAt.After(bestCreated)) {
+				bestDate = v.ValueDate
+				bestCreated = v.CreatedAt
+				val = v.Value
+			}
+		}
+	}
+	return val, bestDate
+}
+
+func (m *MemoryRepository) buildStoreDetailLocked(s *models.AssetStore) *models.AssetStoreDetail {
+	d := &models.AssetStoreDetail{
+		ID:          s.ID,
+		AccountID:   s.AccountID,
+		AssetID:     s.AssetID,
+		Label:       s.Label,
+		Description: s.Description,
+		CreatedAt:   s.CreatedAt,
+		UpdatedAt:   s.UpdatedAt,
+	}
+	if a, ok := m.assets[s.AssetID]; ok {
+		d.AssetLabel = a.Label
+		d.AssetDescription = a.Description
+	}
+	d.LatestQuantity, d.LatestRecordDate = m.findLatestStoreRecordLocked(s.ID)
+	d.LatestValue, d.LatestValueDate = m.findLatestAssetValueLocked(s.AssetID)
+	d.TotalValue = d.LatestQuantity * d.LatestValue
+	return d
+}
+
+func (m *MemoryRepository) CreateAssetStore(_ context.Context, store *models.AssetStore) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	lowerLabel := strings.ToLower(strings.TrimSpace(store.Label))
+	for _, existing := range m.assetStores {
+		if existing.AccountID == store.AccountID && strings.ToLower(existing.Label) == lowerLabel {
+			return ErrConflict
+		}
+	}
+	copied := *store
+	m.assetStores[store.ID] = &copied
+	return nil
+}
+
+func (m *MemoryRepository) GetAssetStoreByID(_ context.Context, accountID, storeID string) (*models.AssetStoreDetail, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	s, exists := m.assetStores[storeID]
+	if !exists || s.AccountID != accountID {
+		return nil, ErrNotFound
+	}
+	return m.buildStoreDetailLocked(s), nil
+}
+
+func (m *MemoryRepository) GetAssetStoreByAccountAndLabel(_ context.Context, accountID, label string) (*models.AssetStore, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	lowerLabel := strings.ToLower(strings.TrimSpace(label))
+	for _, s := range m.assetStores {
+		if s.AccountID == accountID && strings.ToLower(s.Label) == lowerLabel {
+			copied := *s
+			return &copied, nil
+		}
+	}
+	return nil, ErrNotFound
+}
+
+func (m *MemoryRepository) ListAssetStores(_ context.Context, accountID string) ([]*models.AssetStoreDetail, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	var list []*models.AssetStoreDetail
+	for _, s := range m.assetStores {
+		if s.AccountID == accountID {
+			list = append(list, m.buildStoreDetailLocked(s))
+		}
+	}
+	sort.Slice(list, func(i, j int) bool {
+		return list[i].Label < list[j].Label
+	})
+	return list, nil
+}
+
+func (m *MemoryRepository) UpdateAssetStore(_ context.Context, store *models.AssetStore) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	existing, exists := m.assetStores[store.ID]
+	if !exists || existing.AccountID != store.AccountID {
+		return ErrNotFound
+	}
+	lowerLabel := strings.ToLower(strings.TrimSpace(store.Label))
+	for _, other := range m.assetStores {
+		if other.ID != store.ID && other.AccountID == store.AccountID && strings.ToLower(other.Label) == lowerLabel {
+			return ErrConflict
+		}
+	}
+	existing.Label = store.Label
+	existing.Description = store.Description
+	if store.AssetID != "" {
+		existing.AssetID = store.AssetID
+	}
+	existing.UpdatedAt = store.UpdatedAt
+	return nil
+}
+
+func (m *MemoryRepository) DeleteAssetStore(_ context.Context, accountID, storeID string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	existing, exists := m.assetStores[storeID]
+	if !exists || existing.AccountID != accountID {
+		return ErrNotFound
+	}
+	delete(m.assetStores, storeID)
+	for rID, r := range m.assetStoreRecords {
+		if r.AssetStoreID == storeID {
+			delete(m.assetStoreRecords, rID)
+		}
+	}
+	return nil
+}
+
+func (m *MemoryRepository) CreateAssetStoreRecord(_ context.Context, rec *models.AssetStoreRecord) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	for _, existing := range m.assetStoreRecords {
+		if existing.AssetStoreID == rec.AssetStoreID && existing.RecordDate == rec.RecordDate {
+			return ErrConflict
+		}
+	}
+	copied := *rec
+	m.assetStoreRecords[rec.ID] = &copied
+	return nil
+}
+
+func (m *MemoryRepository) GetAssetStoreRecordByID(_ context.Context, storeID, recordID string) (*models.AssetStoreRecord, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	r, exists := m.assetStoreRecords[recordID]
+	if !exists || r.AssetStoreID != storeID {
+		return nil, ErrNotFound
+	}
+	copied := *r
+	return &copied, nil
+}
+
+func (m *MemoryRepository) ListAssetStoreRecords(_ context.Context, storeID string) ([]*models.AssetStoreRecord, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	var list []*models.AssetStoreRecord
+	for _, r := range m.assetStoreRecords {
+		if r.AssetStoreID == storeID {
+			copied := *r
+			list = append(list, &copied)
+		}
+	}
+	sort.Slice(list, func(i, j int) bool {
+		if list[i].RecordDate != list[j].RecordDate {
+			return list[i].RecordDate > list[j].RecordDate
+		}
+		return list[i].CreatedAt.After(list[j].CreatedAt)
+	})
+	return list, nil
+}
+
+func (m *MemoryRepository) UpdateAssetStoreRecord(_ context.Context, rec *models.AssetStoreRecord) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	existing, exists := m.assetStoreRecords[rec.ID]
+	if !exists || existing.AssetStoreID != rec.AssetStoreID {
+		return ErrNotFound
+	}
+	for _, other := range m.assetStoreRecords {
+		if other.ID != rec.ID && other.AssetStoreID == rec.AssetStoreID && other.RecordDate == rec.RecordDate {
+			return ErrConflict
+		}
+	}
+	existing.Quantity = rec.Quantity
+	existing.RecordDate = rec.RecordDate
+	existing.UpdatedAt = rec.UpdatedAt
+	return nil
+}
+
+func (m *MemoryRepository) DeleteAssetStoreRecord(_ context.Context, storeID, recordID string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	existing, exists := m.assetStoreRecords[recordID]
+	if !exists || existing.AssetStoreID != storeID {
+		return ErrNotFound
+	}
+	delete(m.assetStoreRecords, recordID)
+	return nil
+}
+
+func (m *MemoryRepository) collectStoreTrendDatesLocked(storeID, assetID string) []string {
+	dateSet := make(map[string]bool)
+	for _, r := range m.assetStoreRecords {
+		if r.AssetStoreID == storeID {
+			dateSet[r.RecordDate] = true
+		}
+	}
+	for _, v := range m.assetValues {
+		if v.AssetID == assetID {
+			dateSet[v.ValueDate] = true
+		}
+	}
+	var dates []string
+	for d := range dateSet {
+		dates = append(dates, d)
+	}
+	sort.Strings(dates)
+	return dates
+}
+
+func (m *MemoryRepository) getStoreQtyAtDateLocked(storeID, dateStr string) float64 {
+	var bestDate string
+	var bestCreated time.Time
+	var qty float64
+	for _, r := range m.assetStoreRecords {
+		if r.AssetStoreID == storeID && r.RecordDate <= dateStr {
+			if r.RecordDate > bestDate || (r.RecordDate == bestDate && r.CreatedAt.After(bestCreated)) {
+				bestDate = r.RecordDate
+				bestCreated = r.CreatedAt
+				qty = r.Quantity
+			}
+		}
+	}
+	return qty
+}
+
+func (m *MemoryRepository) getAssetValAtDateLocked(assetID, dateStr string) float64 {
+	var bestDate string
+	var bestCreated time.Time
+	var val float64
+	for _, v := range m.assetValues {
+		if v.AssetID == assetID && v.ValueDate <= dateStr {
+			if v.ValueDate > bestDate || (v.ValueDate == bestDate && v.CreatedAt.After(bestCreated)) {
+				bestDate = v.ValueDate
+				bestCreated = v.CreatedAt
+				val = v.Value
+			}
+		}
+	}
+	return val
+}
+
+func (m *MemoryRepository) GetAssetStoreTrend(_ context.Context, storeID string) ([]models.AssetStoreTrendPoint, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	store, exists := m.assetStores[storeID]
+	if !exists {
+		return nil, ErrNotFound
+	}
+	dates := m.collectStoreTrendDatesLocked(storeID, store.AssetID)
+	var points []models.AssetStoreTrendPoint
+	for _, d := range dates {
+		q := m.getStoreQtyAtDateLocked(storeID, d)
+		if q <= 0 {
+			continue
+		}
+		p := m.getAssetValAtDateLocked(store.AssetID, d)
+		points = append(points, models.AssetStoreTrendPoint{
+			Date:       d,
+			Quantity:   q,
+			UnitValue:  p,
+			TotalValue: q * p,
+		})
+	}
+	return points, nil
 }

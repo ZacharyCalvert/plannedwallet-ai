@@ -308,6 +308,82 @@ type AssetAccountSummaryResponse struct {
 	AccountID  string                  `json:"account_id"`
 	TotalValue float64                 `json:"total_value"`
 	Assets     []*AccountAssetResponse `json:"assets"`
+	Stores     []*AssetStoreDetail     `json:"stores,omitempty"`
+}
+
+// AssetStore represents a labeled storage location for an asset class in an account.
+type AssetStore struct {
+	ID          string    `json:"id"`
+	AccountID   string    `json:"account_id"`
+	AssetID     string    `json:"asset_id"`
+	Label       string    `json:"label"`
+	Description string    `json:"description"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
+}
+
+// AssetStoreDetail contains store info enriched with asset metadata and latest valuation/quantity.
+type AssetStoreDetail struct {
+	ID               string    `json:"id"`
+	AccountID        string    `json:"account_id"`
+	AssetID          string    `json:"asset_id"`
+	Label            string    `json:"label"`
+	Description      string    `json:"description"`
+	AssetLabel       string    `json:"asset_label"`
+	AssetDescription string    `json:"asset_description"`
+	LatestQuantity   float64   `json:"latest_quantity"`
+	LatestRecordDate string    `json:"latest_record_date,omitempty"`
+	LatestValue      float64   `json:"latest_value"`
+	LatestValueDate  string    `json:"latest_value_date,omitempty"`
+	TotalValue       float64   `json:"total_value"`
+	CreatedAt        time.Time `json:"created_at"`
+	UpdatedAt        time.Time `json:"updated_at"`
+}
+
+// CreateAssetStoreRequest payload to create a new asset store
+type CreateAssetStoreRequest struct {
+	AssetID     string   `json:"asset_id" binding:"required"`
+	Label       string   `json:"label" binding:"required,min=1,max=100"`
+	Description string   `json:"description"`
+	Quantity    *float64 `json:"quantity,omitempty"`
+	RecordDate  string   `json:"record_date,omitempty"`
+}
+
+// UpdateAssetStoreRequest payload to update an asset store
+type UpdateAssetStoreRequest struct {
+	Label       string  `json:"label" binding:"required,min=1,max=100"`
+	Description string  `json:"description"`
+	AssetID     *string `json:"asset_id,omitempty"`
+}
+
+// AssetStoreRecord represents a point-in-time quantity record for an asset store.
+type AssetStoreRecord struct {
+	ID           string    `json:"id"`
+	AssetStoreID string    `json:"asset_store_id"`
+	Quantity     float64   `json:"quantity"`
+	RecordDate   string    `json:"record_date"`
+	CreatedAt    time.Time `json:"created_at"`
+	UpdatedAt    time.Time `json:"updated_at"`
+}
+
+// CreateStoreRecordRequest payload to create a new quantity record for a store
+type CreateStoreRecordRequest struct {
+	Quantity   *float64 `json:"quantity" binding:"required"`
+	RecordDate string   `json:"record_date" binding:"required"`
+}
+
+// UpdateStoreRecordRequest payload to update a quantity record
+type UpdateStoreRecordRequest struct {
+	Quantity   *float64 `json:"quantity"`
+	RecordDate *string  `json:"record_date,omitempty"`
+}
+
+// AssetStoreTrendPoint represents a point-in-time valuation point for a single store.
+type AssetStoreTrendPoint struct {
+	Date       string  `json:"date"`
+	Quantity   float64 `json:"quantity"`
+	UnitValue  float64 `json:"unit_value"`
+	TotalValue float64 `json:"total_value"`
 }
 
 // AssetAccountTrendPoint represents a point-in-time total valuation of an asset account.

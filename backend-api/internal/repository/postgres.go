@@ -818,3 +818,317 @@ func (p *PostgresRepository) DeleteExpiredCaptchas(ctx context.Context, olderTha
 	}
 	return res.RowsAffected()
 }
+
+func (p *PostgresRepository) CreateAssetStore(ctx context.Context, store *models.AssetStore) error {
+	query := `INSERT INTO asset_stores (id, account_id, asset_id, label, description, created_at, updated_at)
+	          VALUES ($1, $2, $3, $4, $5, $6, $7)`
+	_, err := p.db.ExecContext(ctx, query, store.ID, store.AccountID, store.AssetID, store.Label, store.Description, store.CreatedAt, store.UpdatedAt)
+	if err != nil {
+		if isUniqueViolation(err) {
+			return ErrConflict
+		}
+		return err
+	}
+	return nil
+}
+
+func (p *PostgresRepository) GetAssetStoreByAccountAndLabel(ctx context.Context, accountID, label string) (*models.AssetStore, error) {
+	query := `SELECT id, account_id, asset_id, label, description, created_at, updated_at
+	          FROM asset_stores
+	          WHERE account_id = $1 AND LOWER(label) = LOWER($2)
+	          LIMIT 1`
+	row := p.db.QueryRowContext(ctx, query, accountID, strings.TrimSpace(label))
+	var s models.AssetStore
+	if err := row.Scan(&s.ID, &s.AccountID, &s.AssetID, &s.Label, &s.Description, &s.CreatedAt, &s.UpdatedAt); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrNotFound
+		}
+		return nil, err
+	}
+	return &s, nil
+}
+
+func scanAssetStoreDetail(row *sql.Row) (*models.AssetStoreDetail, error) {
+	var d models.AssetStoreDetail
+	var recDate, valDate sql.NullString
+	err := row.Scan(
+		&d.ID, &d.AccountID, &d.AssetID, &d.Label, &d.Description,
+		&d.AssetLabel, &d.AssetDescription,
+		&d.LatestQuantity, &recDate,
+		&d.LatestValue, &valDate,
+		&d.TotalValue, &d.CreatedAt, &d.UpdatedAt,
+	)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrNotFound
+		}
+		return nil, err
+	}
+	if recDate.Valid {
+		d.LatestRecordDate = recDate.String
+	}
+	if valDate.Valid {
+		d.LatestValueDate = valDate.String
+	}
+	return &d, nil
+}
+
+func (p *PostgresRepository) GetAssetStoreByID(ctx context.Context, accountID, storeID string) (*models.AssetStoreDetail, error) {
+	query := `SELECT
+	            s.id, s.account_id, s.asset_id, s.label, s.description,
+	            a.label, a.description,
+	            COALESCE(r.quantity, 0),
+	            TO_CHAR(r.record_date, 'YYYY-MM-DD'),
+	            COALESCE(v.value, 0),
+	            TO_CHAR(v.value_date, 'YYYY-MM-DD'),
+	            COALESCE(r.quantity, 0) * COALESCE(v.value, 0),
+	            s.created_at, s.updated_at
+	          FROM asset_stores s
+	          JOIN assets a ON a.id = s.asset_id
+	          LEFT JOIN LATERAL (
+	            SELECT quantity, record_date
+	            FROM asset_store_records
+	            WHERE asset_store_id = s.id
+	            ORDER BY record_date DESC, created_at DESC
+	            LIMIT 1
+	          ) r ON true
+	          LEFT JOIN LATERAL (
+	            SELECT value, value_date
+	            FROM asset_values
+	            WHERE asset_id = s.asset_id
+	            ORDER BY value_date DESC, created_at DESC
+	            LIMIT 1
+	          ) v ON true
+	          WHERE s.account_id = $1 AND s.id = $2`
+	return scanAssetStoreDetail(p.db.QueryRowContext(ctx, query, accountID, storeID))
+}
+
+func scanAssetStoreDetailRows(rows *sql.Rows) ([]*models.AssetStoreDetail, error) {
+	var list []*models.AssetStoreDetail
+	for rows.Next() {
+		var d models.AssetStoreDetail
+		var recDate, valDate sql.NullString
+		err := rows.Scan(
+			&d.ID, &d.AccountID, &d.AssetID, &d.Label, &d.Description,
+			&d.AssetLabel, &d.AssetDescription,
+			&d.LatestQuantity, &recDate,
+			&d.LatestValue, &valDate,
+			&d.TotalValue, &d.CreatedAt, &d.UpdatedAt,
+		)
+		if err != nil {
+			return nil, err
+		}
+		if recDate.Valid {
+			d.LatestRecordDate = recDate.String
+		}
+		if valDate.Valid {
+			d.LatestValueDate = valDate.String
+		}
+		list = append(list, &d)
+	}
+	return list, rows.Err()
+}
+
+func (p *PostgresRepository) ListAssetStores(ctx context.Context, accountID string) ([]*models.AssetStoreDetail, error) {
+	query := `SELECT
+	            s.id, s.account_id, s.asset_id, s.label, s.description,
+	            a.label, a.description,
+	            COALESCE(r.quantity, 0),
+	            TO_CHAR(r.record_date, 'YYYY-MM-DD'),
+	            COALESCE(v.value, 0),
+	            TO_CHAR(v.value_date, 'YYYY-MM-DD'),
+	            COALESCE(r.quantity, 0) * COALESCE(v.value, 0),
+	            s.created_at, s.updated_at
+	          FROM asset_stores s
+	          JOIN assets a ON a.id = s.asset_id
+	          LEFT JOIN LATERAL (
+	            SELECT quantity, record_date
+	            FROM asset_store_records
+	            WHERE asset_store_id = s.id
+	            ORDER BY record_date DESC, created_at DESC
+	            LIMIT 1
+	          ) r ON true
+	          LEFT JOIN LATERAL (
+	            SELECT value, value_date
+	            FROM asset_values
+	            WHERE asset_id = s.asset_id
+	            ORDER BY value_date DESC, created_at DESC
+	            LIMIT 1
+	          ) v ON true
+	          WHERE s.account_id = $1
+	          ORDER BY s.label ASC`
+	rows, err := p.db.QueryContext(ctx, query, accountID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	return scanAssetStoreDetailRows(rows)
+}
+
+func (p *PostgresRepository) UpdateAssetStore(ctx context.Context, store *models.AssetStore) error {
+	query := `UPDATE asset_stores
+	          SET label = $1, description = $2, asset_id = $3, updated_at = $4
+	          WHERE id = $5 AND account_id = $6`
+	res, err := p.db.ExecContext(ctx, query, store.Label, store.Description, store.AssetID, store.UpdatedAt, store.ID, store.AccountID)
+	if err != nil {
+		if isUniqueViolation(err) {
+			return ErrConflict
+		}
+		return err
+	}
+	cnt, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if cnt == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+func (p *PostgresRepository) DeleteAssetStore(ctx context.Context, accountID, storeID string) error {
+	query := `DELETE FROM asset_stores WHERE id = $1 AND account_id = $2`
+	res, err := p.db.ExecContext(ctx, query, storeID, accountID)
+	if err != nil {
+		return err
+	}
+	cnt, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if cnt == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+func (p *PostgresRepository) CreateAssetStoreRecord(ctx context.Context, rec *models.AssetStoreRecord) error {
+	query := `INSERT INTO asset_store_records (id, asset_store_id, quantity, record_date, created_at, updated_at)
+	          VALUES ($1, $2, $3, $4::date, $5, $6)`
+	_, err := p.db.ExecContext(ctx, query, rec.ID, rec.AssetStoreID, rec.Quantity, rec.RecordDate, rec.CreatedAt, rec.UpdatedAt)
+	if err != nil {
+		if isUniqueViolation(err) {
+			return ErrConflict
+		}
+		return err
+	}
+	return nil
+}
+
+func (p *PostgresRepository) GetAssetStoreRecordByID(ctx context.Context, storeID, recordID string) (*models.AssetStoreRecord, error) {
+	query := `SELECT id, asset_store_id, quantity, TO_CHAR(record_date, 'YYYY-MM-DD'), created_at, updated_at
+	          FROM asset_store_records
+	          WHERE asset_store_id = $1 AND id = $2`
+	row := p.db.QueryRowContext(ctx, query, storeID, recordID)
+	var r models.AssetStoreRecord
+	if err := row.Scan(&r.ID, &r.AssetStoreID, &r.Quantity, &r.RecordDate, &r.CreatedAt, &r.UpdatedAt); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrNotFound
+		}
+		return nil, err
+	}
+	return &r, nil
+}
+
+func scanAssetStoreRecordRows(rows *sql.Rows) ([]*models.AssetStoreRecord, error) {
+	var list []*models.AssetStoreRecord
+	for rows.Next() {
+		var r models.AssetStoreRecord
+		if err := rows.Scan(&r.ID, &r.AssetStoreID, &r.Quantity, &r.RecordDate, &r.CreatedAt, &r.UpdatedAt); err != nil {
+			return nil, err
+		}
+		list = append(list, &r)
+	}
+	return list, rows.Err()
+}
+
+func (p *PostgresRepository) ListAssetStoreRecords(ctx context.Context, storeID string) ([]*models.AssetStoreRecord, error) {
+	query := `SELECT id, asset_store_id, quantity, TO_CHAR(record_date, 'YYYY-MM-DD'), created_at, updated_at
+	          FROM asset_store_records
+	          WHERE asset_store_id = $1
+	          ORDER BY record_date DESC, created_at DESC`
+	rows, err := p.db.QueryContext(ctx, query, storeID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	return scanAssetStoreRecordRows(rows)
+}
+
+func (p *PostgresRepository) UpdateAssetStoreRecord(ctx context.Context, rec *models.AssetStoreRecord) error {
+	query := `UPDATE asset_store_records
+	          SET quantity = $1, record_date = $2::date, updated_at = $3
+	          WHERE id = $4 AND asset_store_id = $5`
+	res, err := p.db.ExecContext(ctx, query, rec.Quantity, rec.RecordDate, rec.UpdatedAt, rec.ID, rec.AssetStoreID)
+	if err != nil {
+		if isUniqueViolation(err) {
+			return ErrConflict
+		}
+		return err
+	}
+	cnt, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if cnt == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+func (p *PostgresRepository) DeleteAssetStoreRecord(ctx context.Context, storeID, recordID string) error {
+	query := `DELETE FROM asset_store_records WHERE id = $1 AND asset_store_id = $2`
+	res, err := p.db.ExecContext(ctx, query, recordID, storeID)
+	if err != nil {
+		return err
+	}
+	cnt, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if cnt == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+func (p *PostgresRepository) GetAssetStoreTrend(ctx context.Context, storeID string) ([]models.AssetStoreTrendPoint, error) {
+	query := `SELECT
+	            d.trend_date,
+	            COALESCE(r.quantity, 0),
+	            COALESCE(v.value, 0),
+	            COALESCE(r.quantity, 0) * COALESCE(v.value, 0)
+	          FROM (
+	            SELECT TO_CHAR(record_date, 'YYYY-MM-DD') AS trend_date FROM asset_store_records WHERE asset_store_id = $1
+	            UNION
+	            SELECT TO_CHAR(av.value_date, 'YYYY-MM-DD') FROM asset_values av
+	            JOIN asset_stores s ON s.asset_id = av.asset_id WHERE s.id = $1
+	          ) d
+	          LEFT JOIN LATERAL (
+	            SELECT quantity FROM asset_store_records
+	            WHERE asset_store_id = $1 AND record_date <= d.trend_date::date
+	            ORDER BY record_date DESC, created_at DESC LIMIT 1
+	          ) r ON true
+	          LEFT JOIN LATERAL (
+	            SELECT av.value FROM asset_values av
+	            JOIN asset_stores s ON s.asset_id = av.asset_id
+	            WHERE s.id = $1 AND av.value_date <= d.trend_date::date
+	            ORDER BY av.value_date DESC, av.created_at DESC LIMIT 1
+	          ) v ON true
+	          WHERE r.quantity IS NOT NULL AND r.quantity > 0
+	          ORDER BY d.trend_date ASC`
+	rows, err := p.db.QueryContext(ctx, query, storeID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var points []models.AssetStoreTrendPoint
+	for rows.Next() {
+		var pt models.AssetStoreTrendPoint
+		if err := rows.Scan(&pt.Date, &pt.Quantity, &pt.UnitValue, &pt.TotalValue); err != nil {
+			return nil, err
+		}
+		points = append(points, pt)
+	}
+	return points, rows.Err()
+}

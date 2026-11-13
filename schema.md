@@ -71,8 +71,31 @@ Stores date-keyed valuation points for assets.
 - **Constraint**: `CONSTRAINT uq_asset_values_asset_date UNIQUE (asset_id, value_date)`
 - **Index**: `idx_asset_values_asset_date (asset_id, value_date DESC)`
 
-### 1.7 `account_assets`
-Stores asset holdings and quantities within `asset` accounts across dates.
+### 1.7 `asset_stores`
+Maps asset classes to unique labeled storage locations / holdings within an asset account.
+- `id` (UUID, Primary Key)
+- `account_id` (UUID, Not Null, FK -> `accounts(id)` ON DELETE CASCADE)
+- `asset_id` (UUID, Not Null, FK -> `assets(id)` ON DELETE CASCADE)
+- `label` (VARCHAR(100), Not Null) - Unique label within account (e.g. "red", "blue", "attic box", "silver mattress")
+- `description` (VARCHAR(500), Not Null, Default `''`)
+- `created_at` (TIMESTAMPTZ, Not Null, Default NOW())
+- `updated_at` (TIMESTAMPTZ, Not Null, Default NOW())
+- **Constraints**: `CONSTRAINT uq_asset_stores_account_label UNIQUE (account_id, label)`, `uq_asset_stores_account_lower_label (account_id, LOWER(label))`
+- **Indexes**: `idx_asset_stores_account_id`, `idx_asset_stores_asset_id`
+
+### 1.8 `asset_store_records`
+Stores point-in-time quantity records by date for a given asset store.
+- `id` (UUID, Primary Key)
+- `asset_store_id` (UUID, Not Null, FK -> `asset_stores(id)` ON DELETE CASCADE)
+- `quantity` (DOUBLE PRECISION, Not Null, `CHECK (quantity > 0)`)
+- `record_date` (DATE, Not Null)
+- `created_at` (TIMESTAMPTZ, Not Null, Default NOW())
+- `updated_at` (TIMESTAMPTZ, Not Null, Default NOW())
+- **Constraint**: `CONSTRAINT uq_asset_store_records_store_date UNIQUE (asset_store_id, record_date)`
+- **Indexes**: `idx_asset_store_records_store_id`, `idx_asset_store_records_store_date (asset_store_id, record_date DESC)`
+
+### 1.9 `account_assets`
+Legacy asset mapping table retained for backward compatibility.
 - `id` (UUID, Primary Key)
 - `account_id` (UUID, Not Null, FK -> `accounts(id)` ON DELETE CASCADE)
 - `asset_id` (UUID, Not Null, FK -> `assets(id)` ON DELETE CASCADE)
@@ -83,7 +106,7 @@ Stores asset holdings and quantities within `asset` accounts across dates.
 - **Constraint**: `CONSTRAINT uq_account_assets_account_asset_date UNIQUE (account_id, asset_id, asset_date)`
 - **Indexes**: `idx_account_assets_account_id`, `idx_account_assets_asset_id`, `idx_account_assets_account_date (account_id, asset_date DESC)`
 
-### 1.8 `account_snapshots`
+### 1.10 `account_snapshots`
 Stores manual point-in-time valuations for `snapshot` accounts.
 - `id` (UUID, Primary Key)
 - `account_id` (UUID, Not Null, FK -> `accounts(id)` ON DELETE CASCADE)

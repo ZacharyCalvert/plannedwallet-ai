@@ -402,6 +402,23 @@ func (h *Handler) RegisterRoutes(r *gin.Engine) {
 			protected.PUT("/accounts/:accountId/assets/:assetId", h.UpdateAccountAsset)
 			protected.DELETE("/accounts/:accountId/assets/:assetId", h.DeleteAccountAsset)
 
+			// Asset Stores
+			protected.POST("/accounts/:accountId/stores", h.CreateAssetStore)
+			protected.GET("/accounts/:accountId/stores", h.ListAssetStores)
+			protected.GET("/accounts/:accountId/stores/summary", h.GetAssetAccountSummary)
+			protected.GET("/accounts/:accountId/stores/trend", h.GetAssetAccountTrend)
+			protected.GET("/accounts/:accountId/stores/:storeId", h.GetAssetStore)
+			protected.PUT("/accounts/:accountId/stores/:storeId", h.UpdateAssetStore)
+			protected.DELETE("/accounts/:accountId/stores/:storeId", h.DeleteAssetStore)
+			protected.GET("/accounts/:accountId/stores/:storeId/trend", h.GetAssetStoreTrend)
+
+			// Asset Store Records
+			protected.POST("/accounts/:accountId/stores/:storeId/records", h.CreateAssetStoreRecord)
+			protected.GET("/accounts/:accountId/stores/:storeId/records", h.ListAssetStoreRecords)
+			protected.GET("/accounts/:accountId/stores/:storeId/records/:recordId", h.GetAssetStoreRecord)
+			protected.PUT("/accounts/:accountId/stores/:storeId/records/:recordId", h.UpdateAssetStoreRecord)
+			protected.DELETE("/accounts/:accountId/stores/:storeId/records/:recordId", h.DeleteAssetStoreRecord)
+
 			// Account Snapshots
 			protected.POST("/accounts/:accountId/snapshots", h.CreateAccountSnapshot)
 			protected.GET("/accounts/:accountId/snapshots", h.ListAccountSnapshots)

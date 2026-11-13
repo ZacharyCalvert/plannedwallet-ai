@@ -226,8 +226,39 @@ func (c *Controller) DeleteAccountAsset(ctx context.Context, userID, accountID, 
 	return nil
 }
 
-// GetAssetAccountSummary computes total current worth and summarizes distinct held assets.
+// GetAssetAccountSummary computes total current worth across all asset stores or legacy assets.
 func (c *Controller) GetAssetAccountSummary(ctx context.Context, userID, accountID string) (*models.AssetAccountSummaryResponse, error) {
+	if _, err := c.verifyAssetAccount(ctx, userID, accountID, models.AccessLevelRead); err != nil {
+		return nil, err
+	}
+	stores, err := c.repo.ListAssetStores(ctx, accountID)
+	if err == nil && len(stores) > 0 {
+		var total float64
+		var legacyAssets []*models.AccountAssetResponse
+		for _, s := range stores {
+			total += s.TotalValue
+			legacyAssets = append(legacyAssets, &models.AccountAssetResponse{
+				ID:              s.ID,
+				AccountID:       s.AccountID,
+				AssetID:         s.AssetID,
+				Label:           s.Label,
+				Description:     s.Description,
+				Quantity:        s.LatestQuantity,
+				AssetDate:       s.LatestRecordDate,
+				LatestValue:     s.LatestValue,
+				LatestValueDate: s.LatestValueDate,
+				TotalValue:      s.TotalValue,
+				CreatedAt:       s.CreatedAt,
+				UpdatedAt:       s.UpdatedAt,
+			})
+		}
+		return &models.AssetAccountSummaryResponse{
+			AccountID:  accountID,
+			TotalValue: total,
+			Assets:     legacyAssets,
+			Stores:     stores,
+		}, nil
+	}
 	assets, err := c.ListAccountAssets(ctx, userID, accountID)
 	if err != nil {
 		return nil, err
@@ -345,11 +376,7 @@ func (c *Controller) loadAssetsValuationMap(ctx context.Context, assetIDs []stri
 	return valMap, nil
 }
 
-// GetAssetAccountTrend calculates total account worth over time.
-func (c *Controller) GetAssetAccountTrend(ctx context.Context, userID, accountID string, startDate, endDate *string) ([]*models.AssetAccountTrendPoint, error) {
-	if _, err := c.verifyAssetAccount(ctx, userID, accountID, models.AccessLevelRead); err != nil {
-		return nil, err
-	}
+func (c *Controller) computeLegacyAccountTrend(ctx context.Context, accountID string, startDate, endDate *string) ([]*models.AssetAccountTrendPoint, error) {
 	details, err := c.repo.ListAccountAssets(ctx, accountID)
 	if err != nil {
 		return nil, NewAppError(http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to list account assets.")
@@ -373,4 +400,104 @@ func (c *Controller) GetAssetAccountTrend(ctx context.Context, userID, accountID
 		points = append(points, &models.AssetAccountTrendPoint{Date: d, TotalValue: val})
 	}
 	return points, nil
+}
+
+func (c *Controller) loadStoresTrendData(ctx context.Context, stores []*models.AssetStoreDetail) (map[string][]*models.AssetStoreRecord, map[string][]*models.AssetValue, error) {
+	recsMap := make(map[string][]*models.AssetStoreRecord, len(stores))
+	valsMap := make(map[string][]*models.AssetValue)
+	for _, s := range stores {
+		recs, err := c.repo.ListAssetStoreRecords(ctx, s.ID)
+		if err != nil {
+			return nil, nil, err
+		}
+		recsMap[s.ID] = recs
+		if _, ok := valsMap[s.AssetID]; !ok {
+			vals, err := c.repo.ListAssetValues(ctx, s.AssetID, nil, nil)
+			if err != nil {
+				return nil, nil, err
+			}
+			valsMap[s.AssetID] = vals
+		}
+	}
+	return recsMap, valsMap, nil
+}
+
+func collectStoreTrendDates(recsMap map[string][]*models.AssetStoreRecord, valsMap map[string][]*models.AssetValue, start, end string) []string {
+	dateSet := make(map[string]bool)
+	for _, recs := range recsMap {
+		for _, r := range recs {
+			if (start == "" || r.RecordDate >= start) && (end == "" || r.RecordDate <= end) {
+				dateSet[r.RecordDate] = true
+			}
+		}
+	}
+	for _, vals := range valsMap {
+		for _, v := range vals {
+			if (start == "" || v.ValueDate >= start) && (end == "" || v.ValueDate <= end) {
+				dateSet[v.ValueDate] = true
+			}
+		}
+	}
+	var dates []string
+	for d := range dateSet {
+		dates = append(dates, d)
+	}
+	sort.Strings(dates)
+	return dates
+}
+
+func getStoreRecordQtyAtDate(recs []*models.AssetStoreRecord, dateStr string) float64 {
+	var bestDate string
+	var bestCreated time.Time
+	var qty float64
+	for _, r := range recs {
+		if r.RecordDate <= dateStr {
+			if r.RecordDate > bestDate || (r.RecordDate == bestDate && r.CreatedAt.After(bestCreated)) {
+				bestDate = r.RecordDate
+				bestCreated = r.CreatedAt
+				qty = r.Quantity
+			}
+		}
+	}
+	return qty
+}
+
+func (c *Controller) computeStoresAccountTrend(ctx context.Context, _ string, stores []*models.AssetStoreDetail, startDate, endDate *string) ([]*models.AssetAccountTrendPoint, error) {
+	recsMap, valsMap, err := c.loadStoresTrendData(ctx, stores)
+	if err != nil {
+		return nil, NewAppError(http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to retrieve store trend data.")
+	}
+	var start, end string
+	if startDate != nil {
+		start = *startDate
+	}
+	if endDate != nil {
+		end = *endDate
+	}
+	dates := collectStoreTrendDates(recsMap, valsMap, start, end)
+	points := make([]*models.AssetAccountTrendPoint, 0, len(dates))
+	for _, d := range dates {
+		var total float64
+		for _, s := range stores {
+			q := getStoreRecordQtyAtDate(recsMap[s.ID], d)
+			if q > 0 {
+				p := getAssetPriceAtDate(valsMap[s.AssetID], d)
+				total += q * p
+			}
+		}
+		points = append(points, &models.AssetAccountTrendPoint{Date: d, TotalValue: total})
+	}
+	return points, nil
+}
+
+// GetAssetAccountTrend calculates total account worth over time.
+func (c *Controller) GetAssetAccountTrend(ctx context.Context, userID, accountID string, startDate, endDate *string) ([]*models.AssetAccountTrendPoint, error) {
+	if _, err := c.verifyAssetAccount(ctx, userID, accountID, models.AccessLevelRead); err != nil {
+		return nil, err
+	}
+	stores, _ := c.repo.ListAssetStores(ctx, accountID)
+	if len(stores) > 0 {
+		return c.computeStoresAccountTrend(ctx, accountID, stores, startDate, endDate)
+	}
+	return c.computeLegacyAccountTrend(ctx, accountID, startDate, endDate)
 }

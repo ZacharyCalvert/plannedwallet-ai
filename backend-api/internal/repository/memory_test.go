@@ -259,3 +259,66 @@ func TestMemoryRepo_CaptchaLifecycleAndExpiration(t *testing.T) {
 		t.Fatalf("expected 1 deleted expired captcha, got %d (%v)", deleted, err)
 	}
 }
+
+func TestMemoryRepo_AssetStoreAndRecords(t *testing.T) {
+	repo := repository.NewMemoryRepository()
+	ctx := context.Background()
+	now := time.Now().UTC()
+
+	acc := &models.Account{ID: "acc-asset-1", AdminID: "u-1", Name: "Crypto Portfolio", Type: "asset"}
+	_ = repo.CreateAccount(ctx, acc)
+	btc := &models.Asset{ID: "asset-alpha", Label: "Coin Alpha"}
+	_ = repo.CreateAsset(ctx, btc)
+	_ = repo.CreateAssetValue(ctx, &models.AssetValue{ID: "v1", AssetID: btc.ID, Value: 50000.0, ValueDate: "2026-01-01"})
+	_ = repo.CreateAssetValue(ctx, &models.AssetValue{ID: "v2", AssetID: btc.ID, Value: 60000.0, ValueDate: "2026-06-01"})
+
+	// 1. Create store 'red'
+	storeRed := &models.AssetStore{ID: "store-red", AccountID: acc.ID, AssetID: btc.ID, Label: "red", Description: "Red hardware key", CreatedAt: now, UpdatedAt: now}
+	if err := repo.CreateAssetStore(ctx, storeRed); err != nil {
+		t.Fatalf("failed to create store: %v", err)
+	}
+
+	// 2. Duplicate label in same account
+	storeDup := &models.AssetStore{ID: "store-dup", AccountID: acc.ID, AssetID: btc.ID, Label: "RED", CreatedAt: now, UpdatedAt: now}
+	if err := repo.CreateAssetStore(ctx, storeDup); !errors.Is(err, repository.ErrConflict) {
+		t.Fatalf("expected conflict on duplicate store label, got: %v", err)
+	}
+
+	// 3. Add records for 'red': Jan 1 (0.2), Feb 1 (0.3), Oct 1 (0.5)
+	r1 := &models.AssetStoreRecord{ID: "r1", AssetStoreID: storeRed.ID, Quantity: 0.2, RecordDate: "2026-01-01", CreatedAt: now, UpdatedAt: now}
+	r2 := &models.AssetStoreRecord{ID: "r2", AssetStoreID: storeRed.ID, Quantity: 0.3, RecordDate: "2026-02-01", CreatedAt: now, UpdatedAt: now}
+	r3 := &models.AssetStoreRecord{ID: "r3", AssetStoreID: storeRed.ID, Quantity: 0.5, RecordDate: "2026-10-01", CreatedAt: now, UpdatedAt: now}
+	_ = repo.CreateAssetStoreRecord(ctx, r1)
+	_ = repo.CreateAssetStoreRecord(ctx, r2)
+	_ = repo.CreateAssetStoreRecord(ctx, r3)
+
+	// Duplicate date record
+	rDup := &models.AssetStoreRecord{ID: "rDup", AssetStoreID: storeRed.ID, Quantity: 0.99, RecordDate: "2026-10-01", CreatedAt: now, UpdatedAt: now}
+	if err := repo.CreateAssetStoreRecord(ctx, rDup); !errors.Is(err, repository.ErrConflict) {
+		t.Fatalf("expected conflict on duplicate record date, got: %v", err)
+	}
+
+	// 4. Check store detail (latest quantity 0.5, latest value 60000.0 => total 30000.0)
+	detail, err := repo.GetAssetStoreByID(ctx, acc.ID, storeRed.ID)
+	if err != nil {
+		t.Fatalf("failed to get store detail: %v", err)
+	}
+	if detail.LatestQuantity != 0.5 || detail.LatestValue != 60000.0 || detail.TotalValue != 30000.0 {
+		t.Errorf("unexpected detail: %+v", detail)
+	}
+
+	// 5. Store trend
+	trend, err := repo.GetAssetStoreTrend(ctx, storeRed.ID)
+	if err != nil || len(trend) == 0 {
+		t.Fatalf("expected trend points, got %d (%v)", len(trend), err)
+	}
+
+	// 6. Delete store (cascades records)
+	if err := repo.DeleteAssetStore(ctx, acc.ID, storeRed.ID); err != nil {
+		t.Fatalf("failed to delete store: %v", err)
+	}
+	recs, _ := repo.ListAssetStoreRecords(ctx, storeRed.ID)
+	if len(recs) != 0 {
+		t.Errorf("expected 0 records after cascade delete, got %d", len(recs))
+	}
+}

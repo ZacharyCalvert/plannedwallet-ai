@@ -488,3 +488,311 @@ def test_asset_account_multi_date_holdings_and_trend(api_context: APIRequestCont
     # Verify only 2 holdings remain
     post_del_list = api_context.get(f"/api/v1/accounts/{account_id}/assets", headers=headers)
     assert len(post_del_list.json()) == 2
+
+
+def test_asset_stores_and_records_workflow(api_context: APIRequestContext):
+    """
+    Test full workflow of labeled asset stores and date-based quantity records:
+    - Create asset account and asset definition (Alpha Coin)
+    - Add multi-date valuations for Alpha Coin (Jan 1, Feb 1, Oct 1)
+    - Create labeled asset stores: 'Red Key' and 'Blue Key'
+    - Verify duplicate store label within same account fails (409 Conflict)
+    - Add date-based quantity records to 'Red Key' (Jan 1: 0.3, Feb 1: 0.5, Oct 1: 0.2)
+    - Verify duplicate date record for same store fails (409 Conflict)
+    - Add date-based quantity records to 'Blue Key' (Feb 1: 0.1, Oct 1: 0.4)
+    - Verify store list includes latest quantity and calculated total value
+    - Verify store-specific trend over time
+    - Verify account-wide store summary and multi-store aggregated trend
+    - Update store label ('Blue Key' -> 'Navy Key')
+    - Update store record quantity
+    - Delete store record and verify count
+    - Delete store and verify cascade deletion of records
+    - Verify access control permissions (read cannot mutate stores or records)
+    """
+    user_owner, token_owner = create_authenticated_user(api_context)
+    headers_owner = {"Authorization": f"Bearer {token_owner}"}
+
+    # 1. Create asset account
+    acc_res = api_context.post(
+        "/api/v1/accounts",
+        data={
+            "name": "Crypto Asset Portfolio",
+            "type": "asset",
+            "description": "Multi-store cold and warm storage keys",
+        },
+        headers=headers_owner,
+    )
+    assert acc_res.status == 201, f"Failed to create account: {acc_res.text()}"
+    account = acc_res.json()
+    account_id = account["id"]
+
+    # 2. Create asset definition
+    uid = uuid.uuid4().hex[:6]
+    asset_res = api_context.post(
+        "/api/v1/assets",
+        data={"label": f"alphacoin_{uid}", "description": "Generic crypto alpha coin"},
+        headers=headers_owner,
+    )
+    assert asset_res.status == 201, f"Failed to create asset: {asset_res.text()}"
+    asset_id = asset_res.json()["id"]
+
+    # 3. Add valuations: Jan 1 = $40,000, Feb 1 = $45,000, Oct 1 = $60,000
+    v1_res = api_context.post(
+        f"/api/v1/assets/{asset_id}/values",
+        data={"value": 40000.00, "value_date": "2026-01-01"},
+        headers=headers_owner,
+    )
+    assert v1_res.status == 201
+    v2_res = api_context.post(
+        f"/api/v1/assets/{asset_id}/values",
+        data={"value": 45000.00, "value_date": "2026-02-01"},
+        headers=headers_owner,
+    )
+    assert v2_res.status == 201
+    v3_res = api_context.post(
+        f"/api/v1/assets/{asset_id}/values",
+        data={"value": 60000.00, "value_date": "2026-10-01"},
+        headers=headers_owner,
+    )
+    assert v3_res.status == 201
+
+    # 4. Create Asset Stores: 'Red Key' and 'Blue Key'
+    s1_res = api_context.post(
+        f"/api/v1/accounts/{account_id}/stores",
+        data={
+            "asset_id": asset_id,
+            "label": "Red Key",
+            "description": "Primary cold storage private key (red)",
+        },
+        headers=headers_owner,
+    )
+    assert s1_res.status == 201, f"Failed to create store: {s1_res.text()}"
+    store_red = s1_res.json()
+    assert store_red["label"] == "Red Key"
+    assert store_red["latest_quantity"] == 0.0
+    assert store_red["total_value"] == 0.0
+
+    s2_res = api_context.post(
+        f"/api/v1/accounts/{account_id}/stores",
+        data={
+            "asset_id": asset_id,
+            "label": "Blue Key",
+            "description": "Secondary hardware key (blue)",
+        },
+        headers=headers_owner,
+    )
+    assert s2_res.status == 201, f"Failed to create store: {s2_res.text()}"
+    store_blue = s2_res.json()
+    assert store_blue["label"] == "Blue Key"
+
+    # Duplicate store label check (case-insensitive)
+    dup_store = api_context.post(
+        f"/api/v1/accounts/{account_id}/stores",
+        data={"asset_id": asset_id, "label": "red key"},
+        headers=headers_owner,
+    )
+    assert dup_store.status == 409
+
+    # 5. Add Quantity Records to 'Red Key'
+    # Jan 1: 0.3
+    r1 = api_context.post(
+        f"/api/v1/accounts/{account_id}/stores/{store_red['id']}/records",
+        data={"quantity": 0.3, "record_date": "2026-01-01"},
+        headers=headers_owner,
+    )
+    assert r1.status == 201, f"Failed to add store record: {r1.text()}"
+    rec1 = r1.json()
+    assert rec1["quantity"] == 0.3
+    assert rec1["record_date"] == "2026-01-01"
+
+    # Feb 1: 0.5
+    r2 = api_context.post(
+        f"/api/v1/accounts/{account_id}/stores/{store_red['id']}/records",
+        data={"quantity": 0.5, "record_date": "2026-02-01"},
+        headers=headers_owner,
+    )
+    assert r2.status == 201
+
+    # Oct 1: 0.2
+    r3 = api_context.post(
+        f"/api/v1/accounts/{account_id}/stores/{store_red['id']}/records",
+        data={"quantity": 0.2, "record_date": "2026-10-01"},
+        headers=headers_owner,
+    )
+    assert r3.status == 201
+
+    # Conflict on duplicate date for same store
+    dup_rec = api_context.post(
+        f"/api/v1/accounts/{account_id}/stores/{store_red['id']}/records",
+        data={"quantity": 0.9, "record_date": "2026-10-01"},
+        headers=headers_owner,
+    )
+    assert dup_rec.status == 409
+
+    # 6. Add Quantity Records to 'Blue Key'
+    # Feb 1: 0.1
+    b1 = api_context.post(
+        f"/api/v1/accounts/{account_id}/stores/{store_blue['id']}/records",
+        data={"quantity": 0.1, "record_date": "2026-02-01"},
+        headers=headers_owner,
+    )
+    assert b1.status == 201
+
+    # Oct 1: 0.4
+    b2 = api_context.post(
+        f"/api/v1/accounts/{account_id}/stores/{store_blue['id']}/records",
+        data={"quantity": 0.4, "record_date": "2026-10-01"},
+        headers=headers_owner,
+    )
+    assert b2.status == 201
+
+    # 7. List Stores and verify current positions
+    stores_res = api_context.get(f"/api/v1/accounts/{account_id}/stores", headers=headers_owner)
+    assert stores_res.status == 200
+    store_list = stores_res.json()
+    assert len(store_list) == 2
+    by_label = {s["label"]: s for s in store_list}
+
+    # Red Key latest: 0.2, valuation: 60,000 -> total = 12,000
+    assert abs(by_label["Red Key"]["latest_quantity"] - 0.2) < 0.001
+    assert abs(by_label["Red Key"]["latest_value"] - 60000.00) < 0.01
+    assert abs(by_label["Red Key"]["total_value"] - 12000.00) < 0.01
+
+    # Blue Key latest: 0.4, valuation: 60,000 -> total = 24,000
+    assert abs(by_label["Blue Key"]["latest_quantity"] - 0.4) < 0.001
+    assert abs(by_label["Blue Key"]["latest_value"] - 60000.00) < 0.01
+    assert abs(by_label["Blue Key"]["total_value"] - 24000.00) < 0.01
+
+    # 8. Store Trend Endpoint for Red Key
+    s1_trend_res = api_context.get(
+        f"/api/v1/accounts/{account_id}/stores/{store_red['id']}/trend",
+        headers=headers_owner,
+    )
+    assert s1_trend_res.status == 200
+    s1_trend = s1_trend_res.json()
+    assert len(s1_trend) == 3
+    # 2026-01-01: 0.3 * 40,000 = 12,000
+    assert s1_trend[0]["date"] == "2026-01-01"
+    assert abs(s1_trend[0]["quantity"] - 0.3) < 0.001
+    assert abs(s1_trend[0]["total_value"] - 12000.00) < 0.01
+    # 2026-02-01: 0.5 * 45,000 = 22,500
+    assert s1_trend[1]["date"] == "2026-02-01"
+    assert abs(s1_trend[1]["quantity"] - 0.5) < 0.001
+    assert abs(s1_trend[1]["total_value"] - 22500.00) < 0.01
+    # 2026-10-01: 0.2 * 60,000 = 12,000
+    assert s1_trend[2]["date"] == "2026-10-01"
+    assert abs(s1_trend[2]["quantity"] - 0.2) < 0.001
+    assert abs(s1_trend[2]["total_value"] - 12000.00) < 0.01
+
+    # 9. Account Summary
+    sum_res = api_context.get(
+        f"/api/v1/accounts/{account_id}/stores/summary",
+        headers=headers_owner,
+    )
+    assert sum_res.status == 200
+    summary = sum_res.json()
+    assert abs(summary["total_value"] - 36000.00) < 0.01
+    assert len(summary["stores"]) == 2
+
+    # 10. Aggregated Account Trend across all stores
+    acc_trend_res = api_context.get(
+        f"/api/v1/accounts/{account_id}/stores/trend",
+        headers=headers_owner,
+    )
+    assert acc_trend_res.status == 200
+    acc_trend = acc_trend_res.json()
+    assert len(acc_trend) == 3
+    # 2026-01-01: Red (0.3 * 40k = 12k), Blue (0) -> 12,000
+    assert acc_trend[0]["date"] == "2026-01-01"
+    assert abs(acc_trend[0]["total_value"] - 12000.00) < 0.01
+    # 2026-02-01: Red (0.5 * 45k = 22.5k), Blue (0.1 * 45k = 4.5k) -> 27,000
+    assert acc_trend[1]["date"] == "2026-02-01"
+    assert abs(acc_trend[1]["total_value"] - 27000.00) < 0.01
+    # 2026-10-01: Red (0.2 * 60k = 12k), Blue (0.4 * 60k = 24k) -> 36,000
+    assert acc_trend[2]["date"] == "2026-10-01"
+    assert abs(acc_trend[2]["total_value"] - 36000.00) < 0.01
+
+    # 11. Update Store Label
+    upd_store = api_context.put(
+        f"/api/v1/accounts/{account_id}/stores/{store_blue['id']}",
+        data={"label": "Navy Key", "description": "Updated blue hardware key"},
+        headers=headers_owner,
+    )
+    assert upd_store.status == 200
+    assert upd_store.json()["label"] == "Navy Key"
+
+    # 12. Update Store Record
+    upd_rec = api_context.put(
+        f"/api/v1/accounts/{account_id}/stores/{store_red['id']}/records/{rec1['id']}",
+        data={"quantity": 0.35, "record_date": "2026-01-05"},
+        headers=headers_owner,
+    )
+    assert upd_rec.status == 200
+    assert abs(upd_rec.json()["quantity"] - 0.35) < 0.001
+    assert upd_rec.json()["record_date"] == "2026-01-05"
+
+    # 13. Delete Store Record
+    del_rec = api_context.delete(
+        f"/api/v1/accounts/{account_id}/stores/{store_red['id']}/records/{rec1['id']}",
+        headers=headers_owner,
+    )
+    assert del_rec.status == 204
+
+    # List records returns 2 remaining for Red Key
+    recs_res = api_context.get(
+        f"/api/v1/accounts/{account_id}/stores/{store_red['id']}/records",
+        headers=headers_owner,
+    )
+    assert recs_res.status == 200
+    assert len(recs_res.json()) == 2
+
+    # 14. Access Control: Collaborator with Read Access
+    user_collab, token_collab = create_authenticated_user(api_context)
+    headers_collab = {"Authorization": f"Bearer {token_collab}"}
+
+    # Grant read access to collaborator
+    grant_res = api_context.post(
+        f"/api/v1/accounts/{account_id}/access",
+        data={"user_id": user_collab["id"], "access_level": "read"},
+        headers=headers_owner,
+    )
+    assert grant_res.status == 200
+
+    # Collab can read stores
+    collab_read = api_context.get(
+        f"/api/v1/accounts/{account_id}/stores",
+        headers=headers_collab,
+    )
+    assert collab_read.status == 200
+
+    # Collab cannot create store (403 Forbidden)
+    collab_create_store = api_context.post(
+        f"/api/v1/accounts/{account_id}/stores",
+        data={"asset_id": asset_id, "label": "Unauthorized Store"},
+        headers=headers_collab,
+    )
+    assert collab_create_store.status == 403
+
+    # Collab cannot add record (403 Forbidden)
+    collab_create_rec = api_context.post(
+        f"/api/v1/accounts/{account_id}/stores/{store_red['id']}/records",
+        data={"quantity": 1.0, "record_date": "2026-11-01"},
+        headers=headers_collab,
+    )
+    assert collab_create_rec.status == 403
+
+    # 15. Delete Store
+    del_store = api_context.delete(
+        f"/api/v1/accounts/{account_id}/stores/{store_blue['id']}",
+        headers=headers_owner,
+    )
+    assert del_store.status == 204
+
+    # Verify only Red Key store remains
+    final_stores = api_context.get(
+        f"/api/v1/accounts/{account_id}/stores",
+        headers=headers_owner,
+    )
+    assert len(final_stores.json()) == 1
+    assert final_stores.json()[0]["label"] == "Red Key"
+

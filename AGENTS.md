@@ -95,14 +95,16 @@ All account endpoints enforce permissions via the `account_access` table:
 ---
 
 ## 5. Assets & Valuations Architecture
-- **`assets` Table**: Stores asset definitions (`id`, `user_id`, `label`, `description`).
+- **`assets` Table**: Stores asset classes / definitions (`id`, `user_id`, `label`, `description`).
   - `user_id` can be `NULL` for globally available/system assets.
   - Unique constraint enforces unique labels per user or globally: `UNIQUE NULLS NOT DISTINCT (user_id, label)` and case-insensitively via `uq_assets_user_lower_label (user_id, LOWER(label))`.
 - **`asset_values` Table**: Stores date-keyed unit prices (`id`, `asset_id`, `value`, `value_date`).
   - Enforces one valuation per asset per date: `UNIQUE (asset_id, value_date)`.
-- **`account_assets` Table**: Maps assets into asset accounts across dates (`id`, `account_id`, `asset_id`, `quantity`, `asset_date`).
+- **`asset_stores` Table**: Maps asset classes to unique labeled storage locations / holdings within an asset account (`id`, `account_id`, `asset_id`, `label`, `description`).
+  - Unique constraint per account and label: `CONSTRAINT uq_asset_stores_account_label UNIQUE (account_id, label)`.
+- **`asset_store_records` Table**: Stores point-in-time quantity records by date for a given asset store (`id`, `asset_store_id`, `quantity`, `record_date`).
   - Quantity must be strictly positive (`CHECK (quantity > 0)`).
-  - Uniqueness is enforced per account, asset, and date: `CONSTRAINT uq_account_assets_account_asset_date UNIQUE (account_id, asset_id, asset_date)`.
+  - Uniqueness is enforced per store and date: `CONSTRAINT uq_asset_store_records_store_date UNIQUE (asset_store_id, record_date)`.
 - **`account_snapshots` Table**: Stores point-in-time valuations for snapshot accounts (`id`, `account_id`, `value`, `snapshot_date`, `created_at`, `updated_at`).
   - Enforces one valuation per snapshot account per date: `CONSTRAINT uq_account_snapshots_account_date UNIQUE (account_id, snapshot_date)`.
   - Ordered chronologically by `snapshot_date ASC, created_at ASC` to provide time-series trending over time.
