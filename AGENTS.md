@@ -100,9 +100,9 @@ All account endpoints enforce permissions via the `account_access` table:
   - Unique constraint enforces unique labels per user or globally: `UNIQUE NULLS NOT DISTINCT (user_id, label)` and case-insensitively via `uq_assets_user_lower_label (user_id, LOWER(label))`.
 - **`asset_values` Table**: Stores date-keyed unit prices (`id`, `asset_id`, `value`, `value_date`).
   - Enforces one valuation per asset per date: `UNIQUE (asset_id, value_date)`.
-- **`account_assets` Table**: Maps assets into asset accounts (`id`, `account_id`, `asset_id`, `quantity`).
+- **`account_assets` Table**: Maps assets into asset accounts across dates (`id`, `account_id`, `asset_id`, `quantity`, `asset_date`).
   - Quantity must be strictly positive (`CHECK (quantity > 0)`).
-  - Unique constraint prevents duplicate asset entries within the same account: `UNIQUE (account_id, asset_id)`.
+  - Uniqueness is enforced per account, asset, and date: `CONSTRAINT uq_account_assets_account_asset_date UNIQUE (account_id, asset_id, asset_date)`.
 - **`account_snapshots` Table**: Stores point-in-time valuations for snapshot accounts (`id`, `account_id`, `value`, `snapshot_date`, `created_at`, `updated_at`).
   - Enforces one valuation per snapshot account per date: `CONSTRAINT uq_account_snapshots_account_date UNIQUE (account_id, snapshot_date)`.
   - Ordered chronologically by `snapshot_date ASC, created_at ASC` to provide time-series trending over time.

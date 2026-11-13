@@ -9,7 +9,7 @@ start: stop
 	docker compose up -d --build
 
 clean: stop
-	rm -rf ./$(DATA_DIR) || sleep 2 && docker compose down --remove-orphans && rm -rf ./$(DATA_DIR)
+	rm -rf ./$(DATA_DIR) || sleep 2 && docker compose down --remove-orphans && rm -rf ./$(DATA_DIR) && echo "Cleaned directory"
 
 stop:
 	docker compose down --remove-orphans
