@@ -1,12 +1,16 @@
-.PHONY: start stop clean build build-api build-frontend build-gateway test refresh
+.PHONY: start stop clean build build-api build-frontend build-gateway test refresh local
 
-DATA_DIR := data
+export DATA_DIR ?= data
 
 refresh: stop clean start
 
 start: stop
 	mkdir -p $(DATA_DIR)
 	docker compose up -d --build
+
+local: stop
+	mkdir -p local-data
+	DATA_DIR=local-data docker compose up -d --build
 
 clean: stop
 	rm -rf ./$(DATA_DIR) || sleep 2 && docker compose down --remove-orphans && rm -rf ./$(DATA_DIR) && echo "Cleaned directory"

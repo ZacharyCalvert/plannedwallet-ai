@@ -1,5 +1,9 @@
 # Postgres data directory
 data/
+local-data/
+
+# OS files
+.DS_Store
 
 # Binaries
 server
