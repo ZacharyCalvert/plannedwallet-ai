@@ -20,6 +20,13 @@ def test_hello_endpoint(api_context: APIRequestContext):
     assert response.status == 200, f"Expected 200, got {response.status}: {response.text()}"
     assert response.text() == "world"
 
+def test_health_endpoint(api_context: APIRequestContext):
+    """Test database-confirmed health check endpoint at /api/health."""
+    response = api_context.get("/api/health")
+    assert response.status == 200, f"Expected 200, got {response.status}: {response.text()}"
+    data = response.json()
+    assert data.get("status") == "up"
+
 def test_create_user(api_context: APIRequestContext):
     """Test 1: Create a user with username, email, and receive TOTP secret."""
     user_data = generate_user_data()

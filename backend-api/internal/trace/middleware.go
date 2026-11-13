@@ -46,9 +46,27 @@ func enforceClientID(c *gin.Context, ctx context.Context) (string, bool) {
 	return clientID, true
 }
 
-func handleClientID(c *gin.Context, ctx context.Context, tc *TraceContext) bool {
+func isHealthPath(path string) bool {
+	return path == "/api/health" || path == "/api/v1/health" || path == "/health"
+}
+
+func resolveSpecialClientID(c *gin.Context) (string, bool) {
+	raw := strings.TrimSpace(c.GetHeader(HeaderClientID))
 	if c.Request.Method == http.MethodOptions {
-		if clientID := strings.TrimSpace(c.GetHeader(HeaderClientID)); clientID != "" {
+		return raw, true
+	}
+	if isHealthPath(c.Request.URL.Path) {
+		if raw == "" {
+			return "health-check", true
+		}
+		return raw, true
+	}
+	return "", false
+}
+
+func handleClientID(c *gin.Context, ctx context.Context, tc *TraceContext) bool {
+	if clientID, ok := resolveSpecialClientID(c); ok {
+		if clientID != "" {
 			tc.ClientID = clientID
 			c.Set("clientID", clientID)
 			logClientTrace(ctx, tc, clientID)

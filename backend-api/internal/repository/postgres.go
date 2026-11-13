@@ -20,6 +20,10 @@ func NewPostgresRepository(db *sql.DB) *PostgresRepository {
 	return &PostgresRepository{db: db}
 }
 
+func (p *PostgresRepository) Ping(ctx context.Context) error {
+	return p.db.PingContext(ctx)
+}
+
 func isUniqueViolation(err error) bool {
 	var pqErr *pq.Error
 	if errors.As(err, &pqErr) {

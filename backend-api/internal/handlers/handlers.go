@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"regexp"
@@ -361,11 +362,31 @@ func (h *Handler) Hello(c *gin.Context) {
 	c.String(http.StatusOK, "world")
 }
 
+// Health handles GET /api/health and responds with {"status":"up"} once DB connection is confirmed.
+func (h *Handler) Health(c *gin.Context) {
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
+	defer cancel()
+
+	if err := h.ctrl.HealthCheck(ctx); err != nil {
+		trace.LogError(c.Request.Context(), err, "Database health check failed")
+		c.JSON(http.StatusServiceUnavailable, gin.H{
+			"status": "down",
+			"error":  "database unavailable",
+		})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"status": "up",
+	})
+}
+
 // RegisterRoutes registers all API routes according to schema.yml
 func (h *Handler) RegisterRoutes(r *gin.Engine) {
+	r.GET("/api/health", h.Health)
 	api := r.Group("/api/v1")
 	{
 		// Public endpoints
+		api.GET("/health", h.Health)
 		api.GET("/hello", h.Hello)
 		api.GET("/captcha", h.GetCaptcha)
 		api.GET("/captcha/:captchaId", h.GetCaptchaImage)

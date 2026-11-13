@@ -67,6 +67,10 @@ func fdidMiddleware(expectedFDID string, isProd bool) gin.HandlerFunc {
 			c.Next()
 			return
 		}
+		if c.Request.URL.Path == "/api/health" || c.Request.URL.Path == "/health" {
+			c.Next()
+			return
+		}
 		if !strings.EqualFold(getIncomingFDID(c), cleanExpected) {
 			trace.LogError(c.Request.Context(), nil, "Access denied: missing or invalid Azure Front Door ID header")
 			c.AbortWithStatusJSON(http.StatusForbidden, models.ErrorResponse{

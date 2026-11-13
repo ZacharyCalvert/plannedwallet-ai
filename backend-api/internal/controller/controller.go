@@ -63,6 +63,11 @@ func (c *Controller) SetRequireCaptcha(require bool) {
 	c.requireCaptcha = require
 }
 
+// HealthCheck verifies that the backing repository/database connection is active and responsive.
+func (c *Controller) HealthCheck(ctx context.Context) error {
+	return c.repo.Ping(ctx)
+}
+
 // ListAccounts retrieves all accounts accessible to the specified user.
 func (c *Controller) ListAccounts(ctx context.Context, userID string) ([]*models.AccountResponse, error) {
 	accounts, err := c.repo.ListAccountsByUserID(ctx, userID)

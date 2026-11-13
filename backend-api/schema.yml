@@ -41,6 +41,37 @@ tags:
     description: Smoke test and liveness endpoints.
 
 paths:
+  /api/health:
+    get:
+      tags:
+        - Health
+      summary: Service and database health check
+      description: Verifies connectivity to the backing database and returns service status.
+      operationId: getHealth
+      responses:
+        '200':
+          description: Service and database are up and healthy.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "up"
+        '503':
+          description: Service or database is unavailable.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "down"
+                  error:
+                    type: string
+                    example: "database unavailable"
   /api/v1/hello:
     parameters:
       - $ref: '#/components/parameters/XClientId'

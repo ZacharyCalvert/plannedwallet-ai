@@ -62,6 +62,25 @@ func TestHelloEndpoint(t *testing.T) {
 	}
 }
 
+func TestHealthEndpoint(t *testing.T) {
+	r, _ := setupTestRouter()
+	req := httptest.NewRequest(http.MethodGet, "/api/health", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200 from /api/health, got %d (body: %s)", w.Code, w.Body.String())
+	}
+
+	var res map[string]string
+	if err := json.Unmarshal(w.Body.Bytes(), &res); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	if res["status"] != "up" {
+		t.Fatalf("expected status: up, got %q", res["status"])
+	}
+}
+
 func TestMissingClientID_Rejected(t *testing.T) {
 	r, _ := setupTestRouter()
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/hello", nil)

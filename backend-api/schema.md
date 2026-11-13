@@ -141,6 +141,7 @@ Shared backing store for ephemeral CAPTCHA challenges to support 12-factor state
 All HTTP requests require the `X-Client-ID` header. Protected endpoints require the `Authorization: Bearer <JWT>` header.
 
 ### 3.1 Health
+- `GET /api/health`: Database-confirmed health check endpoint (`{"status": "up"}`).
 - `GET /api/v1/hello`: Liveness smoke test.
 
 ### 3.2 Authentication, Security & Users

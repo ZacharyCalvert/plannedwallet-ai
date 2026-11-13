@@ -14,6 +14,9 @@ var (
 )
 
 type Repository interface {
+	// Health check
+	Ping(ctx context.Context) error
+
 	// User operations
 	CreateUser(ctx context.Context, user *models.User) error
 	GetUserByUsername(ctx context.Context, username string) (*models.User, error)

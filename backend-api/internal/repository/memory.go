@@ -50,6 +50,13 @@ func NewMemoryRepository() *MemoryRepository {
 	}
 }
 
+func (m *MemoryRepository) Ping(ctx context.Context) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	return nil
+}
+
 func (m *MemoryRepository) CreateUser(_ context.Context, user *models.User) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
