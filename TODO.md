@@ -6,8 +6,8 @@ Top features:
 - [x] Database review / plan
 - [x] add / update / reconcile checking records
 - [x] Add credit card account types
-snapshot account inputs - this account is worth x at this time
-CAPTCHA for account setup
+- [x] snapshot account inputs - this account is worth x at this time
+- [x] CAPTCHA for account setup
 asset account -> like X bitcoin / total worth of the account
 Add categories (expense categories)
 Enforce uniqueness of email as well as user
