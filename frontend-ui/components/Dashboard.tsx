@@ -7,6 +7,7 @@ import { AccountsPane } from './AccountsPane';
 import { NewAccountForm } from './NewAccountForm';
 import { AccountDetail } from './AccountDetail';
 import { SnapshotAccountDetail } from './SnapshotAccountDetail';
+import { AssetAccountDetail } from './AssetAccountDetail';
 
 interface DashboardProps {
   session: UserSession;
@@ -60,6 +61,8 @@ export function Dashboard({ session }: DashboardProps) {
         ) : selected ? (
           selected.type === 'snapshot' ? (
             <SnapshotAccountDetail account={selected} token={session.token} />
+          ) : selected.type === 'asset' || selected.type === 'assets' ? (
+            <AssetAccountDetail account={selected} token={session.token} />
           ) : (
             <AccountDetail account={selected} token={session.token} />
           )

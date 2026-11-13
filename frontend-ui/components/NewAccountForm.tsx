@@ -49,6 +49,7 @@ export function NewAccountForm({ token, onSuccess, onCancel }: NewAccountFormPro
             <option value="savings">Savings</option>
             <option value="credit card">Credit Card</option>
             <option value="snapshot">Snapshot</option>
+            <option value="asset">Asset</option>
           </select>
         </div>
         <div className="form-group">
@@ -66,6 +67,8 @@ export function NewAccountForm({ token, onSuccess, onCancel }: NewAccountFormPro
                 ? 'e.g. Preferred Rewards Card'
                 : accountType === 'snapshot'
                 ? 'e.g. Day Trading Portfolio'
+                : accountType === 'asset'
+                ? 'e.g. Crypto Portfolio'
                 : 'e.g. Primary Everyday Checking'
             }
           />
@@ -85,6 +88,8 @@ export function NewAccountForm({ token, onSuccess, onCancel }: NewAccountFormPro
                 ? 'e.g. Dining, travel, and rewards card'
                 : accountType === 'snapshot'
                 ? 'e.g. Periodic manual valuation tracking of trading portfolio'
+                : accountType === 'asset'
+                ? 'e.g. Cryptocurrency holdings including Bitcoin, Ethereum, and Solana'
                 : 'e.g. Household bills and everyday purchases'
             }
           />

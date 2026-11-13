@@ -65,3 +65,68 @@ export interface UpdateSnapshotRequest {
   value: number;
   snapshot_date?: string;
 }
+
+export interface Asset {
+  id: string;
+  user_id?: string | null;
+  label: string;
+  description: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AssetValue {
+  id: string;
+  asset_id: string;
+  value: number;
+  value_date: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AccountAsset {
+  id: string;
+  account_id: string;
+  asset_id: string;
+  label: string;
+  description: string;
+  quantity: number;
+  asset_date: string;
+  latest_value: number;
+  latest_value_date?: string | null;
+  total_value: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AssetAccountSummary {
+  account_id: string;
+  total_value: number;
+  assets: AccountAsset[];
+}
+
+export interface AssetAccountTrendPoint {
+  date: string;
+  total_value: number;
+}
+
+export interface CreateAssetRequest {
+  label: string;
+  description?: string;
+}
+
+export interface CreateAssetValueRequest {
+  value: number;
+  value_date: string;
+}
+
+export interface AddAccountAssetRequest {
+  asset_id: string;
+  quantity: number;
+  asset_date?: string;
+}
+
+export interface UpdateAccountAssetRequest {
+  quantity?: number;
+  asset_date?: string;
+}
