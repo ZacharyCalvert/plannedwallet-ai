@@ -123,6 +123,34 @@ func TestInitJWTServiceSecureInProduction(t *testing.T) {
 	}
 }
 
+func TestCheckJWTSecretBits(t *testing.T) {
+	if err := checkJWTSecretBits(""); err != nil {
+		t.Errorf("Expected nil error for empty secret, got %v", err)
+	}
+
+	shortKeys := []string{
+		"a",
+		"short-key",
+		"1234567890123456789012345678901",
+	}
+	for _, k := range shortKeys {
+		if err := checkJWTSecretBits(k); err == nil {
+			t.Errorf("Expected error for secret %q with len %d < 32", k, len(k))
+		}
+	}
+
+	validKeys := []string{
+		"12345678901234567890123456789012",
+		"super-secret-jwt-key-replace-in-production",
+		"c29tZS1zZWN1cmUtcHJvZHVjdGlvbi1rZXktMjU2LWJpdHM=",
+	}
+	for _, k := range validKeys {
+		if err := checkJWTSecretBits(k); err != nil {
+			t.Errorf("Expected nil error for secret with len %d >= 32, got %v", len(k), err)
+		}
+	}
+}
+
 func TestValidateExpectedFDID(t *testing.T) {
 	validateExpectedFDID("", false)
 	validateExpectedFDID("some-fdid", false)

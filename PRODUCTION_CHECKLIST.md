@@ -17,8 +17,8 @@ The backend API supports a unified boolean environment variable: `PRODUCTION_ENV
    - When a shutdown signal is received (e.g. during a Kubernetes rolling update or autoscaler scale-down), the server stops accepting new connections and grants existing in-flight HTTP requests up to 30 seconds to complete cleanly before closing database handles and terminating.
 
 3. **Mandatory High-Entropy JWT Secret**:
-   - In `PRODUCTION_ENV=true`, the application performs startup validation on `JWT_SECRET`.
-   - If `JWT_SECRET` is unset, empty, set to the default development secret (`super-secret-jwt-key-replace-in-production`, `dev-super-secret-jwt-key`), or contains the substring `"super secret"` / `"super-secret"`, the process **terminates immediately on startup** (`log.Fatalf`).
+   - The application enforces a minimum key length of **256 bits (32 bytes)**: whenever `JWT_SECRET` is set in the environment and contains fewer than 32 bytes, the application logs a fatal error and terminates on startup (`log.Fatalf`).
+   - In `PRODUCTION_ENV=true`, the application additionally performs startup validation on `JWT_SECRET`: if unset, empty, set to the default development secret (`super-secret-jwt-key-replace-in-production`, `dev-super-secret-jwt-key`), or containing the substring `"super secret"` / `"super-secret"`, the process **terminates immediately on startup** (`log.Fatalf`).
 
 4. **Automated CAPTCHA Enforcement**:
    - When `PRODUCTION_ENV=true`, `REQUIRE_CAPTCHA` is automatically enforced as `true`, regardless of whether `REQUIRE_CAPTCHA` was explicitly set.

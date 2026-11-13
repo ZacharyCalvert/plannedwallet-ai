@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -26,7 +27,10 @@ import (
 	"github.com/plannedwallet/internal/trace"
 )
 
-const defaultJWTSecret = "super-secret-jwt-key-replace-in-production"
+const (
+	defaultJWTSecret  = "super-secret-jwt-key-replace-in-production"
+	minJWTSecretBytes = 32 // 256 bits
+)
 
 func getEnv(key, defaultVal string) string {
 	if val := os.Getenv(key); val != "" {
@@ -84,10 +88,29 @@ func fdidMiddleware(expectedFDID string, isProd bool) gin.HandlerFunc {
 	}
 }
 
-func initJWTService(isProd bool) *auth.Service {
-	jwtSecret := getEnv("JWT_SECRET", defaultJWTSecret)
-	if isProd && isDefaultJWTSecret(jwtSecret) {
+func checkJWTSecretBits(secret string) error {
+	if secret != "" && len([]byte(secret)) < minJWTSecretBytes {
+		return fmt.Errorf("JWT_SECRET is set but is less than 256 bits (32 bytes): length is %d bytes", len([]byte(secret)))
+	}
+	return nil
+}
+
+func validateJWTSecret(rawSecret string, isProd bool) {
+	if err := checkJWTSecretBits(rawSecret); err != nil {
+		log.Fatalf("Fatal: %v", err)
+	}
+	if isProd && isDefaultJWTSecret(rawSecret) {
 		log.Fatalf("Fatal: PRODUCTION_ENV is true but default JWT secret is in use. Secure JWT_SECRET required.")
+	}
+}
+
+func initJWTService(isProd bool) *auth.Service {
+	rawSecret := os.Getenv("JWT_SECRET")
+	validateJWTSecret(rawSecret, isProd)
+
+	jwtSecret := rawSecret
+	if jwtSecret == "" {
+		jwtSecret = defaultJWTSecret
 	}
 	jwtExpStr := getEnv("JWT_EXPIRATION_SECONDS", "3600")
 	jwtExp, err := strconv.Atoi(jwtExpStr)

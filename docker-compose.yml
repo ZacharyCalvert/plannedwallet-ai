@@ -31,7 +31,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       POSTGRES_DB: ${POSTGRES_DB:-plannedwallet}
       POSTGRES_SSLMODE: disable
-      JWT_SECRET: ${JWT_SECRET:-dev-super-secret-jwt-key}
+      JWT_SECRET: ${JWT_SECRET:-super-secret-jwt-key-replace-in-production}
       PRODUCTION_ENV: ${PRODUCTION_ENV:-false}
       EXPECTED_FDID: ${EXPECTED_FDID:-}
     ports:
