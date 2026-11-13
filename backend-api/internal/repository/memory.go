@@ -488,7 +488,7 @@ func (m *MemoryRepository) hasAccountAssetConflict(aa *models.AccountAsset) bool
 		if item.ID == aa.ID {
 			continue
 		}
-		if item.AccountID == aa.AccountID && item.AssetID == aa.AssetID {
+		if item.AccountID == aa.AccountID && item.AssetID == aa.AssetID && item.AssetDate == aa.AssetDate {
 			return true
 		}
 	}
@@ -505,6 +505,9 @@ func (m *MemoryRepository) AddAccountAsset(_ context.Context, aa *models.Account
 	if _, ok := m.assets[aa.AssetID]; !ok {
 		return ErrNotFound
 	}
+	if aa.AssetDate == "" {
+		aa.AssetDate = time.Now().UTC().Format("2006-01-02")
+	}
 	if m.hasAccountAssetConflict(aa) {
 		return ErrConflict
 	}
@@ -514,12 +517,21 @@ func (m *MemoryRepository) AddAccountAsset(_ context.Context, aa *models.Account
 }
 
 func (m *MemoryRepository) findAccountAsset(accountID, identifier string) *models.AccountAsset {
+	var latest *models.AccountAsset
 	for _, item := range m.accountAssets {
-		if item.AccountID == accountID && (item.ID == identifier || item.AssetID == identifier) {
+		if item.AccountID != accountID {
+			continue
+		}
+		if item.ID == identifier {
 			return item
 		}
+		if item.AssetID == identifier {
+			if latest == nil || item.AssetDate > latest.AssetDate || (item.AssetDate == latest.AssetDate && item.CreatedAt.After(latest.CreatedAt)) {
+				latest = item
+			}
+		}
 	}
-	return nil
+	return latest
 }
 
 func (m *MemoryRepository) GetAccountAsset(_ context.Context, accountID, identifier string) (*models.AccountAsset, error) {
@@ -534,10 +546,14 @@ func (m *MemoryRepository) GetAccountAsset(_ context.Context, accountID, identif
 	return &copied, nil
 }
 
-func (m *MemoryRepository) getLatestAssetValue(assetID string) (float64, string) {
+func (m *MemoryRepository) getLatestAssetValue(assetID, asOfDate string) (float64, string) {
 	var latestVal float64
 	var latestDate string
 	var latestCreated time.Time
+
+	var asOfVal float64
+	var asOfDateStr string
+	var asOfCreated time.Time
 
 	for _, v := range m.assetValues {
 		if v.AssetID != assetID {
@@ -548,6 +564,16 @@ func (m *MemoryRepository) getLatestAssetValue(assetID string) (float64, string)
 			latestVal = v.Value
 			latestCreated = v.CreatedAt
 		}
+		if asOfDate != "" && v.ValueDate <= asOfDate {
+			if v.ValueDate > asOfDateStr || (v.ValueDate == asOfDateStr && v.CreatedAt.After(asOfCreated)) {
+				asOfDateStr = v.ValueDate
+				asOfVal = v.Value
+				asOfCreated = v.CreatedAt
+			}
+		}
+	}
+	if asOfDateStr != "" {
+		return asOfVal, asOfDateStr
 	}
 	return latestVal, latestDate
 }
@@ -565,7 +591,7 @@ func (m *MemoryRepository) ListAccountAssets(_ context.Context, accountID string
 		if !ok {
 			continue
 		}
-		val, date := m.getLatestAssetValue(item.AssetID)
+		val, date := m.getLatestAssetValue(item.AssetID, item.AssetDate)
 		details = append(details, &models.AccountAssetDetail{
 			ID:              item.ID,
 			AccountID:       item.AccountID,
@@ -573,6 +599,7 @@ func (m *MemoryRepository) ListAccountAssets(_ context.Context, accountID string
 			Label:           asset.Label,
 			Description:     asset.Description,
 			Quantity:        item.Quantity,
+			AssetDate:       item.AssetDate,
 			LatestValue:     val,
 			LatestValueDate: date,
 			CreatedAt:       item.CreatedAt,
@@ -580,6 +607,12 @@ func (m *MemoryRepository) ListAccountAssets(_ context.Context, accountID string
 		})
 	}
 	sort.Slice(details, func(i, j int) bool {
+		if details[i].AssetDate != details[j].AssetDate {
+			return details[i].AssetDate > details[j].AssetDate
+		}
+		if !details[i].CreatedAt.Equal(details[j].CreatedAt) {
+			return details[i].CreatedAt.After(details[j].CreatedAt)
+		}
 		return strings.ToLower(details[i].Label) < strings.ToLower(details[j].Label)
 	})
 	return details, nil
@@ -593,6 +626,9 @@ func (m *MemoryRepository) UpdateAccountAsset(_ context.Context, aa *models.Acco
 	if !ok || existing.AccountID != aa.AccountID {
 		return ErrNotFound
 	}
+	if m.hasAccountAssetConflict(aa) {
+		return ErrConflict
+	}
 	copied := *aa
 	m.accountAssets[aa.ID] = &copied
 	return nil
@@ -602,11 +638,16 @@ func (m *MemoryRepository) DeleteAccountAsset(_ context.Context, accountID, iden
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	item := m.findAccountAsset(accountID, identifier)
-	if item == nil {
+	deleted := false
+	for id, item := range m.accountAssets {
+		if item.AccountID == accountID && (item.ID == identifier || item.AssetID == identifier) {
+			delete(m.accountAssets, id)
+			deleted = true
+		}
+	}
+	if !deleted {
 		return ErrNotFound
 	}
-	delete(m.accountAssets, item.ID)
 	return nil
 }
 

@@ -328,3 +328,163 @@ def test_asset_account_negative_cases(api_context: APIRequestContext):
         headers=headers,
     )
     assert fake_add.status == 404
+
+
+def test_asset_account_multi_date_holdings_and_trend(api_context: APIRequestContext):
+    """
+    Test setting asset quantities across multiple dates and tracking portfolio valuation over time:
+    - User records 0.3 units on 2026-01-01
+    - User records 0.5 units on 2026-07-01
+    - User records 0.2 units on 2026-10-01
+    - Valuations on 2026-01-01 ($40,000), 2026-07-01 ($60,000), 2026-10-01 ($65,000)
+    - Verify summary reflects current position (0.2 units * $65,000 = $13,000)
+    - Verify trend endpoint returns chronological timeline points
+    - Verify updating holding date and quantity
+    - Verify deleting a specific holding
+    """
+    user, token = create_authenticated_user(api_context)
+    headers = {"Authorization": f"Bearer {token}"}
+
+    # 1. Create asset account
+    acc_res = api_context.post(
+        "/api/v1/accounts",
+        data={
+            "name": "Digital Asset Portfolio",
+            "type": "asset",
+            "description": "Multi-date asset holding portfolio",
+        },
+        headers=headers,
+    )
+    assert acc_res.status == 201
+    account_id = acc_res.json()["id"]
+
+    # 2. Create generic asset definition
+    uid = uuid.uuid4().hex[:6]
+    asset_res = api_context.post(
+        "/api/v1/assets",
+        data={"label": f"token_{uid}", "description": "Digital utility token"},
+        headers=headers,
+    )
+    assert asset_res.status == 201
+    asset_id = asset_res.json()["id"]
+
+    # 3. Add valuations on Jan 1, July 1, Oct 1
+    api_context.post(
+        f"/api/v1/assets/{asset_id}/values",
+        data={"value": 40000.00, "value_date": "2026-01-01"},
+        headers=headers,
+    )
+    api_context.post(
+        f"/api/v1/assets/{asset_id}/values",
+        data={"value": 60000.00, "value_date": "2026-07-01"},
+        headers=headers,
+    )
+    api_context.post(
+        f"/api/v1/assets/{asset_id}/values",
+        data={"value": 65000.00, "value_date": "2026-10-01"},
+        headers=headers,
+    )
+
+    # 4. Add holdings on Jan 1 (0.3), July 1 (0.5), Oct 1 (0.2)
+    h1_res = api_context.post(
+        f"/api/v1/accounts/{account_id}/assets",
+        data={"asset_id": asset_id, "quantity": 0.3, "asset_date": "2026-01-01"},
+        headers=headers,
+    )
+    assert h1_res.status == 201
+    h1 = h1_res.json()
+    assert h1["asset_date"] == "2026-01-01"
+    assert h1["quantity"] == 0.3
+    assert abs(h1["total_value"] - 0.3 * 40000.00) < 0.01
+
+    h2_res = api_context.post(
+        f"/api/v1/accounts/{account_id}/assets",
+        data={"asset_id": asset_id, "quantity": 0.5, "asset_date": "2026-07-01"},
+        headers=headers,
+    )
+    assert h2_res.status == 201
+    h2 = h2_res.json()
+    assert h2["asset_date"] == "2026-07-01"
+    assert h2["quantity"] == 0.5
+    assert abs(h2["total_value"] - 0.5 * 60000.00) < 0.01
+
+    h3_res = api_context.post(
+        f"/api/v1/accounts/{account_id}/assets",
+        data={"asset_id": asset_id, "quantity": 0.2, "asset_date": "2026-10-01"},
+        headers=headers,
+    )
+    assert h3_res.status == 201
+    h3 = h3_res.json()
+    assert h3["asset_date"] == "2026-10-01"
+    assert h3["quantity"] == 0.2
+    assert abs(h3["total_value"] - 0.2 * 65000.00) < 0.01
+
+    # Conflict when adding duplicate date for same asset
+    dup_res = api_context.post(
+        f"/api/v1/accounts/{account_id}/assets",
+        data={"asset_id": asset_id, "quantity": 0.99, "asset_date": "2026-10-01"},
+        headers=headers,
+    )
+    assert dup_res.status == 409
+
+    # 5. Verify List Account Assets returns all 3 holdings (ordered newest first)
+    list_res = api_context.get(f"/api/v1/accounts/{account_id}/assets", headers=headers)
+    assert list_res.status == 200
+    all_holdings = list_res.json()
+    assert len(all_holdings) == 3
+    assert all_holdings[0]["asset_date"] == "2026-10-01"
+    assert all_holdings[1]["asset_date"] == "2026-07-01"
+    assert all_holdings[2]["asset_date"] == "2026-01-01"
+
+    # 6. Verify Summary computes current position from latest holding (0.2 * 65,000 = 13,000)
+    sum_res = api_context.get(f"/api/v1/accounts/{account_id}/assets/summary", headers=headers)
+    assert sum_res.status == 200
+    sum_data = sum_res.json()
+    assert abs(sum_data["total_value"] - 13000.00) < 0.01
+    assert len(sum_data["assets"]) == 1
+    assert sum_data["assets"][0]["quantity"] == 0.2
+
+    # 7. Verify Trend endpoint returns time-series progression
+    trend_res = api_context.get(f"/api/v1/accounts/{account_id}/assets/trend", headers=headers)
+    assert trend_res.status == 200
+    trend = trend_res.json()
+    assert len(trend) == 3
+    assert trend[0]["date"] == "2026-01-01"
+    assert abs(trend[0]["total_value"] - 12000.00) < 0.01
+    assert trend[1]["date"] == "2026-07-01"
+    assert abs(trend[1]["total_value"] - 30000.00) < 0.01
+    assert trend[2]["date"] == "2026-10-01"
+    assert abs(trend[2]["total_value"] - 13000.00) < 0.01
+
+    # Date range filtering on trend endpoint
+    filtered_trend = api_context.get(
+        f"/api/v1/accounts/{account_id}/assets/trend?start_date=2026-06-01&end_date=2026-10-01",
+        headers=headers,
+    )
+    assert filtered_trend.status == 200
+    f_pts = filtered_trend.json()
+    assert len(f_pts) == 2
+    assert f_pts[0]["date"] == "2026-07-01"
+    assert f_pts[1]["date"] == "2026-10-01"
+
+    # 8. Update holding h1 date and quantity
+    upd_res = api_context.put(
+        f"/api/v1/accounts/{account_id}/assets/{h1['id']}",
+        data={"quantity": 0.4, "asset_date": "2026-02-01"},
+        headers=headers,
+    )
+    assert upd_res.status == 200
+    updated_h1 = upd_res.json()
+    assert updated_h1["quantity"] == 0.4
+    assert updated_h1["asset_date"] == "2026-02-01"
+
+    # 9. Delete holding h2 (July 1)
+    del_res = api_context.delete(
+        f"/api/v1/accounts/{account_id}/assets/{h2['id']}",
+        headers=headers,
+    )
+    assert del_res.status == 204
+
+    # Verify only 2 holdings remain
+    post_del_list = api_context.get(f"/api/v1/accounts/{account_id}/assets", headers=headers)
+    assert len(post_del_list.json()) == 2

@@ -117,3 +117,26 @@ func (h *Handler) GetAssetAccountSummary(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, res)
 }
+
+// GetAssetAccountTrend handles GET /api/v1/accounts/:accountId/assets/trend
+func (h *Handler) GetAssetAccountTrend(c *gin.Context) {
+	userID, ok := h.getUserID(c)
+	if !ok {
+		return
+	}
+	accountID := c.Param("accountId")
+	var startDate, endDate *string
+	if s := c.Query("start_date"); s != "" {
+		startDate = &s
+	}
+	if e := c.Query("end_date"); e != "" {
+		endDate = &e
+	}
+
+	res, err := h.ctrl.GetAssetAccountTrend(c.Request.Context(), userID, accountID, startDate, endDate)
+	if err != nil {
+		h.handleError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, res)
+}

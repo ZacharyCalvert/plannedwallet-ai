@@ -720,3 +720,46 @@ func TestSnapshotAccountWorkflow(t *testing.T) {
 		t.Errorf("unexpected snapshot ordering: %+v", list)
 	}
 }
+
+func TestAssetAccountTrendAndDateTracking(t *testing.T) {
+	ctrl, _ := setupController()
+	ctx := context.Background()
+
+	u, _ := ctrl.RegisterUser(ctx, models.UserRegistrationRequest{
+		Username: "crypto_holder", Email: "holder@crypto.test", Password: "ValidPass123!",
+	})
+	acc, _ := ctrl.CreateAccount(ctx, u.ID, models.AccountCreationRequest{
+		Name: "Crypto Holdings", Type: "asset", Description: "Crypto portfolio",
+	})
+	btc, _ := ctrl.CreateAsset(ctx, u.ID, models.AssetCreateRequest{Label: "btc", Description: "Bitcoin"})
+
+	setupBtcValuations(ctx, ctrl, u.ID, btc.ID)
+	setupBtcHoldings(ctx, ctrl, u.ID, acc.ID, btc.ID)
+
+	summary, err := ctrl.GetAssetAccountSummary(ctx, u.ID, acc.ID)
+	if err != nil || summary.TotalValue != 13000.0 {
+		t.Fatalf("expected summary total 13000, got %v (err: %v)", summary.TotalValue, err)
+	}
+
+	trend, err := ctrl.GetAssetAccountTrend(ctx, u.ID, acc.ID, nil, nil)
+	if err != nil || len(trend) != 3 {
+		t.Fatalf("expected 3 trend points, got %d (err: %v)", len(trend), err)
+	}
+	if trend[0].TotalValue != 12000.0 || trend[1].TotalValue != 30000.0 || trend[2].TotalValue != 13000.0 {
+		t.Errorf("unexpected trend points: %+v", trend)
+	}
+}
+
+func setupBtcValuations(ctx context.Context, ctrl *controller.Controller, uID, btcID string) {
+	p1, p2, p3 := 40000.0, 60000.0, 65000.0
+	_, _ = ctrl.CreateAssetValue(ctx, uID, btcID, models.AssetValueCreateRequest{Value: &p1, ValueDate: "2026-01-01"})
+	_, _ = ctrl.CreateAssetValue(ctx, uID, btcID, models.AssetValueCreateRequest{Value: &p2, ValueDate: "2026-07-01"})
+	_, _ = ctrl.CreateAssetValue(ctx, uID, btcID, models.AssetValueCreateRequest{Value: &p3, ValueDate: "2026-10-01"})
+}
+
+func setupBtcHoldings(ctx context.Context, ctrl *controller.Controller, uID, accID, btcID string) {
+	q1, q2, q3 := 0.3, 0.5, 0.2
+	_, _ = ctrl.AddAccountAsset(ctx, uID, accID, models.AccountAssetAddRequest{AssetID: btcID, Quantity: &q1, AssetDate: "2026-01-01"})
+	_, _ = ctrl.AddAccountAsset(ctx, uID, accID, models.AccountAssetAddRequest{AssetID: btcID, Quantity: &q2, AssetDate: "2026-07-01"})
+	_, _ = ctrl.AddAccountAsset(ctx, uID, accID, models.AccountAssetAddRequest{AssetID: btcID, Quantity: &q3, AssetDate: "2026-10-01"})
+}

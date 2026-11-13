@@ -21,8 +21,8 @@ func TestInitSQLEmbedded(t *testing.T) {
 		t.Error("expected initSQL to contain uq_account_snapshots_account_date constraint")
 	}
 
-	if !strings.Contains(initSQL, "uq_account_assets_account_asset UNIQUE (account_id, asset_id)") {
-		t.Error("expected initSQL to contain uq_account_assets_account_asset constraint")
+	if !strings.Contains(initSQL, "uq_account_assets_account_asset_date UNIQUE (account_id, asset_id, asset_date)") {
+		t.Error("expected initSQL to contain uq_account_assets_account_asset_date constraint")
 	}
 
 	if !strings.Contains(initSQL, "uq_assets_user_label UNIQUE NULLS NOT DISTINCT (user_id, label)") {

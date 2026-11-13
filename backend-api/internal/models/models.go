@@ -254,6 +254,7 @@ type AccountAsset struct {
 	AccountID string    `json:"account_id"`
 	AssetID   string    `json:"asset_id"`
 	Quantity  float64   `json:"quantity"`
+	AssetDate string    `json:"asset_date"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 }
@@ -266,6 +267,7 @@ type AccountAssetDetail struct {
 	Label           string
 	Description     string
 	Quantity        float64
+	AssetDate       string
 	LatestValue     float64
 	LatestValueDate string
 	CreatedAt       time.Time
@@ -274,13 +276,15 @@ type AccountAssetDetail struct {
 
 // AccountAssetAddRequest represents payload to add an asset with quantity to an account.
 type AccountAssetAddRequest struct {
-	AssetID  string   `json:"asset_id" binding:"required"`
-	Quantity *float64 `json:"quantity" binding:"required"`
+	AssetID   string   `json:"asset_id" binding:"required"`
+	Quantity  *float64 `json:"quantity" binding:"required"`
+	AssetDate string   `json:"asset_date"`
 }
 
 // AccountAssetUpdateRequest represents payload to update the quantity of an asset in an account.
 type AccountAssetUpdateRequest struct {
-	Quantity *float64 `json:"quantity" binding:"required"`
+	Quantity  *float64 `json:"quantity"`
+	AssetDate string   `json:"asset_date"`
 }
 
 // AccountAssetResponse represents an asset holding returned by the API with calculated values.
@@ -291,6 +295,7 @@ type AccountAssetResponse struct {
 	Label           string    `json:"label"`
 	Description     string    `json:"description"`
 	Quantity        float64   `json:"quantity"`
+	AssetDate       string    `json:"asset_date"`
 	LatestValue     float64   `json:"latest_value"`
 	LatestValueDate string    `json:"latest_value_date,omitempty"`
 	TotalValue      float64   `json:"total_value"`
@@ -303,6 +308,12 @@ type AssetAccountSummaryResponse struct {
 	AccountID  string                  `json:"account_id"`
 	TotalValue float64                 `json:"total_value"`
 	Assets     []*AccountAssetResponse `json:"assets"`
+}
+
+// AssetAccountTrendPoint represents a point-in-time total valuation of an asset account.
+type AssetAccountTrendPoint struct {
+	Date       string  `json:"date"`
+	TotalValue float64 `json:"total_value"`
 }
 
 // AccountSnapshot represents a point-in-time valuation for a snapshot account.

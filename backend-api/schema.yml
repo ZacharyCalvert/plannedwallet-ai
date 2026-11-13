@@ -984,6 +984,74 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
+  /api/v1/accounts/{accountId}/assets/trend:
+    parameters:
+      - $ref: '#/components/parameters/XClientId'
+      - name: accountId
+        in: path
+        required: true
+        description: Unique identifier of the asset account.
+        schema:
+          type: string
+          format: uuid
+    get:
+      tags:
+        - Account Assets
+      summary: Get asset account valuation trend over time
+      description: |
+        Retrieves historical portfolio valuations across all holdings and valuation dates.
+      operationId: getAssetAccountTrend
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: start_date
+          in: query
+          required: false
+          description: Lower bound date filter (YYYY-MM-DD, inclusive).
+          schema:
+            type: string
+            format: date
+        - name: end_date
+          in: query
+          required: false
+          description: Upper bound date filter (YYYY-MM-DD, inclusive).
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          summary: Valuation trend points retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AssetAccountTrendPoint'
+        '400':
+          summary: Invalid account type
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          summary: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          summary: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          summary: Account not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
   /api/v1/accounts/{accountId}/assets/{assetId}:
     parameters:
       - $ref: '#/components/parameters/XClientId'
@@ -2480,11 +2548,14 @@ components:
           minimum: 0.00000001
           description: Held quantity of the asset (must be greater than 0).
           example: 45.209
+        asset_date:
+          type: string
+          format: date
+          description: Date as of which this quantity is held (defaults to today).
+          example: "2026-11-12"
 
     AccountAssetUpdateRequest:
       type: object
-      required:
-        - quantity
       properties:
         quantity:
           type: number
@@ -2492,6 +2563,11 @@ components:
           minimum: 0.00000001
           description: New held quantity of the asset (must be greater than 0).
           example: 50.0
+        asset_date:
+          type: string
+          format: date
+          description: Updated holding date (YYYY-MM-DD).
+          example: "2026-11-12"
 
     AccountAssetResponse:
       type: object
@@ -2502,6 +2578,7 @@ components:
         - label
         - description
         - quantity
+        - asset_date
         - latest_value
         - total_value
         - created_at
@@ -2535,6 +2612,11 @@ components:
           format: double
           description: Quantity held in the account.
           example: 45.209
+        asset_date:
+          type: string
+          format: date
+          description: Date as of which the holding is recorded.
+          example: "2026-11-12"
         latest_value:
           type: number
           format: double
@@ -2577,9 +2659,26 @@ components:
           example: 1469.2925
         assets:
           type: array
-          description: List of asset holdings with their latest valuations.
+          description: List of distinct asset holdings with their latest valuations.
           items:
             $ref: '#/components/schemas/AccountAssetResponse'
+
+    AssetAccountTrendPoint:
+      type: object
+      required:
+        - date
+        - total_value
+      properties:
+        date:
+          type: string
+          format: date
+          description: Date of valuation point (YYYY-MM-DD).
+          example: "2026-11-12"
+        total_value:
+          type: number
+          format: double
+          description: Total account valuation on this date.
+          example: 13000.00
 
     AccountSnapshotCreateRequest:
       type: object

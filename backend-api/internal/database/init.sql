@@ -77,13 +77,15 @@ CREATE TABLE IF NOT EXISTS account_assets (
     account_id UUID NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
     asset_id UUID NOT NULL REFERENCES assets(id) ON DELETE CASCADE,
     quantity DOUBLE PRECISION NOT NULL CHECK (quantity > 0),
+    asset_date DATE NOT NULL DEFAULT CURRENT_DATE,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    CONSTRAINT uq_account_assets_account_asset UNIQUE (account_id, asset_id)
+    CONSTRAINT uq_account_assets_account_asset_date UNIQUE (account_id, asset_id, asset_date)
 );
 
 CREATE INDEX IF NOT EXISTS idx_account_assets_account_id ON account_assets(account_id);
 CREATE INDEX IF NOT EXISTS idx_account_assets_asset_id ON account_assets(asset_id);
+CREATE INDEX IF NOT EXISTS idx_account_assets_account_date ON account_assets(account_id, asset_date DESC);
 
 CREATE TABLE IF NOT EXISTS account_snapshots (
     id UUID PRIMARY KEY,

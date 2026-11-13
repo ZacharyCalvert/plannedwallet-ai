@@ -72,15 +72,16 @@ Stores date-keyed valuation points for assets.
 - **Index**: `idx_asset_values_asset_date (asset_id, value_date DESC)`
 
 ### 1.7 `account_assets`
-Stores asset holdings and quantities within `asset` accounts.
+Stores asset holdings and quantities within `asset` accounts across dates.
 - `id` (UUID, Primary Key)
 - `account_id` (UUID, Not Null, FK -> `accounts(id)` ON DELETE CASCADE)
 - `asset_id` (UUID, Not Null, FK -> `assets(id)` ON DELETE CASCADE)
 - `quantity` (DOUBLE PRECISION, Not Null, `CHECK (quantity > 0)`)
+- `asset_date` (DATE, Not Null, Default `CURRENT_DATE`)
 - `created_at` (TIMESTAMPTZ, Not Null, Default NOW())
 - `updated_at` (TIMESTAMPTZ, Not Null, Default NOW())
-- **Constraint**: `CONSTRAINT uq_account_assets_account_asset UNIQUE (account_id, asset_id)`
-- **Indexes**: `idx_account_assets_account_id`, `idx_account_assets_asset_id`
+- **Constraint**: `CONSTRAINT uq_account_assets_account_asset_date UNIQUE (account_id, asset_id, asset_date)`
+- **Indexes**: `idx_account_assets_account_id`, `idx_account_assets_asset_id`, `idx_account_assets_account_date (account_id, asset_date DESC)`
 
 ### 1.8 `account_snapshots`
 Stores manual point-in-time valuations for `snapshot` accounts.
@@ -159,6 +160,7 @@ All HTTP requests require the `X-Client-ID` header. Protected endpoints require 
 - `POST /api/v1/accounts/{accountId}/assets`: Add asset holding to asset account.
 - `GET /api/v1/accounts/{accountId}/assets`: List asset holdings and valuations in account.
 - `GET /api/v1/accounts/{accountId}/assets/summary`: Get aggregated account valuation and breakdown.
+- `GET /api/v1/accounts/{accountId}/assets/trend`: Retrieve time-series valuation points (`date`, `total_value`) tracking account worth over time.
 - `GET /api/v1/accounts/{accountId}/assets/{assetId}`: Get specific asset holding.
 - `PUT /api/v1/accounts/{accountId}/assets/{assetId}`: Update quantity held.
 - `DELETE /api/v1/accounts/{accountId}/assets/{assetId}`: Remove asset from account.

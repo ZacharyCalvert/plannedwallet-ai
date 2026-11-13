@@ -145,26 +145,38 @@ func TestMemoryRepo_AccountAssetOperations(t *testing.T) {
 	})
 
 	aa := &models.AccountAsset{
-		ID: "aa-1", AccountID: acc.ID, AssetID: asset.ID, Quantity: 45.209, CreatedAt: now, UpdatedAt: now,
+		ID: "aa-1", AccountID: acc.ID, AssetID: asset.ID, Quantity: 45.209, AssetDate: "2026-11-10", CreatedAt: now, UpdatedAt: now,
 	}
 	if err := repo.AddAccountAsset(ctx, aa); err != nil {
 		t.Fatalf("failed to add account asset: %v", err)
 	}
 
-	// Conflict on duplicate asset in same account
+	// Conflict on duplicate asset in same account on same date
 	aaDup := &models.AccountAsset{
-		ID: "aa-dup", AccountID: acc.ID, AssetID: asset.ID, Quantity: 10.0, CreatedAt: now, UpdatedAt: now,
+		ID: "aa-dup", AccountID: acc.ID, AssetID: asset.ID, Quantity: 10.0, AssetDate: "2026-11-10", CreatedAt: now, UpdatedAt: now,
 	}
 	if err := repo.AddAccountAsset(ctx, aaDup); !errors.Is(err, repository.ErrConflict) {
-		t.Fatalf("expected ErrConflict on duplicate asset in account, got %v", err)
+		t.Fatalf("expected ErrConflict on duplicate asset in account on same date, got %v", err)
+	}
+
+	// Different date succeeds
+	aaDate2 := &models.AccountAsset{
+		ID: "aa-2", AccountID: acc.ID, AssetID: asset.ID, Quantity: 50.0, AssetDate: "2026-11-12", CreatedAt: now.Add(time.Hour), UpdatedAt: now.Add(time.Hour),
+	}
+	if err := repo.AddAccountAsset(ctx, aaDate2); err != nil {
+		t.Fatalf("failed to add account asset on different date: %v", err)
 	}
 
 	details, err := repo.ListAccountAssets(ctx, acc.ID)
-	if err != nil || len(details) != 1 {
-		t.Fatalf("expected 1 detail, got %d (%v)", len(details), err)
+	if err != nil || len(details) != 2 {
+		t.Fatalf("expected 2 details, got %d (%v)", len(details), err)
 	}
-	if details[0].LatestValue != 32.50 || details[0].Quantity != 45.209 {
-		t.Errorf("unexpected detail: %+v", details[0])
+	// Ordered by AssetDate DESC
+	if details[0].AssetDate != "2026-11-12" || details[0].Quantity != 50.0 {
+		t.Errorf("unexpected newest detail: %+v", details[0])
+	}
+	if details[1].AssetDate != "2026-11-10" || details[1].Quantity != 45.209 {
+		t.Errorf("unexpected older detail: %+v", details[1])
 	}
 }
 
