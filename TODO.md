@@ -8,15 +8,20 @@ Top features:
 - [x] Add credit card account types
 - [x] snapshot account inputs - this account is worth x at this time
 - [x] CAPTCHA for account setup
-asset account -> like X bitcoin / total worth of the account
-Add categories (expense categories)
-Enforce uniqueness of email as well as user
+- [x] asset account -> like X bitcoin / total worth of the account
+- [x] Enforce uniqueness of email as well as user
 Update user agent to enforce 12 factor behaviors
 
 Top priority:
 Infrastructure + auto deploy to staging
 enforce REQUIRE_CAPTCHA set to true as environment variable
 Create JWT secret and mount as required field for JWT issuance / signing
+
+Production ready:
+- legal disclaimer
+- Means to halt/disable signups (new accounts)
+- Establish means to observe activity / record counts
+- Calculate space, size, cost (confirm limits for usage planning)
 
 Medium priority:
 Add dependabot monitoring of npm, docker images, golang dependencies
@@ -45,6 +50,7 @@ fun money / daily money based on income expectations (payroll)
 Payroll / payday features -> button to add?
 Cookie to ignore TOTP challenge ? 
 Snapshot extraction of gold / silver / stocks / gas
+Add categories (expense categories)
 
 Premium features:
 Bulk data upload (json/csv)
