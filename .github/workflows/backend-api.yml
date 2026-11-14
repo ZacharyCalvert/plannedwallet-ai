@@ -38,7 +38,7 @@ jobs:
         uses: docker/setup-buildx-action@v3
 
       - name: Build Docker image for testing
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: ./backend-api
           file: ./backend-api/Dockerfile
@@ -131,7 +131,7 @@ jobs:
             type=ref,event=branch
 
       - name: Push Docker image
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: ./backend-api
           file: ./backend-api/Dockerfile
