@@ -63,20 +63,26 @@ jobs:
           echo "Migration Job: $MIGRATION_JOB_NAME"
           echo "Container Image: $CONTAINER_IMAGE"
 
-          # 1. Encode SQL script into base64 to pass into container
-          SQL_B64=$(base64 -w 0 < "$SQL_FILE_PATH" 2>/dev/null || base64 < "$SQL_FILE_PATH" | tr -d '\n')
+          # 1. Fetch current job template
+          echo "Fetching job template for '$MIGRATION_JOB_NAME'..."
+          az containerapp job show \
+            --name "$MIGRATION_JOB_NAME" \
+            --resource-group "$AZURE_RESOURCE_GROUP" \
+            --query "properties.template" \
+            -o json > /tmp/migration-template.json
 
-          # 2. Format args as a JSON array string to avoid Azure CLI argparse flag collisions
-          ARGS_JSON="[\"-c\", \"echo $SQL_B64 | base64 -d | psql -v ON_ERROR_STOP=1 -h \$DB_HOST -U \$DB_USER -d \$DB_NAME\"]"
+          # 2. Modify template to execute SQL script via python helper
+          python3 .github/scripts/prepare-migration-job.py \
+            /tmp/migration-template.json \
+            "$SQL_FILE_PATH" \
+            "$CONTAINER_IMAGE"
 
-          # 3. Start the migration job with psql command override
+          # 3. Start Container App Job execution using the prepared template
           echo "Starting Container App Job '$MIGRATION_JOB_NAME'..."
           EXEC_NAME=$(az containerapp job start \
             --name "$MIGRATION_JOB_NAME" \
             --resource-group "$AZURE_RESOURCE_GROUP" \
-            --image "$CONTAINER_IMAGE" \
-            --command "/bin/sh" \
-            --args "$ARGS_JSON" \
+            --yaml /tmp/migration-template.json \
             --query "name" -o tsv)
 
           if [ -z "$EXEC_NAME" ]; then
@@ -106,6 +112,7 @@ jobs:
               az containerapp job logs show \
                 --name "$MIGRATION_JOB_NAME" \
                 --resource-group "$AZURE_RESOURCE_GROUP" \
+                --container "$MIGRATION_JOB_NAME" \
                 --execution "$EXEC_NAME" \
                 --tail 300 || true
               echo "--- End Container Execution Logs ---"
@@ -116,6 +123,7 @@ jobs:
               az containerapp job logs show \
                 --name "$MIGRATION_JOB_NAME" \
                 --resource-group "$AZURE_RESOURCE_GROUP" \
+                --container "$MIGRATION_JOB_NAME" \
                 --execution "$EXEC_NAME" \
                 --tail 300 || true
               echo "--- End Container Execution Logs ---"
