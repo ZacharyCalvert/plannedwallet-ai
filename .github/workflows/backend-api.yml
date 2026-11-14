@@ -298,36 +298,61 @@ jobs:
 
       - name: Run Database Migrations
         if: ${{ github.event_name == 'push' || inputs.run_migrations != false }}
+        env:
+          SQL_FILE_PATH: 'backend-api/internal/database/init.sql'
         run: |
           RESOURCE_GROUP="${{ steps.meta.outputs.RESOURCE_GROUP }}"
           ENV_SHORT="${{ steps.meta.outputs.ENV_SHORT }}"
-          IMAGE_NAME="${{ steps.meta.outputs.IMAGE_NAME }}"
+          CONTAINER_IMAGE="${{ vars.MIGRATION_CONTAINER_IMAGE || 'postgres:16-alpine' }}"
 
           JOB_NAME="${{ vars.MIGRATION_JOB_NAME || '' }}"
           if [ -z "$JOB_NAME" ]; then
             JOB_NAME="job-pw-${ENV_SHORT}-migrations"
           fi
 
-          echo "Starting Container Apps Job: ${JOB_NAME}..."
+          echo "Target Environment: ${{ steps.meta.outputs.TARGET_ENV }}"
+          echo "Resource Group: $RESOURCE_GROUP"
+          echo "Migration Job: $JOB_NAME"
+          echo "Migration Container Image: $CONTAINER_IMAGE"
+          echo "SQL File Path: $SQL_FILE_PATH"
+
+          # 1. Fetch current job template
+          echo "Fetching job template for '$JOB_NAME'..."
+          az containerapp job show \
+            --name "$JOB_NAME" \
+            --resource-group "$RESOURCE_GROUP" \
+            --query "properties.template" \
+            -o json > /tmp/migration-template.json
+
+          # 2. Modify template to execute SQL script via python helper
+          python3 .github/scripts/prepare-migration-job.py \
+            /tmp/migration-template.json \
+            "$SQL_FILE_PATH" \
+            "$CONTAINER_IMAGE"
+          CONTAINER_NAME=$(cat /tmp/container-name.txt 2>/dev/null || echo "migration-runner")
+          echo "Target Container Name: $CONTAINER_NAME"
+
+          # 3. Start Container App Job execution using the prepared template
+          echo "Starting Container App Job '$JOB_NAME'..."
           EXECUTION_NAME=$(az containerapp job start \
             --name "$JOB_NAME" \
             --resource-group "$RESOURCE_GROUP" \
-            --image "$IMAGE_NAME" \
-            --query "name" -o tsv 2>/dev/null || az containerapp job start \
-            --name "$JOB_NAME" \
-            --resource-group "$RESOURCE_GROUP" \
+            --yaml /tmp/migration-template.json \
             --query "name" -o tsv)
 
           if [ -z "$EXECUTION_NAME" ]; then
-            echo "Error: Failed to initiate Container Apps Job execution."
+            echo "Error: Failed to initiate Container App Job execution."
             exit 1
           fi
 
-          echo "Migration job execution started: ${EXECUTION_NAME}"
-          echo "Waiting for migrations to complete..."
+          echo "Container App Job execution started: $EXECUTION_NAME"
+          echo "Monitoring execution status..."
 
-          POLL_SUCCESS=false
-          for i in $(seq 1 40); do
+          # 4. Poll execution status until completion (up to 300 seconds)
+          START_TIME=$(date +%s)
+          TIMEOUT_SECONDS=300
+
+          while true; do
             STATUS=$(az containerapp job execution show \
               --name "$JOB_NAME" \
               --resource-group "$RESOURCE_GROUP" \
@@ -338,26 +363,46 @@ jobs:
               --job-execution-name "$EXECUTION_NAME" \
               --query "status" -o tsv 2>/dev/null || echo "Unknown")
 
-            echo "Migration status: [${STATUS}] (Attempt $i/40)"
+            echo "Current execution status: $STATUS"
+
             if [ "$STATUS" = "Succeeded" ]; then
-              echo "Database migrations completed successfully!"
-              POLL_SUCCESS=true
+              echo "Database schema migration completed successfully inside the VNet."
+              echo "--- Container Execution Logs ---"
+              az containerapp job logs show \
+                --name "$JOB_NAME" \
+                --resource-group "$RESOURCE_GROUP" \
+                --container "$CONTAINER_NAME" \
+                --execution "$EXECUTION_NAME" \
+                --tail 300 || true
+              echo "--- End Container Execution Logs ---"
               break
             elif [ "$STATUS" = "Failed" ]; then
-              echo "ERROR: Database migrations failed!"
+              echo "Error: Database migration job execution failed in Azure Container Apps."
+              echo "--- Container Execution Logs ---"
+              az containerapp job logs show \
+                --name "$JOB_NAME" \
+                --resource-group "$RESOURCE_GROUP" \
+                --container "$CONTAINER_NAME" \
+                --execution "$EXECUTION_NAME" \
+                --tail 300 || true
+              echo "--- End Container Execution Logs ---"
               az containerapp job execution show \
                 --name "$JOB_NAME" \
                 --resource-group "$RESOURCE_GROUP" \
-                --job-execution-name "$EXECUTION_NAME" || true
+                --job-execution-name "$EXECUTION_NAME" \
+                --output json || true
               exit 1
             fi
+
+            CURRENT_TIME=$(date +%s)
+            ELAPSED=$((CURRENT_TIME - START_TIME))
+            if [ $ELAPSED -ge $TIMEOUT_SECONDS ]; then
+              echo "Error: Timed out after $TIMEOUT_SECONDS seconds waiting for migration job to complete."
+              exit 1
+            fi
+
             sleep 5
           done
-
-          if [ "$POLL_SUCCESS" != "true" ]; then
-            echo "Error: Timed out waiting for migration job to complete (status: $STATUS)."
-            exit 1
-          fi
 
       - name: Deploy New Revision to Azure Container App
         run: |
