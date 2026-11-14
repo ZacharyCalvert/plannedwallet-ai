@@ -76,6 +76,8 @@ jobs:
             /tmp/migration-template.json \
             "$SQL_FILE_PATH" \
             "$CONTAINER_IMAGE"
+          CONTAINER_NAME=$(cat /tmp/container-name.txt 2>/dev/null || echo "migration-runner")
+          echo "Target Container Name: $CONTAINER_NAME"
 
           # 3. Start Container App Job execution using the prepared template
           echo "Starting Container App Job '$MIGRATION_JOB_NAME'..."
@@ -112,7 +114,7 @@ jobs:
               az containerapp job logs show \
                 --name "$MIGRATION_JOB_NAME" \
                 --resource-group "$AZURE_RESOURCE_GROUP" \
-                --container "$MIGRATION_JOB_NAME" \
+                --container "$CONTAINER_NAME" \
                 --execution "$EXEC_NAME" \
                 --tail 300 || true
               echo "--- End Container Execution Logs ---"
@@ -123,7 +125,7 @@ jobs:
               az containerapp job logs show \
                 --name "$MIGRATION_JOB_NAME" \
                 --resource-group "$AZURE_RESOURCE_GROUP" \
-                --container "$MIGRATION_JOB_NAME" \
+                --container "$CONTAINER_NAME" \
                 --execution "$EXEC_NAME" \
                 --tail 300 || true
               echo "--- End Container Execution Logs ---"

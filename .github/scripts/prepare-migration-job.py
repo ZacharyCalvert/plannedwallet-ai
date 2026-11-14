@@ -24,13 +24,21 @@ def main():
     container["command"] = ["/bin/sh"]
     container["args"] = [
         "-c",
-        f"echo {sql_b64} | base64 -d | psql -v ON_ERROR_STOP=1 -h $DB_HOST -U $DB_USER -d $DB_NAME",
+        (
+            f'echo {sql_b64} | base64 -d | PGPASSWORD="$DB_PASSWORD"'
+            ' PGSSLMODE="${DB_SSLMODE:-require}" psql -v ON_ERROR_STOP=1 -h'
+            ' "$DB_HOST" -p "${DB_PORT:-5432}" -U "$DB_USER" -d "$DB_NAME"'
+        ),
     ]
 
     with open(template_path, "w") as f:
         json.dump(template, f, indent=2)
 
-    print(f"Successfully prepared migration template for {container.get('name', 'container')}.")
+    container_name = container.get("name", "migration-runner")
+    with open("/tmp/container-name.txt", "w") as f:
+        f.write(container_name)
+
+    print(f"Successfully prepared migration template for container '{container_name}'.")
 
 
 if __name__ == "__main__":
