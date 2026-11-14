@@ -189,7 +189,7 @@ jobs:
           echo "Verified static export: index.html and 404.html are present."
 
       - name: Azure Login via OIDC Federated Trust
-        uses: azure/login@v2
+        uses: azure/login@v3
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID || vars.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID || vars.AZURE_TENANT_ID }}
