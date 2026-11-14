@@ -73,7 +73,7 @@ jobs:
             --resource-group "$AZURE_RESOURCE_GROUP" \
             --image "$CONTAINER_IMAGE" \
             --command "/bin/sh" \
-            --args "-c,echo $SQL_B64 | base64 -d | psql -v ON_ERROR_STOP=1 -h \$DB_HOST -U \$DB_USER -d \$DB_NAME" \
+            --args "-c" "echo $SQL_B64 | base64 -d | psql -v ON_ERROR_STOP=1 -h \$DB_HOST -U \$DB_USER -d \$DB_NAME" \
             --query "name" -o tsv)
 
           if [ -z "$EXEC_NAME" ]; then
@@ -99,9 +99,21 @@ jobs:
 
             if [ "$STATUS" = "Succeeded" ]; then
               echo "Database schema migration completed successfully inside the VNet."
+              echo "--- Container Execution Logs ---"
+              az containerapp job logs show \
+                --name "$MIGRATION_JOB_NAME" \
+                --resource-group "$AZURE_RESOURCE_GROUP" \
+                --execution "$EXEC_NAME" || true
+              echo "--- End Container Execution Logs ---"
               break
             elif [ "$STATUS" = "Failed" ]; then
               echo "Error: Database migration job execution failed in Azure Container Apps."
+              echo "--- Container Execution Logs ---"
+              az containerapp job logs show \
+                --name "$MIGRATION_JOB_NAME" \
+                --resource-group "$AZURE_RESOURCE_GROUP" \
+                --execution "$EXEC_NAME" || true
+              echo "--- End Container Execution Logs ---"
               az containerapp job execution show \
                 --name "$MIGRATION_JOB_NAME" \
                 --resource-group "$AZURE_RESOURCE_GROUP" \
