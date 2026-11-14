@@ -8,10 +8,21 @@ on:
       - 'frontend-ui/**'
       - '.github/workflows/frontend-ui.yml'
   workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Target deployment environment'
+        required: true
+        default: 'stage'
+        type: choice
+        options:
+          - stage
+          - production
+          - prod
 
 permissions:
   contents: read
   packages: write
+  id-token: write
 
 jobs:
   test-and-build:
@@ -43,6 +54,26 @@ jobs:
         working-directory: frontend-ui
         run: |
           npm run build
+
+      - name: Verify static export entry point and 404 fallback
+        run: |
+          echo "Verifying static export contents..."
+          if [ ! -f frontend-ui/out/index.html ]; then
+            echo "Error: Required entry point index.html not found in frontend-ui/out!"
+            exit 1
+          fi
+          if [ ! -f frontend-ui/out/404.html ]; then
+            echo "Error: Required fallback 404.html not found in frontend-ui/out!"
+            exit 1
+          fi
+          echo "Static export verified: index.html and 404.html are present."
+
+      - name: Upload static export artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-static-out
+          path: frontend-ui/out
+          retention-days: 1
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -111,3 +142,153 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
+
+  deploy-static:
+    name: Deploy Static to ${{ (inputs.environment == 'production' || inputs.environment == 'prod') && 'production' || 'stage' }}
+    needs: test-and-build
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: ${{ (github.event_name == 'workflow_dispatch' && (inputs.environment == 'production' || inputs.environment == 'prod')) && 'production' || 'stage' }}
+
+    steps:
+      - name: Validate target environment and branch
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_ENV: ${{ inputs.environment }}
+          BRANCH: ${{ github.ref_name }}
+        run: |
+          echo "Triggered by event: $EVENT_NAME"
+          echo "Triggered on branch: $BRANCH"
+          echo "Input Environment: $INPUT_ENV"
+          if [ "$BRANCH" != "main" ]; then
+            echo "Error: deploy-static is strictly restricted to run ONLY from the 'main' branch."
+            exit 1
+          fi
+          if [ "$EVENT_NAME" = "push" ] && [ -n "$INPUT_ENV" ] && [ "$INPUT_ENV" != "stage" ]; then
+            echo "Error: Automated push triggers are strictly restricted to the stage environment."
+            exit 1
+          fi
+
+      - name: Download static export artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: frontend-static-out
+          path: ./out
+
+      - name: Verify static export files
+        run: |
+          echo "Verifying downloaded static files in ./out..."
+          if [ ! -f ./out/index.html ]; then
+            echo "Error: Required entry point index.html missing from downloaded artifacts!"
+            exit 1
+          fi
+          if [ ! -f ./out/404.html ]; then
+            echo "Error: Required fallback 404.html missing from downloaded artifacts!"
+            exit 1
+          fi
+          echo "Verified static export: index.html and 404.html are present."
+
+      - name: Azure Login via OIDC Federated Trust
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID || vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID || vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID || vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Sync Static Assets to Azure Storage ($web)
+        run: |
+          if [ "${{ inputs.environment }}" = "production" ] || [ "${{ inputs.environment }}" = "prod" ]; then
+            TARGET_ENV="production"
+            ENV_SHORT="prod"
+          else
+            TARGET_ENV="stage"
+            ENV_SHORT="stage"
+          fi
+
+          RESOURCE_GROUP="${{ vars.AZURE_RESOURCE_GROUP || '' }}"
+          if [ -z "$RESOURCE_GROUP" ]; then
+            RESOURCE_GROUP="rg-plannedwallet-$ENV_SHORT"
+          fi
+
+          STORAGE_ACCOUNT="${{ vars.FRONTEND_STORAGE_ACCOUNT_NAME || '' }}"
+          if [ -z "$STORAGE_ACCOUNT" ]; then
+            echo "FRONTEND_STORAGE_ACCOUNT_NAME not set in vars. Discovering storage account in $RESOURCE_GROUP..."
+            STORAGE_ACCOUNT=$(az storage account list --resource-group "$RESOURCE_GROUP" --query "[?contains(name, 'pw') || contains(name, 'front') || contains(name, 'web') || contains(name, 'static')].name | [0]" -o tsv 2>/dev/null || echo "")
+            if [ -z "$STORAGE_ACCOUNT" ]; then
+              STORAGE_ACCOUNT=$(az storage account list --resource-group "$RESOURCE_GROUP" --query "[0].name" -o tsv 2>/dev/null || echo "")
+            fi
+          fi
+
+          if [ -z "$STORAGE_ACCOUNT" ]; then
+            echo "Error: Target storage account could not be found in $RESOURCE_GROUP."
+            echo "Please set FRONTEND_STORAGE_ACCOUNT_NAME in GitHub Environment variables."
+            exit 1
+          fi
+
+          echo "Target Environment: $TARGET_ENV"
+          echo "Resource Group: $RESOURCE_GROUP"
+          echo "Storage Account: $STORAGE_ACCOUNT"
+          echo "Deploying static export from ./out to Azure Storage container '$web'..."
+
+          az storage blob sync \
+            --account-name "$STORAGE_ACCOUNT" \
+            --auth-mode login \
+            --container '$web' \
+            --source './out' \
+            --delete-destination true
+
+          echo "Static assets successfully synced to Azure Storage container '$web'."
+
+      - name: Purge Azure Front Door CDN Cache
+        run: |
+          if [ "${{ inputs.environment }}" = "production" ] || [ "${{ inputs.environment }}" = "prod" ]; then
+            TARGET_ENV="production"
+            ENV_SHORT="prod"
+          else
+            TARGET_ENV="stage"
+            ENV_SHORT="stage"
+          fi
+
+          RESOURCE_GROUP="${{ vars.AZURE_RESOURCE_GROUP || '' }}"
+          if [ -z "$RESOURCE_GROUP" ]; then
+            RESOURCE_GROUP="rg-plannedwallet-$ENV_SHORT"
+          fi
+
+          AFD_PROFILE="${{ vars.AFD_PROFILE_NAME || '' }}"
+          if [ -z "$AFD_PROFILE" ]; then
+            AFD_PROFILE="afd-pw-$ENV_SHORT"
+          fi
+
+          AFD_ENDPOINT="${{ vars.AFD_ENDPOINT_NAME || '' }}"
+          if [ -z "$AFD_ENDPOINT" ]; then
+            echo "AFD_ENDPOINT_NAME not set. Discovering Azure Front Door endpoint in $AFD_PROFILE..."
+            AFD_ENDPOINT=$(az afd endpoint list --resource-group "$RESOURCE_GROUP" --profile-name "$AFD_PROFILE" --query "[0].name" -o tsv 2>/dev/null || echo "")
+          fi
+
+          CUSTOM_DOMAIN="${{ vars.CUSTOM_DOMAIN || '' }}"
+          if [ -z "$CUSTOM_DOMAIN" ]; then
+            if [ "$TARGET_ENV" = "production" ]; then
+              CUSTOM_DOMAIN="www.plannedwallet.com"
+            else
+              CUSTOM_DOMAIN="stage.plannedwallet.com"
+            fi
+          fi
+
+          echo "Target AFD Profile: $AFD_PROFILE"
+          echo "Target AFD Endpoint: $AFD_ENDPOINT"
+          echo "Target Domains: $CUSTOM_DOMAIN"
+
+          if [ -z "$AFD_ENDPOINT" ]; then
+            echo "Warning: No Azure Front Door endpoint found for profile $AFD_PROFILE in $RESOURCE_GROUP. Skipping CDN cache purge."
+          else
+            for domain in $CUSTOM_DOMAIN; do
+              echo "Purging CDN edge cache for domain: $domain on endpoint $AFD_ENDPOINT..."
+              az afd endpoint purge \
+                --resource-group "$RESOURCE_GROUP" \
+                --profile-name "$AFD_PROFILE" \
+                --endpoint-name "$AFD_ENDPOINT" \
+                --domains "$domain" \
+                --content-paths "/*" || echo "Warning: Purge for domain $domain encountered an issue."
+            done
+            echo "Azure Front Door CDN edge cache purge completed."
+          fi
