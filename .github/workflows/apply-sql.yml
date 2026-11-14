@@ -55,11 +55,13 @@ jobs:
           TARGET_ENV: ${{ inputs.environment || 'stage' }}
           AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP || (inputs.environment == 'production' && 'rg-plannedwallet-prod' || 'rg-plannedwallet-stage') }}
           MIGRATION_JOB_NAME: ${{ vars.MIGRATION_JOB_NAME || (inputs.environment == 'production' && 'job-pw-prod-migrations' || 'job-pw-stage-migrations') }}
+          CONTAINER_IMAGE: ${{ vars.MIGRATION_CONTAINER_IMAGE || 'postgres:16-alpine' }}
           SQL_FILE_PATH: 'backend-api/internal/database/init.sql'
         run: |
           echo "Target Environment: $TARGET_ENV"
           echo "Resource Group: $AZURE_RESOURCE_GROUP"
           echo "Migration Job: $MIGRATION_JOB_NAME"
+          echo "Container Image: $CONTAINER_IMAGE"
 
           # 1. Encode SQL script into base64 to pass into container
           SQL_B64=$(base64 -w 0 < "$SQL_FILE_PATH" 2>/dev/null || base64 < "$SQL_FILE_PATH" | tr -d '\n')
@@ -69,6 +71,7 @@ jobs:
           EXEC_NAME=$(az containerapp job start \
             --name "$MIGRATION_JOB_NAME" \
             --resource-group "$AZURE_RESOURCE_GROUP" \
+            --image "$CONTAINER_IMAGE" \
             --command "/bin/sh" \
             --args "-c,echo $SQL_B64 | base64 -d | psql -v ON_ERROR_STOP=1 -h \$DB_HOST -U \$DB_USER -d \$DB_NAME" \
             --query "name" -o tsv)
