@@ -66,14 +66,22 @@ jobs:
           # 1. Encode SQL script into base64 to pass into container
           SQL_B64=$(base64 -w 0 < "$SQL_FILE_PATH" 2>/dev/null || base64 < "$SQL_FILE_PATH" | tr -d '\n')
 
-          # 2. Start the migration job with psql command override
+          # 2. Format args as a JSON array string to avoid Azure CLI argparse flag collisions
+          ARGS_JSON=$(python3 -c "
+import json, sys
+sql_b64 = sys.argv[1]
+cmd = f'echo {sql_b64} | base64 -d | psql -v ON_ERROR_STOP=1 -h \$DB_HOST -U \$DB_USER -d \$DB_NAME'
+print(json.dumps(['-c', cmd]))
+" "$SQL_B64")
+
+          # 3. Start the migration job with psql command override
           echo "Starting Container App Job '$MIGRATION_JOB_NAME'..."
           EXEC_NAME=$(az containerapp job start \
             --name "$MIGRATION_JOB_NAME" \
             --resource-group "$AZURE_RESOURCE_GROUP" \
             --image "$CONTAINER_IMAGE" \
             --command "/bin/sh" \
-            --args "-c" "echo $SQL_B64 | base64 -d | psql -v ON_ERROR_STOP=1 -h \$DB_HOST -U \$DB_USER -d \$DB_NAME" \
+            --args "$ARGS_JSON" \
             --query "name" -o tsv)
 
           if [ -z "$EXEC_NAME" ]; then
@@ -84,7 +92,7 @@ jobs:
           echo "Container App Job execution started: $EXEC_NAME"
           echo "Monitoring execution status..."
 
-          # 3. Poll execution status until completion
+          # 4. Poll execution status until completion
           START_TIME=$(date +%s)
           TIMEOUT_SECONDS=300 # 5 minutes max
 
@@ -103,7 +111,8 @@ jobs:
               az containerapp job logs show \
                 --name "$MIGRATION_JOB_NAME" \
                 --resource-group "$AZURE_RESOURCE_GROUP" \
-                --execution "$EXEC_NAME" || true
+                --execution "$EXEC_NAME" \
+                --tail 300 || true
               echo "--- End Container Execution Logs ---"
               break
             elif [ "$STATUS" = "Failed" ]; then
@@ -112,7 +121,8 @@ jobs:
               az containerapp job logs show \
                 --name "$MIGRATION_JOB_NAME" \
                 --resource-group "$AZURE_RESOURCE_GROUP" \
-                --execution "$EXEC_NAME" || true
+                --execution "$EXEC_NAME" \
+                --tail 300 || true
               echo "--- End Container Execution Logs ---"
               az containerapp job execution show \
                 --name "$MIGRATION_JOB_NAME" \
