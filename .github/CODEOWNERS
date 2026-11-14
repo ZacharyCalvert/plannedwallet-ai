@@ -1,0 +1,40 @@
+# CODEOWNERS - PlannedWallet Public Repository
+# Defines individuals or teams responsible for code review.
+# Enforced via GitHub Branch Protection / Rulesets ("Require review from Code Owners").
+
+# ---------------------------------------------------------
+# Global Default Owner
+# ---------------------------------------------------------
+* @ZacharyCalvert
+
+# ---------------------------------------------------------
+# CI/CD Workflows, Automation & GitHub Configuration
+# Modifications here could alter runner permissions or execution flow.
+# ---------------------------------------------------------
+/.github/ @ZacharyCalvert
+/.github/workflows/ @ZacharyCalvert
+/.github/workflows/apply-sql.yml @ZacharyCalvert
+
+# ---------------------------------------------------------
+# Database Schema & Migrations
+# Applied directly against Azure PostgreSQL Flexible Server.
+# ---------------------------------------------------------
+/backend-api/internal/database/init.sql @ZacharyCalvert
+/SQL_CONFIG.md @ZacharyCalvert
+
+# ---------------------------------------------------------
+# Production Security, Infrastructure & Checklist Documentation
+# ---------------------------------------------------------
+/PRODREADY.md @ZacharyCalvert
+/PRODUCTION_CHECKLIST.md @ZacharyCalvert
+/docker-compose.yml @ZacharyCalvert
+/nginx-gateway/ @ZacharyCalvert
+
+# ---------------------------------------------------------
+# Backend API & Authentication / Access Control Core
+# ---------------------------------------------------------
+/backend-api/internal/auth/ @ZacharyCalvert
+/backend-api/internal/controller/ @ZacharyCalvert
+/backend-api/internal/handlers/ @ZacharyCalvert
+/backend-api/internal/repository/ @ZacharyCalvert
+/backend-api/main.go @ZacharyCalvert
