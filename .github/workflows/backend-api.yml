@@ -9,10 +9,26 @@ on:
       - 'itests/**'
       - '.github/workflows/backend-api.yml'
   workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Target deployment environment'
+        required: true
+        default: 'stage'
+        type: choice
+        options:
+          - stage
+          - production
+          - prod
+      run_migrations:
+        description: 'Execute ephemeral database migration job before deploying'
+        required: true
+        type: boolean
+        default: true
 
 permissions:
   contents: read
   packages: write
+  id-token: write
 
 jobs:
   test-and-build:
@@ -139,3 +155,220 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
+
+  deploy-backend:
+    name: Deploy Backend to ${{ (inputs.environment == 'production' || inputs.environment == 'prod') && 'production' || 'stage' }}
+    needs: test-and-build
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: ${{ (github.event_name == 'workflow_dispatch' && (inputs.environment == 'production' || inputs.environment == 'prod')) && 'production' || 'stage' }}
+
+    steps:
+      - name: Validate target environment and branch
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_ENV: ${{ inputs.environment }}
+          BRANCH: ${{ github.ref_name }}
+        run: |
+          echo "Triggered by event: $EVENT_NAME"
+          echo "Triggered on branch: $BRANCH"
+          echo "Input Environment: $INPUT_ENV"
+          if [ "$BRANCH" != "main" ]; then
+            echo "Error: deploy-backend is strictly restricted to run ONLY from the 'main' branch."
+            exit 1
+          fi
+          if [ "$EVENT_NAME" = "push" ] && [ -n "$INPUT_ENV" ] && [ "$INPUT_ENV" != "stage" ]; then
+            echo "Error: Automated push triggers are strictly restricted to the stage environment."
+            exit 1
+          fi
+
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Azure Login via OIDC Federated Trust
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID || vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID || vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID || vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Resolve Target Environment and ACR Metadata
+        id: meta
+        run: |
+          if [ "${{ inputs.environment }}" = "production" ] || [ "${{ inputs.environment }}" = "prod" ]; then
+            TARGET_ENV="production"
+            ENV_SHORT="prod"
+          else
+            TARGET_ENV="stage"
+            ENV_SHORT="stage"
+          fi
+
+          RESOURCE_GROUP="${{ vars.AZURE_RESOURCE_GROUP || '' }}"
+          if [ -z "$RESOURCE_GROUP" ]; then
+            RESOURCE_GROUP="rg-plannedwallet-$ENV_SHORT"
+          fi
+
+          ACR_NAME="${{ vars.ACR_NAME || '' }}"
+          if [ -z "$ACR_NAME" ]; then
+            echo "ACR_NAME not set in vars. Discovering ACR in $RESOURCE_GROUP..."
+            ACR_NAME=$(az acr list --resource-group "$RESOURCE_GROUP" --query "[0].name" -o tsv 2>/dev/null || echo "")
+            if [ -z "$ACR_NAME" ]; then
+              ACR_NAME=$(az acr list --query "[?contains(name, 'pw') || contains(name, 'plannedwallet')].name | [0]" -o tsv 2>/dev/null || echo "")
+            fi
+          fi
+
+          if [ -z "$ACR_NAME" ]; then
+            echo "Error: Azure Container Registry (ACR) could not be resolved."
+            echo "Please set ACR_NAME in GitHub Environment variables."
+            exit 1
+          fi
+
+          LOGIN_SERVER="${{ vars.ACR_LOGIN_SERVER || '' }}"
+          if [ -z "$LOGIN_SERVER" ]; then
+            LOGIN_SERVER=$(az acr show --name "$ACR_NAME" --query "loginServer" -o tsv 2>/dev/null || echo "${ACR_NAME}.azurecr.io")
+          fi
+
+          IMAGE_REPO="${{ vars.BACKEND_IMAGE_REPOSITORY || 'backend' }}"
+          IMAGE_TAG="${{ github.sha }}"
+          IMAGE_NAME="${LOGIN_SERVER}/${IMAGE_REPO}:${IMAGE_TAG}"
+          LATEST_TAG="${LOGIN_SERVER}/${IMAGE_REPO}:${ENV_SHORT}-latest"
+
+          echo "Target Environment: $TARGET_ENV"
+          echo "Resource Group: $RESOURCE_GROUP"
+          echo "ACR Name: $ACR_NAME"
+          echo "ACR Login Server: $LOGIN_SERVER"
+          echo "Image Name: $IMAGE_NAME"
+          echo "Latest Tag: $LATEST_TAG"
+
+          echo "TARGET_ENV=${TARGET_ENV}" >> $GITHUB_OUTPUT
+          echo "ENV_SHORT=${ENV_SHORT}" >> $GITHUB_OUTPUT
+          echo "RESOURCE_GROUP=${RESOURCE_GROUP}" >> $GITHUB_OUTPUT
+          echo "ACR_NAME=${ACR_NAME}" >> $GITHUB_OUTPUT
+          echo "IMAGE_NAME=${IMAGE_NAME}" >> $GITHUB_OUTPUT
+          echo "LATEST_TAG=${LATEST_TAG}" >> $GITHUB_OUTPUT
+
+      - name: Log in to Azure Container Registry (ACR)
+        run: |
+          echo "Logging into ACR: ${{ steps.meta.outputs.ACR_NAME }}..."
+          az acr login --name "${{ steps.meta.outputs.ACR_NAME }}"
+
+      - name: Build and Push Backend Image to ACR
+        run: |
+          IMAGE_NAME="${{ steps.meta.outputs.IMAGE_NAME }}"
+          LATEST_TAG="${{ steps.meta.outputs.LATEST_TAG }}"
+
+          echo "Building Docker image: $IMAGE_NAME..."
+          docker build \
+            --file backend-api/Dockerfile \
+            --tag "$IMAGE_NAME" \
+            --tag "$LATEST_TAG" \
+            ./backend-api
+
+          echo "Pushing images to ACR..."
+          docker push "$IMAGE_NAME"
+          docker push "$LATEST_TAG"
+          echo "Backend container image successfully pushed to ACR."
+
+      - name: "Safeguard: Inspect Container App Environment Variables"
+        run: |
+          RESOURCE_GROUP="${{ steps.meta.outputs.RESOURCE_GROUP }}"
+          ENV_SHORT="${{ steps.meta.outputs.ENV_SHORT }}"
+          TARGET_ENV="${{ steps.meta.outputs.TARGET_ENV }}"
+
+          APP_NAME="${{ vars.CONTAINERAPP_NAME || '' }}"
+          if [ -z "$APP_NAME" ]; then
+            APP_NAME="ca-pw-${ENV_SHORT}-api"
+            if ! az containerapp show --name "$APP_NAME" --resource-group "$RESOURCE_GROUP" >/dev/null 2>&1; then
+              DISCOVERED_APP=$(az containerapp list --resource-group "$RESOURCE_GROUP" --query "[?contains(name, 'api') || contains(name, 'backend')].name | [0]" -o tsv 2>/dev/null || echo "")
+              if [ -n "$DISCOVERED_APP" ]; then
+                APP_NAME="$DISCOVERED_APP"
+              fi
+            fi
+          fi
+
+          echo "Target Container App: $APP_NAME"
+          echo "Fetching Container App configuration for inspection..."
+          az containerapp show \
+            --name "$APP_NAME" \
+            --resource-group "$RESOURCE_GROUP" \
+            -o json > /tmp/ca-config.json
+
+          python3 .github/scripts/verify-containerapp-env.py /tmp/ca-config.json "$TARGET_ENV"
+          echo "CONTAINERAPP_NAME=${APP_NAME}" >> $GITHUB_ENV
+
+      - name: Run Database Migrations
+        if: ${{ github.event_name == 'push' || inputs.run_migrations != false }}
+        run: |
+          RESOURCE_GROUP="${{ steps.meta.outputs.RESOURCE_GROUP }}"
+          ENV_SHORT="${{ steps.meta.outputs.ENV_SHORT }}"
+          IMAGE_NAME="${{ steps.meta.outputs.IMAGE_NAME }}"
+
+          JOB_NAME="${{ vars.MIGRATION_JOB_NAME || '' }}"
+          if [ -z "$JOB_NAME" ]; then
+            JOB_NAME="job-pw-${ENV_SHORT}-migrations"
+          fi
+
+          echo "Starting Container Apps Job: ${JOB_NAME}..."
+          EXECUTION_NAME=$(az containerapp job start \
+            --name "$JOB_NAME" \
+            --resource-group "$RESOURCE_GROUP" \
+            --image "$IMAGE_NAME" \
+            --query "name" -o tsv 2>/dev/null || az containerapp job start \
+            --name "$JOB_NAME" \
+            --resource-group "$RESOURCE_GROUP" \
+            --query "name" -o tsv)
+
+          if [ -z "$EXECUTION_NAME" ]; then
+            echo "Error: Failed to initiate Container Apps Job execution."
+            exit 1
+          fi
+
+          echo "Migration job execution started: ${EXECUTION_NAME}"
+          echo "Waiting for migrations to complete..."
+
+          POLL_SUCCESS=false
+          for i in $(seq 1 40); do
+            STATUS=$(az containerapp job execution show \
+              --name "$JOB_NAME" \
+              --resource-group "$RESOURCE_GROUP" \
+              --job-execution-name "$EXECUTION_NAME" \
+              --query "properties.status" -o tsv 2>/dev/null || az containerapp job execution show \
+              --name "$JOB_NAME" \
+              --resource-group "$RESOURCE_GROUP" \
+              --job-execution-name "$EXECUTION_NAME" \
+              --query "status" -o tsv 2>/dev/null || echo "Unknown")
+
+            echo "Migration status: [${STATUS}] (Attempt $i/40)"
+            if [ "$STATUS" = "Succeeded" ]; then
+              echo "Database migrations completed successfully!"
+              POLL_SUCCESS=true
+              break
+            elif [ "$STATUS" = "Failed" ]; then
+              echo "ERROR: Database migrations failed!"
+              az containerapp job execution show \
+                --name "$JOB_NAME" \
+                --resource-group "$RESOURCE_GROUP" \
+                --job-execution-name "$EXECUTION_NAME" || true
+              exit 1
+            fi
+            sleep 5
+          done
+
+          if [ "$POLL_SUCCESS" != "true" ]; then
+            echo "Error: Timed out waiting for migration job to complete (status: $STATUS)."
+            exit 1
+          fi
+
+      - name: Deploy New Revision to Azure Container App
+        run: |
+          RESOURCE_GROUP="${{ steps.meta.outputs.RESOURCE_GROUP }}"
+          APP_NAME="${CONTAINERAPP_NAME}"
+          IMAGE_NAME="${{ steps.meta.outputs.IMAGE_NAME }}"
+
+          echo "Deploying image $IMAGE_NAME to Container App $APP_NAME..."
+          az containerapp update \
+            --name "$APP_NAME" \
+            --resource-group "$RESOURCE_GROUP" \
+            --image "$IMAGE_NAME"
+
+          echo "Deployment revision successfully submitted to $APP_NAME!"
