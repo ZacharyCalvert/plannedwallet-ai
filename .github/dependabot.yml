@@ -1,0 +1,141 @@
+version: 2
+
+updates:
+  # ---------------------------------------------------------------------------
+  # 1. Golang Modules (Backend API)
+  # ---------------------------------------------------------------------------
+  - package-ecosystem: "gomod"
+    directory: "/backend-api"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 10
+    commit-message:
+      prefix: "chore(deps)"
+    labels:
+      - "dependencies"
+      - "backend"
+    groups:
+      minor-and-patch:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+
+  # ---------------------------------------------------------------------------
+  # 2. NPM Packages (Frontend UI)
+  # ---------------------------------------------------------------------------
+  - package-ecosystem: "npm"
+    directory: "/frontend-ui"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 10
+    commit-message:
+      prefix: "chore(deps)"
+    labels:
+      - "dependencies"
+      - "frontend"
+    groups:
+      minor-and-patch:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+
+  # ---------------------------------------------------------------------------
+  # 3. Python Packages (Integration Test Suite)
+  # ---------------------------------------------------------------------------
+  - package-ecosystem: "pip"
+    directory: "/itests"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 10
+    commit-message:
+      prefix: "chore(deps)"
+    labels:
+      - "dependencies"
+      - "itests"
+    groups:
+      minor-and-patch:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+
+  # ---------------------------------------------------------------------------
+  # 4. Docker Base Images (Backend API Container)
+  # ---------------------------------------------------------------------------
+  - package-ecosystem: "docker"
+    directory: "/backend-api"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "chore(deps)"
+    labels:
+      - "dependencies"
+      - "docker"
+      - "backend"
+
+  # ---------------------------------------------------------------------------
+  # 5. Docker Base Images (Frontend UI Container)
+  # ---------------------------------------------------------------------------
+  - package-ecosystem: "docker"
+    directory: "/frontend-ui"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "chore(deps)"
+    labels:
+      - "dependencies"
+      - "docker"
+      - "frontend"
+
+  # ---------------------------------------------------------------------------
+  # 6. Docker Base Images (Nginx Gateway Reverse Proxy)
+  # ---------------------------------------------------------------------------
+  - package-ecosystem: "docker"
+    directory: "/nginx-gateway"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "chore(deps)"
+    labels:
+      - "dependencies"
+      - "docker"
+      - "gateway"
+
+  # ---------------------------------------------------------------------------
+  # 7. Docker Compose Services & Images
+  # ---------------------------------------------------------------------------
+  - package-ecosystem: "docker-compose"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "chore(deps)"
+    labels:
+      - "dependencies"
+      - "docker"
+
+  # ---------------------------------------------------------------------------
+  # 8. GitHub Actions Workflows & Actions
+  # ---------------------------------------------------------------------------
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 10
+    commit-message:
+      prefix: "chore(deps)"
+    labels:
+      - "dependencies"
+      - "github-actions"
+    groups:
+      minor-and-patch:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
