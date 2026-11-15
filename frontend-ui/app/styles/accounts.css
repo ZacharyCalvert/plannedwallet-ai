@@ -117,21 +117,21 @@
 
 .account-card-credit-card,
 .account-card-credit_card {
-  border-color: #fecdd3;
-  background-color: #fffafb;
+  border-color: #ddd6fe;
+  background-color: #f5f3ff;
 }
 
 .account-card-credit-card:hover,
 .account-card-credit_card:hover {
-  border-color: #fda4af;
-  background-color: #fff1f2;
+  border-color: #c4b5fd;
+  background-color: #ede9fe;
 }
 
 .account-card-credit-card.selected,
 .account-card-credit_card.selected {
-  border-color: var(--credit-card);
-  background-color: #fff1f2;
-  box-shadow: 0 0 0 1px var(--credit-card);
+  border-color: #8b5cf6;
+  background-color: #ede9fe;
+  box-shadow: 0 0 0 1px #8b5cf6;
 }
 
 .badge-snapshot {
