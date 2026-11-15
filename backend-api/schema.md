@@ -134,6 +134,50 @@ Stores paid subscriber membership records defining service periods for users.
 - `updated_at` (TIMESTAMPTZ, Not Null, Default NOW())
 - **Indexes**: `idx_subscriptions_user_id`, `idx_subscriptions_user_ends (user_id, subscriber_ends DESC)`
 
+### 1.13 `perspectives`
+Stores multi-account aggregated perspective metadata.
+- `id` (UUID, Primary Key)
+- `user_id` (UUID, Not Null, FK -> `users(id)` ON DELETE CASCADE)
+- `name` (VARCHAR(100), Not Null)
+- `description` (VARCHAR(255), Not Null, Default `''`)
+- `created_at` (TIMESTAMPTZ, Not Null, Default NOW())
+- `updated_at` (TIMESTAMPTZ, Not Null, Default NOW())
+- **Index**: `idx_perspectives_user_id (user_id)`
+
+### 1.14 `perspective_settings`
+Stores analytical viewing preferences and calculation settings.
+- `id` (UUID, Primary Key)
+- `perspective_id` (UUID, Not Null, FK -> `perspectives(id)` ON DELETE CASCADE)
+- `show_financial_trend` (BOOLEAN, Not Null, Default TRUE)
+- `calculate_average_daily_spend` (BOOLEAN, Not Null, Default FALSE)
+- `calculate_average_return_yoy` (BOOLEAN, Not Null, Default FALSE)
+- `track_ruined_date` (BOOLEAN, Not Null, Default FALSE)
+- `custom_daily_spend` (DOUBLE PRECISION, Nullable)
+- `created_at` (TIMESTAMPTZ, Not Null, Default NOW())
+- `updated_at` (TIMESTAMPTZ, Not Null, Default NOW())
+- **Constraint**: `CONSTRAINT uq_perspective_settings_perspective UNIQUE (perspective_id)`
+- **Index**: `idx_perspective_settings_perspective_id (perspective_id)`
+
+### 1.15 `perspective_accounts`
+Maps financial accounts into aggregated perspectives.
+- `id` (UUID, Primary Key)
+- `perspective_id` (UUID, Not Null, FK -> `perspectives(id)` ON DELETE CASCADE)
+- `account_id` (UUID, Not Null, FK -> `accounts(id)` ON DELETE CASCADE)
+- `created_at` (TIMESTAMPTZ, Not Null, Default NOW())
+- **Constraint**: `CONSTRAINT uq_perspective_accounts_perspective_account UNIQUE (perspective_id, account_id)`
+- **Indexes**: `idx_perspective_accounts_perspective_id`, `idx_perspective_accounts_account_id`
+
+### 1.16 `perspective_access`
+Multi-user sharing and role-based permissions (`read`, `edit`, `admin`) for perspectives.
+- `id` (UUID, Primary Key)
+- `perspective_id` (UUID, Not Null, FK -> `perspectives(id)` ON DELETE CASCADE)
+- `user_id` (UUID, Not Null, FK -> `users(id)` ON DELETE CASCADE)
+- `access_level` (VARCHAR(20), Not Null) - `'read'`, `'edit'`, `'admin'`
+- `created_at` (TIMESTAMPTZ, Not Null, Default NOW())
+- `updated_at` (TIMESTAMPTZ, Not Null, Default NOW())
+- **Constraint**: `CONSTRAINT uq_perspective_access_perspective_user UNIQUE (perspective_id, user_id)`
+- **Indexes**: `idx_perspective_access_perspective_id`, `idx_perspective_access_user_id`
+
 ---
 
 ## 2. Account Types & Behavior
@@ -205,3 +249,21 @@ All HTTP requests require the `X-Client-ID` header. Protected endpoints require 
 - `GET /api/v1/accounts/{accountId}/snapshots/{snapshotId}`: Get specific snapshot record.
 - `PUT /api/v1/accounts/{accountId}/snapshots/{snapshotId}`: Update snapshot valuation or date.
 - `DELETE /api/v1/accounts/{accountId}/snapshots/{snapshotId}`: Delete snapshot record.
+
+### 3.9 Perspectives & Aggregated Analytics
+- `POST /api/v1/perspectives`: Create a new perspective viewing window (`name`, `description`, optional `account_ids`, optional `settings`).
+- `GET /api/v1/perspectives`: List perspectives accessible by the authenticated user (owned and shared).
+- `GET /api/v1/perspectives/{perspectiveId}`: Get perspective details and settings.
+- `PUT /api/v1/perspectives/{perspectiveId}`: Update perspective name or description.
+- `DELETE /api/v1/perspectives/{perspectiveId}`: Delete perspective (admin only).
+- `GET /api/v1/perspectives/{perspectiveId}/settings`: Get perspective settings.
+- `PUT /api/v1/perspectives/{perspectiveId}/settings`: Update calculation and display toggles (`show_financial_trend`, `calculate_average_daily_spend`, `calculate_average_return_yoy`, `track_ruined_date`, `custom_daily_spend`).
+- `GET /api/v1/perspectives/{perspectiveId}/accounts`: List accounts linked to perspective.
+- `POST /api/v1/perspectives/{perspectiveId}/accounts`: Link an account to perspective (`account_id`).
+- `DELETE /api/v1/perspectives/{perspectiveId}/accounts/{accountId}`: Unlink an account from perspective.
+- `GET /api/v1/perspectives/{perspectiveId}/access`: List user access grants on perspective.
+- `GET /api/v1/perspectives/{perspectiveId}/access/{userId}`: View access grant for a specific user.
+- `POST /api/v1/perspectives/{perspectiveId}/access`: Grant or update user access level (`read`, `edit`, `admin`).
+- `DELETE /api/v1/perspectives/{perspectiveId}/access/{userId}`: Revoke access for a user.
+- `GET /api/v1/perspectives/{perspectiveId}/view`: Retrieve comprehensive aggregated viewing window (total portfolio value, historical trend line, average daily spend, year-over-year return rate, and ruined date runway forecast).
+

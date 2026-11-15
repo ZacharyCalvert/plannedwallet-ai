@@ -26,6 +26,10 @@ type MemoryRepository struct {
 	accountSnapshots  map[string]*models.AccountSnapshot  // id -> AccountSnapshot
 	captchas          map[string]*memoryCaptcha           // id -> memoryCaptcha
 	subscriptions     map[string]*models.Subscription     // id -> Subscription
+	perspectives      map[string]*models.Perspective
+	perspectiveSettings map[string]*models.PerspectiveSettings
+	perspectiveAccounts map[string]*models.PerspectiveAccount
+	perspectiveAccess map[string]*models.PerspectiveAccess
 }
 
 type memoryCaptcha struct {
@@ -49,6 +53,10 @@ func NewMemoryRepository() *MemoryRepository {
 		accountSnapshots:  make(map[string]*models.AccountSnapshot),
 		captchas:          make(map[string]*memoryCaptcha),
 		subscriptions:     make(map[string]*models.Subscription),
+		perspectives:      make(map[string]*models.Perspective),
+		perspectiveSettings: make(map[string]*models.PerspectiveSettings),
+		perspectiveAccounts: make(map[string]*models.PerspectiveAccount),
+		perspectiveAccess: make(map[string]*models.PerspectiveAccess),
 	}
 }
 
@@ -1187,3 +1195,221 @@ func (m *MemoryRepository) DeleteSubscription(_ context.Context, id string) erro
 	delete(m.subscriptions, id)
 	return nil
 }
+
+// CreatePerspective creates a new perspective.
+func (m *MemoryRepository) CreatePerspective(_ context.Context, p *models.Perspective) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if _, exists := m.perspectives[p.ID]; exists {
+		return ErrConflict
+	}
+	copied := *p
+	m.perspectives[p.ID] = &copied
+	return nil
+}
+
+// GetPerspectiveByID returns a perspective by ID.
+func (m *MemoryRepository) GetPerspectiveByID(_ context.Context, id string) (*models.Perspective, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	p, exists := m.perspectives[id]
+	if !exists {
+		return nil, ErrNotFound
+	}
+	copied := *p
+	return &copied, nil
+}
+
+// ListPerspectivesByUserID returns all perspectives owned or shared with the user.
+func (m *MemoryRepository) ListPerspectivesByUserID(_ context.Context, userID string) ([]*models.Perspective, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	var result []*models.Perspective
+	for _, p := range m.perspectives {
+		hasAccess := p.UserID == userID
+		if !hasAccess {
+			key := p.ID + ":" + userID
+			_, hasAccess = m.perspectiveAccess[key]
+		}
+		if hasAccess {
+			copied := *p
+			result = append(result, &copied)
+		}
+	}
+	sort.Slice(result, func(i, j int) bool {
+		return result[i].CreatedAt.Before(result[j].CreatedAt)
+	})
+	if result == nil {
+		result = make([]*models.Perspective, 0)
+	}
+	return result, nil
+}
+
+// UpdatePerspective updates name and description.
+func (m *MemoryRepository) UpdatePerspective(_ context.Context, p *models.Perspective) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	existing, exists := m.perspectives[p.ID]
+	if !exists {
+		return ErrNotFound
+	}
+	existing.Name = p.Name
+	existing.Description = p.Description
+	existing.UpdatedAt = p.UpdatedAt
+	return nil
+}
+
+// DeletePerspective deletes a perspective and cascades its settings, links, and access.
+func (m *MemoryRepository) DeletePerspective(_ context.Context, id string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if _, exists := m.perspectives[id]; !exists {
+		return ErrNotFound
+	}
+	delete(m.perspectives, id)
+	delete(m.perspectiveSettings, id)
+	for k, pa := range m.perspectiveAccounts {
+		if pa.PerspectiveID == id {
+			delete(m.perspectiveAccounts, k)
+		}
+	}
+	for k, acc := range m.perspectiveAccess {
+		if acc.PerspectiveID == id {
+			delete(m.perspectiveAccess, k)
+		}
+	}
+	return nil
+}
+
+// GetPerspectiveSettings retrieves settings for a perspective.
+func (m *MemoryRepository) GetPerspectiveSettings(_ context.Context, perspectiveID string) (*models.PerspectiveSettings, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	s, exists := m.perspectiveSettings[perspectiveID]
+	if !exists {
+		return nil, ErrNotFound
+	}
+	copied := *s
+	return &copied, nil
+}
+
+// UpsertPerspectiveSettings inserts or updates perspective settings.
+func (m *MemoryRepository) UpsertPerspectiveSettings(_ context.Context, settings *models.PerspectiveSettings) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	copied := *settings
+	m.perspectiveSettings[settings.PerspectiveID] = &copied
+	return nil
+}
+
+// AddPerspectiveAccount links an account to a perspective.
+func (m *MemoryRepository) AddPerspectiveAccount(_ context.Context, pa *models.PerspectiveAccount) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	key := pa.PerspectiveID + ":" + pa.AccountID
+	if _, exists := m.perspectiveAccounts[key]; exists {
+		return ErrConflict
+	}
+	copied := *pa
+	m.perspectiveAccounts[key] = &copied
+	return nil
+}
+
+// RemovePerspectiveAccount unlinks an account from a perspective.
+func (m *MemoryRepository) RemovePerspectiveAccount(_ context.Context, perspectiveID, accountID string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	key := perspectiveID + ":" + accountID
+	if _, exists := m.perspectiveAccounts[key]; !exists {
+		return ErrNotFound
+	}
+	delete(m.perspectiveAccounts, key)
+	return nil
+}
+
+// ListPerspectiveAccountIDs returns the account IDs linked to a perspective.
+func (m *MemoryRepository) ListPerspectiveAccountIDs(_ context.Context, perspectiveID string) ([]string, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	var result []string
+	for _, pa := range m.perspectiveAccounts {
+		if pa.PerspectiveID == perspectiveID {
+			result = append(result, pa.AccountID)
+		}
+	}
+	sort.Strings(result)
+	if result == nil {
+		result = make([]string, 0)
+	}
+	return result, nil
+}
+
+// GrantPerspectiveAccess grants or updates access to a user.
+func (m *MemoryRepository) GrantPerspectiveAccess(_ context.Context, access *models.PerspectiveAccess) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	copied := *access
+	key := access.PerspectiveID + ":" + access.UserID
+	m.perspectiveAccess[key] = &copied
+	return nil
+}
+
+// GetPerspectiveAccess retrieves access level for a user on a perspective.
+func (m *MemoryRepository) GetPerspectiveAccess(_ context.Context, perspectiveID, userID string) (*models.PerspectiveAccess, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	key := perspectiveID + ":" + userID
+	access, exists := m.perspectiveAccess[key]
+	if !exists {
+		return nil, ErrNotFound
+	}
+	copied := *access
+	return &copied, nil
+}
+
+// ListPerspectiveAccess lists all access grants on a perspective.
+func (m *MemoryRepository) ListPerspectiveAccess(_ context.Context, perspectiveID string) ([]*models.PerspectiveAccess, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	var result []*models.PerspectiveAccess
+	for _, acc := range m.perspectiveAccess {
+		if acc.PerspectiveID == perspectiveID {
+			copied := *acc
+			result = append(result, &copied)
+		}
+	}
+	sort.Slice(result, func(i, j int) bool {
+		return result[i].CreatedAt.Before(result[j].CreatedAt)
+	})
+	if result == nil {
+		result = make([]*models.PerspectiveAccess, 0)
+	}
+	return result, nil
+}
+
+// RevokePerspectiveAccess removes an access grant.
+func (m *MemoryRepository) RevokePerspectiveAccess(_ context.Context, perspectiveID, userID string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	key := perspectiveID + ":" + userID
+	if _, exists := m.perspectiveAccess[key]; !exists {
+		return ErrNotFound
+	}
+	delete(m.perspectiveAccess, key)
+	return nil
+}
+

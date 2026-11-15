@@ -391,3 +391,90 @@ func TestMemoryRepo_IsUserSubscriber(t *testing.T) {
 		t.Fatal("expected true for active subscription")
 	}
 }
+
+func TestMemoryRepo_PerspectiveCRUD(t *testing.T) {
+	repo := repository.NewMemoryRepository()
+	ctx := context.Background()
+	now := time.Now().UTC()
+
+	p := &models.Perspective{
+		ID: "p-1", UserID: "u-1", Name: "Retirement", Description: "All retirement accounts",
+		CreatedAt: now, UpdatedAt: now,
+	}
+	if err := repo.CreatePerspective(ctx, p); err != nil {
+		t.Fatalf("failed to create perspective: %v", err)
+	}
+	got, err := repo.GetPerspectiveByID(ctx, "p-1")
+	if err != nil || got.Name != "Retirement" {
+		t.Fatalf("unexpected get result: %v, %v", got, err)
+	}
+
+	p.Name = "Updated Retirement"
+	p.UpdatedAt = now.Add(time.Hour)
+	if err := repo.UpdatePerspective(ctx, p); err != nil {
+		t.Fatalf("failed to update: %v", err)
+	}
+
+	// Settings
+	settings := &models.PerspectiveSettings{
+		ID: "ps-1", PerspectiveID: "p-1", ShowFinancialTrend: true,
+		CalculateAverageDailySpend: true, CreatedAt: now, UpdatedAt: now,
+	}
+	if err := repo.UpsertPerspectiveSettings(ctx, settings); err != nil {
+		t.Fatalf("failed to upsert settings: %v", err)
+	}
+	gotSettings, err := repo.GetPerspectiveSettings(ctx, "p-1")
+	if err != nil || !gotSettings.CalculateAverageDailySpend {
+		t.Fatalf("unexpected settings: %v, %v", gotSettings, err)
+	}
+
+	if err := repo.DeletePerspective(ctx, "p-1"); err != nil {
+		t.Fatalf("failed to delete: %v", err)
+	}
+	if _, err := repo.GetPerspectiveByID(ctx, "p-1"); !errors.Is(err, repository.ErrNotFound) {
+		t.Fatalf("expected ErrNotFound after delete, got %v", err)
+	}
+}
+
+func TestMemoryRepo_PerspectiveSharingAndAccounts(t *testing.T) {
+	repo := repository.NewMemoryRepository()
+	ctx := context.Background()
+	now := time.Now().UTC()
+
+	p := &models.Perspective{ID: "p-2", UserID: "u-1", Name: "General Wealth", CreatedAt: now, UpdatedAt: now}
+	_ = repo.CreatePerspective(ctx, p)
+
+	pa := &models.PerspectiveAccount{ID: "pa-1", PerspectiveID: "p-2", AccountID: "acc-1", CreatedAt: now}
+	if err := repo.AddPerspectiveAccount(ctx, pa); err != nil {
+		t.Fatalf("failed to add account link: %v", err)
+	}
+	if err := repo.AddPerspectiveAccount(ctx, pa); !errors.Is(err, repository.ErrConflict) {
+		t.Fatalf("expected conflict on duplicate account link: %v", err)
+	}
+
+	accIDs, err := repo.ListPerspectiveAccountIDs(ctx, "p-2")
+	if err != nil || len(accIDs) != 1 || accIDs[0] != "acc-1" {
+		t.Fatalf("unexpected account IDs: %v, %v", accIDs, err)
+	}
+
+	// Access
+	access := &models.PerspectiveAccess{
+		ID: "pacc-1", PerspectiveID: "p-2", UserID: "u-2", AccessLevel: models.AccessLevelRead,
+		CreatedAt: now, UpdatedAt: now,
+	}
+	if err := repo.GrantPerspectiveAccess(ctx, access); err != nil {
+		t.Fatalf("failed to grant access: %v", err)
+	}
+
+	u2Perspectives, _ := repo.ListPerspectivesByUserID(ctx, "u-2")
+	if len(u2Perspectives) != 1 || u2Perspectives[0].ID != "p-2" {
+		t.Fatalf("expected u-2 to see shared perspective, got %v", u2Perspectives)
+	}
+
+	_ = repo.RemovePerspectiveAccount(ctx, "p-2", "acc-1")
+	accIDsAfter, _ := repo.ListPerspectiveAccountIDs(ctx, "p-2")
+	if len(accIDsAfter) != 0 {
+		t.Fatalf("expected 0 accounts after removal, got %v", accIDsAfter)
+	}
+}
+

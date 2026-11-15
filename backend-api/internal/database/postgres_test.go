@@ -14,6 +14,7 @@ func TestInitSQLEmbedded_Tables(t *testing.T) {
 		"users", "accounts", "account_access", "checking_records",
 		"assets", "asset_values", "asset_stores", "asset_store_records",
 		"account_assets", "account_snapshots", "captchas", "subscriptions",
+		"perspectives", "perspective_settings", "perspective_accounts", "perspective_access",
 	}
 	for _, table := range expectedTables {
 		if !strings.Contains(initSQL, "CREATE TABLE IF NOT EXISTS "+table) {
@@ -47,6 +48,9 @@ func TestInitSQLEmbedded_Constraints(t *testing.T) {
 		"uq_assets_user_label UNIQUE NULLS NOT DISTINCT (user_id, label)",
 		"uq_assets_user_lower_label ON assets (user_id, LOWER(label)) NULLS NOT DISTINCT",
 		"uq_asset_values_asset_date UNIQUE (asset_id, value_date)",
+		"uq_perspective_settings_perspective UNIQUE (perspective_id)",
+		"uq_perspective_accounts_perspective_account UNIQUE (perspective_id, account_id)",
+		"uq_perspective_access_perspective_user UNIQUE (perspective_id, user_id)",
 	}
 	for _, c := range expectedConstraints {
 		if !strings.Contains(initSQL, c) {

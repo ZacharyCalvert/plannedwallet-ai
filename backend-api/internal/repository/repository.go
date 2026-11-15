@@ -96,4 +96,26 @@ type Repository interface {
 	ListSubscriptionsByUserID(ctx context.Context, userID string) ([]*models.Subscription, error)
 	IsUserSubscriber(ctx context.Context, userID string) (bool, error)
 	DeleteSubscription(ctx context.Context, id string) error
+
+	// Perspective operations
+	CreatePerspective(ctx context.Context, p *models.Perspective) error
+	GetPerspectiveByID(ctx context.Context, id string) (*models.Perspective, error)
+	ListPerspectivesByUserID(ctx context.Context, userID string) ([]*models.Perspective, error)
+	UpdatePerspective(ctx context.Context, p *models.Perspective) error
+	DeletePerspective(ctx context.Context, id string) error
+
+	// Perspective Settings operations
+	GetPerspectiveSettings(ctx context.Context, perspectiveID string) (*models.PerspectiveSettings, error)
+	UpsertPerspectiveSettings(ctx context.Context, settings *models.PerspectiveSettings) error
+
+	// Perspective Accounts operations
+	AddPerspectiveAccount(ctx context.Context, pa *models.PerspectiveAccount) error
+	RemovePerspectiveAccount(ctx context.Context, perspectiveID, accountID string) error
+	ListPerspectiveAccountIDs(ctx context.Context, perspectiveID string) ([]string, error)
+
+	// Perspective Access operations
+	GrantPerspectiveAccess(ctx context.Context, access *models.PerspectiveAccess) error
+	GetPerspectiveAccess(ctx context.Context, perspectiveID, userID string) (*models.PerspectiveAccess, error)
+	ListPerspectiveAccess(ctx context.Context, perspectiveID string) ([]*models.PerspectiveAccess, error)
+	RevokePerspectiveAccess(ctx context.Context, perspectiveID, userID string) error
 }

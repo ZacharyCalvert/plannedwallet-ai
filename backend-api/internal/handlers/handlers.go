@@ -384,82 +384,104 @@ func (h *Handler) Health(c *gin.Context) {
 func (h *Handler) RegisterRoutes(r *gin.Engine) {
 	r.GET("/api/health", h.Health)
 	api := r.Group("/api/v1")
-	{
-		// Public endpoints
-		api.GET("/health", h.Health)
-		api.GET("/hello", h.Hello)
-		api.GET("/captcha", h.GetCaptcha)
-		api.GET("/captcha/:captchaId", h.GetCaptchaImage)
-		api.POST("/users", h.RegisterUser)
-		api.POST("/users/:username/token", h.ExchangeToken)
+	h.registerPublicRoutes(api)
 
-		// Protected endpoints
-		protected := api.Group("")
-		protected.Use(h.auth.Middleware())
-		{
-			protected.POST("/accounts", h.CreateAccount)
-			protected.GET("/accounts", h.ListAccounts)
-			protected.GET("/accounts/:accountId", h.GetAccount)
+	protected := api.Group("")
+	protected.Use(h.auth.Middleware())
+	h.registerAccountRoutes(protected)
+	h.registerStoreAndSnapshotRoutes(protected)
+	h.registerAssetRoutes(protected)
+	h.registerPerspectiveRoutes(protected)
+}
 
-			// Account Access
-			protected.POST("/accounts/:accountId/access", h.GrantAccountAccess)
-			protected.GET("/accounts/:accountId/access/:userId", h.GetAccountAccess)
-			protected.DELETE("/accounts/:accountId/access/:userId", h.RevokeAccountAccess)
+func (h *Handler) registerPublicRoutes(api *gin.RouterGroup) {
+	api.GET("/health", h.Health)
+	api.GET("/hello", h.Hello)
+	api.GET("/captcha", h.GetCaptcha)
+	api.GET("/captcha/:captchaId", h.GetCaptchaImage)
+	api.POST("/users", h.RegisterUser)
+	api.POST("/users/:username/token", h.ExchangeToken)
+}
 
-			// Records
-			protected.POST("/accounts/:accountId/records", h.CreateCheckingRecord)
-			protected.GET("/accounts/:accountId/records", h.ListCheckingRecords)
-			protected.GET("/accounts/:accountId/records/:recordId", h.GetCheckingRecord)
-			protected.PUT("/accounts/:accountId/records/:recordId", h.UpdateCheckingRecord)
-			protected.PATCH("/accounts/:accountId/records/:recordId", h.PatchCheckingRecord)
-			protected.DELETE("/accounts/:accountId/records/:recordId", h.DeleteCheckingRecord)
+func (h *Handler) registerAccountRoutes(p *gin.RouterGroup) {
+	p.POST("/accounts", h.CreateAccount)
+	p.GET("/accounts", h.ListAccounts)
+	p.GET("/accounts/:accountId", h.GetAccount)
+	p.POST("/accounts/:accountId/access", h.GrantAccountAccess)
+	p.GET("/accounts/:accountId/access/:userId", h.GetAccountAccess)
+	p.DELETE("/accounts/:accountId/access/:userId", h.RevokeAccountAccess)
 
-			// Account Assets
-			protected.POST("/accounts/:accountId/assets", h.AddAccountAsset)
-			protected.GET("/accounts/:accountId/assets", h.ListAccountAssets)
-			protected.GET("/accounts/:accountId/assets/summary", h.GetAssetAccountSummary)
-			protected.GET("/accounts/:accountId/assets/trend", h.GetAssetAccountTrend)
-			protected.GET("/accounts/:accountId/assets/:assetId", h.GetAccountAsset)
-			protected.PUT("/accounts/:accountId/assets/:assetId", h.UpdateAccountAsset)
-			protected.DELETE("/accounts/:accountId/assets/:assetId", h.DeleteAccountAsset)
+	p.POST("/accounts/:accountId/records", h.CreateCheckingRecord)
+	p.GET("/accounts/:accountId/records", h.ListCheckingRecords)
+	p.GET("/accounts/:accountId/records/:recordId", h.GetCheckingRecord)
+	p.PUT("/accounts/:accountId/records/:recordId", h.UpdateCheckingRecord)
+	p.PATCH("/accounts/:accountId/records/:recordId", h.PatchCheckingRecord)
+	p.DELETE("/accounts/:accountId/records/:recordId", h.DeleteCheckingRecord)
 
-			// Asset Stores
-			protected.POST("/accounts/:accountId/stores", h.CreateAssetStore)
-			protected.GET("/accounts/:accountId/stores", h.ListAssetStores)
-			protected.GET("/accounts/:accountId/stores/summary", h.GetAssetAccountSummary)
-			protected.GET("/accounts/:accountId/stores/trend", h.GetAssetAccountTrend)
-			protected.GET("/accounts/:accountId/stores/:storeId", h.GetAssetStore)
-			protected.PUT("/accounts/:accountId/stores/:storeId", h.UpdateAssetStore)
-			protected.DELETE("/accounts/:accountId/stores/:storeId", h.DeleteAssetStore)
-			protected.GET("/accounts/:accountId/stores/:storeId/trend", h.GetAssetStoreTrend)
+	p.POST("/accounts/:accountId/assets", h.AddAccountAsset)
+	p.GET("/accounts/:accountId/assets", h.ListAccountAssets)
+	p.GET("/accounts/:accountId/assets/summary", h.GetAssetAccountSummary)
+	p.GET("/accounts/:accountId/assets/trend", h.GetAssetAccountTrend)
+	p.GET("/accounts/:accountId/assets/:assetId", h.GetAccountAsset)
+	p.PUT("/accounts/:accountId/assets/:assetId", h.UpdateAccountAsset)
+	p.DELETE("/accounts/:accountId/assets/:assetId", h.DeleteAccountAsset)
+}
 
-			// Asset Store Records
-			protected.POST("/accounts/:accountId/stores/:storeId/records", h.CreateAssetStoreRecord)
-			protected.GET("/accounts/:accountId/stores/:storeId/records", h.ListAssetStoreRecords)
-			protected.GET("/accounts/:accountId/stores/:storeId/records/:recordId", h.GetAssetStoreRecord)
-			protected.PUT("/accounts/:accountId/stores/:storeId/records/:recordId", h.UpdateAssetStoreRecord)
-			protected.DELETE("/accounts/:accountId/stores/:storeId/records/:recordId", h.DeleteAssetStoreRecord)
+func (h *Handler) registerStoreAndSnapshotRoutes(p *gin.RouterGroup) {
+	p.POST("/accounts/:accountId/stores", h.CreateAssetStore)
+	p.GET("/accounts/:accountId/stores", h.ListAssetStores)
+	p.GET("/accounts/:accountId/stores/summary", h.GetAssetAccountSummary)
+	p.GET("/accounts/:accountId/stores/trend", h.GetAssetAccountTrend)
+	p.GET("/accounts/:accountId/stores/:storeId", h.GetAssetStore)
+	p.PUT("/accounts/:accountId/stores/:storeId", h.UpdateAssetStore)
+	p.DELETE("/accounts/:accountId/stores/:storeId", h.DeleteAssetStore)
+	p.GET("/accounts/:accountId/stores/:storeId/trend", h.GetAssetStoreTrend)
 
-			// Account Snapshots
-			protected.POST("/accounts/:accountId/snapshots", h.CreateAccountSnapshot)
-			protected.GET("/accounts/:accountId/snapshots", h.ListAccountSnapshots)
-			protected.GET("/accounts/:accountId/snapshots/:snapshotId", h.GetAccountSnapshot)
-			protected.PUT("/accounts/:accountId/snapshots/:snapshotId", h.UpdateAccountSnapshot)
-			protected.DELETE("/accounts/:accountId/snapshots/:snapshotId", h.DeleteAccountSnapshot)
+	p.POST("/accounts/:accountId/stores/:storeId/records", h.CreateAssetStoreRecord)
+	p.GET("/accounts/:accountId/stores/:storeId/records", h.ListAssetStoreRecords)
+	p.GET("/accounts/:accountId/stores/:storeId/records/:recordId", h.GetAssetStoreRecord)
+	p.PUT("/accounts/:accountId/stores/:storeId/records/:recordId", h.UpdateAssetStoreRecord)
+	p.DELETE("/accounts/:accountId/stores/:storeId/records/:recordId", h.DeleteAssetStoreRecord)
 
-			// Assets
-			protected.POST("/assets", h.CreateAsset)
-			protected.GET("/assets", h.ListAssets)
-			protected.GET("/assets/:assetId", h.GetAsset)
-			protected.PUT("/assets/:assetId", h.UpdateAsset)
-			protected.DELETE("/assets/:assetId", h.DeleteAsset)
+	p.POST("/accounts/:accountId/snapshots", h.CreateAccountSnapshot)
+	p.GET("/accounts/:accountId/snapshots", h.ListAccountSnapshots)
+	p.GET("/accounts/:accountId/snapshots/:snapshotId", h.GetAccountSnapshot)
+	p.PUT("/accounts/:accountId/snapshots/:snapshotId", h.UpdateAccountSnapshot)
+	p.DELETE("/accounts/:accountId/snapshots/:snapshotId", h.DeleteAccountSnapshot)
+}
 
-			// Asset Values
-			protected.POST("/assets/:assetId/values", h.CreateAssetValue)
-			protected.GET("/assets/:assetId/values", h.ListAssetValues)
-			protected.GET("/assets/:assetId/values/:valueId", h.GetAssetValue)
-			protected.PUT("/assets/:assetId/values/:valueId", h.UpdateAssetValue)
-			protected.DELETE("/assets/:assetId/values/:valueId", h.DeleteAssetValue)
-		}
-	}
+func (h *Handler) registerAssetRoutes(p *gin.RouterGroup) {
+	p.POST("/assets", h.CreateAsset)
+	p.GET("/assets", h.ListAssets)
+	p.GET("/assets/:assetId", h.GetAsset)
+	p.PUT("/assets/:assetId", h.UpdateAsset)
+	p.DELETE("/assets/:assetId", h.DeleteAsset)
+
+	p.POST("/assets/:assetId/values", h.CreateAssetValue)
+	p.GET("/assets/:assetId/values", h.ListAssetValues)
+	p.GET("/assets/:assetId/values/:valueId", h.GetAssetValue)
+	p.PUT("/assets/:assetId/values/:valueId", h.UpdateAssetValue)
+	p.DELETE("/assets/:assetId/values/:valueId", h.DeleteAssetValue)
+}
+
+func (h *Handler) registerPerspectiveRoutes(p *gin.RouterGroup) {
+	p.POST("/perspectives", h.CreatePerspective)
+	p.GET("/perspectives", h.ListPerspectives)
+	p.GET("/perspectives/:perspectiveId", h.GetPerspective)
+	p.PUT("/perspectives/:perspectiveId", h.UpdatePerspective)
+	p.DELETE("/perspectives/:perspectiveId", h.DeletePerspective)
+
+	p.GET("/perspectives/:perspectiveId/settings", h.GetPerspectiveSettings)
+	p.PUT("/perspectives/:perspectiveId/settings", h.UpdatePerspectiveSettings)
+
+	p.GET("/perspectives/:perspectiveId/accounts", h.ListPerspectiveAccounts)
+	p.POST("/perspectives/:perspectiveId/accounts", h.LinkPerspectiveAccount)
+	p.DELETE("/perspectives/:perspectiveId/accounts/:accountId", h.UnlinkPerspectiveAccount)
+
+	p.GET("/perspectives/:perspectiveId/access", h.ListPerspectiveAccess)
+	p.GET("/perspectives/:perspectiveId/access/:userId", h.GetPerspectiveAccess)
+	p.POST("/perspectives/:perspectiveId/access", h.GrantPerspectiveAccess)
+	p.DELETE("/perspectives/:perspectiveId/access/:userId", h.RevokePerspectiveAccess)
+
+	p.GET("/perspectives/:perspectiveId/view", h.GetPerspectiveView)
 }

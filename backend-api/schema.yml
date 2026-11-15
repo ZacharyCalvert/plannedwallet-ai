@@ -36,6 +36,12 @@ tags:
   - name: Asset Values
     summary: Asset valuation records
     description: Endpoints for adding, viewing, updating, and deleting daily valuation assignments for assets.
+  - name: Perspectives
+    summary: Financial perspectives
+    description: Aggregated viewing windows across multiple accounts with customizable forecasting, spend, and return metrics.
+  - name: Perspective Access
+    summary: Perspective sharing and permissions
+    description: Endpoints for sharing perspectives and managing user access levels (read, edit, admin).
   - name: Health
     summary: Service health check
     description: Smoke test and liveness endpoints.
@@ -2589,6 +2595,520 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
+  /api/v1/perspectives:
+    parameters:
+      - $ref: '#/components/parameters/XClientId'
+    post:
+      tags:
+        - Perspectives
+      summary: Create financial perspective
+      description: Create a new perspective viewing window aggregating multiple accounts with customized settings.
+      operationId: createPerspective
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PerspectiveCreateRequest'
+      responses:
+        '201':
+          description: Perspective created successfully.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PerspectiveResponse'
+        '400':
+          description: Validation error.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    get:
+      tags:
+        - Perspectives
+      summary: List financial perspectives
+      description: List all perspectives accessible by the authenticated user (owned and shared).
+      operationId: listPerspectives
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Accessible perspectives list.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PerspectiveResponse'
+        '401':
+          description: Unauthorized.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/perspectives/{perspectiveId}:
+    parameters:
+      - $ref: '#/components/parameters/XClientId'
+      - name: perspectiveId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: Unique identifier of the perspective.
+    get:
+      tags:
+        - Perspectives
+      summary: Get perspective details
+      description: Retrieve metadata and settings for a specific perspective.
+      operationId: getPerspective
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Perspective details.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PerspectiveResponse'
+        '401':
+          description: Unauthorized.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Perspective not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    put:
+      tags:
+        - Perspectives
+      summary: Update perspective metadata
+      description: Update perspective name or description. Requires edit or admin permission.
+      operationId: updatePerspective
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PerspectiveUpdateRequest'
+      responses:
+        '200':
+          description: Perspective updated successfully.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PerspectiveResponse'
+        '400':
+          description: Validation error.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden - insufficient permissions.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Perspective not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    delete:
+      tags:
+        - Perspectives
+      summary: Delete perspective
+      description: Permanently delete a perspective and associated settings and shares. Requires admin permission.
+      operationId: deletePerspective
+      security:
+        - BearerAuth: []
+      responses:
+        '204':
+          description: Perspective deleted successfully.
+        '403':
+          description: Forbidden - only admin can delete.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Perspective not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/perspectives/{perspectiveId}/settings:
+    parameters:
+      - $ref: '#/components/parameters/XClientId'
+      - name: perspectiveId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: Unique identifier of the perspective.
+    get:
+      tags:
+        - Perspectives
+      summary: Get perspective settings
+      description: Retrieve analytical configuration toggles and preferences.
+      operationId: getPerspectiveSettings
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Perspective settings.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PerspectiveSettings'
+        '404':
+          description: Perspective not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    put:
+      tags:
+        - Perspectives
+      summary: Update perspective settings
+      description: Update calculation and display toggles (financial trend, daily spend, return YoY, ruined date).
+      operationId: updatePerspectiveSettings
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PerspectiveSettingsInput'
+      responses:
+        '200':
+          description: Updated settings.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PerspectiveSettings'
+        '403':
+          description: Forbidden - insufficient permissions.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Perspective not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/perspectives/{perspectiveId}/accounts:
+    parameters:
+      - $ref: '#/components/parameters/XClientId'
+      - name: perspectiveId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: Unique identifier of the perspective.
+    get:
+      tags:
+        - Perspectives
+      summary: List linked accounts
+      description: List all financial accounts aggregated within this perspective.
+      operationId: listPerspectiveAccounts
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Linked accounts list.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AccountResponse'
+        '404':
+          description: Perspective not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    post:
+      tags:
+        - Perspectives
+      summary: Link account to perspective
+      description: Add an account into this aggregated perspective. User must have at least read access to the account.
+      operationId: linkPerspectiveAccount
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PerspectiveAccountLinkRequest'
+      responses:
+        '201':
+          description: Account linked successfully.
+        '403':
+          description: Forbidden.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Perspective or account not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Account already linked.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/perspectives/{perspectiveId}/accounts/{accountId}:
+    parameters:
+      - $ref: '#/components/parameters/XClientId'
+      - name: perspectiveId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: Unique identifier of the perspective.
+      - name: accountId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: Unique identifier of the account.
+    delete:
+      tags:
+        - Perspectives
+      summary: Unlink account from perspective
+      description: Remove an account from this perspective viewing window.
+      operationId: unlinkPerspectiveAccount
+      security:
+        - BearerAuth: []
+      responses:
+        '204':
+          description: Account unlinked successfully.
+        '403':
+          description: Forbidden.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Account not linked or perspective not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/perspectives/{perspectiveId}/access:
+    parameters:
+      - $ref: '#/components/parameters/XClientId'
+      - name: perspectiveId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: Unique identifier of the perspective.
+    get:
+      tags:
+        - Perspective Access
+      summary: List perspective access grants
+      description: List sharing permissions granted to users on this perspective. Requires admin permission.
+      operationId: listPerspectiveAccess
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Access permissions list.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PerspectiveAccessResponse'
+        '403':
+          description: Forbidden.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Perspective not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    post:
+      tags:
+        - Perspective Access
+      summary: Grant perspective access
+      description: Share perspective with another user or update access level (read, edit, admin). Requires admin permission.
+      operationId: grantPerspectiveAccess
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PerspectiveAccessGrantRequest'
+      responses:
+        '200':
+          description: Access grant updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PerspectiveAccessResponse'
+        '400':
+          description: Invalid access level.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: User or perspective not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/perspectives/{perspectiveId}/access/{userId}:
+    parameters:
+      - $ref: '#/components/parameters/XClientId'
+      - name: perspectiveId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: Unique identifier of the perspective.
+      - name: userId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: Target user identifier.
+    get:
+      tags:
+        - Perspective Access
+      summary: Get user access grant
+      description: View access level granted to a specific user on this perspective.
+      operationId: getPerspectiveAccess
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: User access level.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PerspectiveAccessResponse'
+        '404':
+          description: Access grant or perspective not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    delete:
+      tags:
+        - Perspective Access
+      summary: Revoke perspective access
+      description: Remove sharing permissions for a user from this perspective. Requires admin permission.
+      operationId: revokePerspectiveAccess
+      security:
+        - BearerAuth: []
+      responses:
+        '204':
+          description: Access revoked successfully.
+        '400':
+          description: Cannot revoke owner access.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Access grant or perspective not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/perspectives/{perspectiveId}/view:
+    parameters:
+      - $ref: '#/components/parameters/XClientId'
+      - name: perspectiveId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: Unique identifier of the perspective.
+    get:
+      tags:
+        - Perspectives
+      summary: Get perspective viewing window
+      description: Retrieve aggregated financial trends and calculated analytical metrics (net worth, average daily spend, YoY return, ruined date forecasting) across linked accounts.
+      operationId: getPerspectiveView
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Perspective viewing window and aggregated analytics.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PerspectiveViewResponse'
+        '404':
+          description: Perspective not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
 components:
   securitySchemes:
     BearerAuth:
@@ -3594,4 +4114,250 @@ components:
           type: string
           format: date-time
           description: Timestamp when the snapshot was last updated.
+
+    PerspectiveSettings:
+      type: object
+      required:
+        - id
+        - perspective_id
+        - show_financial_trend
+        - calculate_average_daily_spend
+        - calculate_average_return_yoy
+        - track_ruined_date
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        perspective_id:
+          type: string
+          format: uuid
+        show_financial_trend:
+          type: boolean
+          default: true
+        calculate_average_daily_spend:
+          type: boolean
+          default: false
+        calculate_average_return_yoy:
+          type: boolean
+          default: false
+        track_ruined_date:
+          type: boolean
+          default: false
+        custom_daily_spend:
+          type: number
+          format: double
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    PerspectiveSettingsInput:
+      type: object
+      properties:
+        show_financial_trend:
+          type: boolean
+        calculate_average_daily_spend:
+          type: boolean
+        calculate_average_return_yoy:
+          type: boolean
+        track_ruined_date:
+          type: boolean
+        custom_daily_spend:
+          type: number
+          format: double
+          nullable: true
+
+    PerspectiveCreateRequest:
+      type: object
+      required:
+        - name
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+          example: "Retirement Outlook"
+        description:
+          type: string
+          maxLength: 255
+          example: "Aggregated retirement snapshot accounts"
+        account_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+        settings:
+          $ref: '#/components/schemas/PerspectiveSettingsInput'
+
+    PerspectiveUpdateRequest:
+      type: object
+      required:
+        - name
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        description:
+          type: string
+          maxLength: 255
+
+    PerspectiveResponse:
+      type: object
+      required:
+        - id
+        - user_id
+        - name
+        - description
+        - access_level
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        user_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        description:
+          type: string
+        access_level:
+          type: string
+          enum: [read, edit, admin]
+        settings:
+          $ref: '#/components/schemas/PerspectiveSettings'
+        account_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    PerspectiveAccessGrantRequest:
+      type: object
+      required:
+        - user_id
+        - access_level
+      properties:
+        user_id:
+          type: string
+          format: uuid
+        access_level:
+          type: string
+          enum: [read, edit, admin]
+
+    PerspectiveAccessResponse:
+      type: object
+      required:
+        - id
+        - perspective_id
+        - user_id
+        - access_level
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        perspective_id:
+          type: string
+          format: uuid
+        user_id:
+          type: string
+          format: uuid
+        access_level:
+          type: string
+          enum: [read, edit, admin]
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    PerspectiveAccountLinkRequest:
+      type: object
+      required:
+        - account_id
+      properties:
+        account_id:
+          type: string
+          format: uuid
+
+    PerspectiveTrendPoint:
+      type: object
+      required:
+        - date
+        - total_value
+      properties:
+        date:
+          type: string
+          format: date
+          example: "2026-11-15"
+        total_value:
+          type: number
+          format: double
+          example: 125000.50
+        account_values:
+          type: object
+          additionalProperties:
+            type: number
+            format: double
+
+    PerspectiveViewResponse:
+      type: object
+      required:
+        - perspective
+        - settings
+        - accounts
+        - current_total_value
+      properties:
+        perspective:
+          $ref: '#/components/schemas/PerspectiveResponse'
+        settings:
+          $ref: '#/components/schemas/PerspectiveSettings'
+        accounts:
+          type: array
+          items:
+            $ref: '#/components/schemas/AccountResponse'
+        current_total_value:
+          type: number
+          format: double
+          example: 125000.50
+        trend:
+          type: array
+          items:
+            $ref: '#/components/schemas/PerspectiveTrendPoint'
+        average_daily_spend:
+          type: number
+          format: double
+          nullable: true
+          example: 45.20
+        average_return_yoy:
+          type: number
+          format: double
+          nullable: true
+          example: 0.085
+        ruined_date:
+          type: string
+          format: date
+          nullable: true
+          example: "2034-08-22"
+        days_until_ruined:
+          type: integer
+          nullable: true
+          example: 2840
+
 

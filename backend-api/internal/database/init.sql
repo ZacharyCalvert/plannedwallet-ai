@@ -147,5 +147,56 @@ CREATE TABLE IF NOT EXISTS subscriptions (
 CREATE INDEX IF NOT EXISTS idx_subscriptions_user_id ON subscriptions(user_id);
 CREATE INDEX IF NOT EXISTS idx_subscriptions_user_ends ON subscriptions(user_id, subscriber_ends DESC);
 
+CREATE TABLE IF NOT EXISTS perspectives (
+    id UUID PRIMARY KEY,
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    name VARCHAR(100) NOT NULL,
+    description VARCHAR(255) NOT NULL DEFAULT '',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_perspectives_user_id ON perspectives(user_id);
+
+CREATE TABLE IF NOT EXISTS perspective_settings (
+    id UUID PRIMARY KEY,
+    perspective_id UUID NOT NULL REFERENCES perspectives(id) ON DELETE CASCADE,
+    show_financial_trend BOOLEAN NOT NULL DEFAULT TRUE,
+    calculate_average_daily_spend BOOLEAN NOT NULL DEFAULT FALSE,
+    calculate_average_return_yoy BOOLEAN NOT NULL DEFAULT FALSE,
+    track_ruined_date BOOLEAN NOT NULL DEFAULT FALSE,
+    custom_daily_spend DOUBLE PRECISION,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT uq_perspective_settings_perspective UNIQUE (perspective_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_perspective_settings_perspective_id ON perspective_settings(perspective_id);
+
+CREATE TABLE IF NOT EXISTS perspective_accounts (
+    id UUID PRIMARY KEY,
+    perspective_id UUID NOT NULL REFERENCES perspectives(id) ON DELETE CASCADE,
+    account_id UUID NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT uq_perspective_accounts_perspective_account UNIQUE (perspective_id, account_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_perspective_accounts_perspective_id ON perspective_accounts(perspective_id);
+CREATE INDEX IF NOT EXISTS idx_perspective_accounts_account_id ON perspective_accounts(account_id);
+
+CREATE TABLE IF NOT EXISTS perspective_access (
+    id UUID PRIMARY KEY,
+    perspective_id UUID NOT NULL REFERENCES perspectives(id) ON DELETE CASCADE,
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    access_level VARCHAR(20) NOT NULL CHECK (access_level IN ('read', 'edit', 'admin')),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT uq_perspective_access_perspective_user UNIQUE (perspective_id, user_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_perspective_access_perspective_id ON perspective_access(perspective_id);
+CREATE INDEX IF NOT EXISTS idx_perspective_access_user_id ON perspective_access(user_id);
+
+
 
 

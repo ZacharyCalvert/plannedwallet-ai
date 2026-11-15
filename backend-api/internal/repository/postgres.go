@@ -1228,3 +1228,229 @@ func (p *PostgresRepository) DeleteSubscription(ctx context.Context, id string) 
 	}
 	return nil
 }
+
+func (p *PostgresRepository) CreatePerspective(ctx context.Context, perspective *models.Perspective) error {
+	query := `INSERT INTO perspectives (id, user_id, name, description, created_at, updated_at)
+	          VALUES ($1, $2, $3, $4, $5, $6)`
+	_, err := p.db.ExecContext(ctx, query, perspective.ID, perspective.UserID, perspective.Name, perspective.Description, perspective.CreatedAt, perspective.UpdatedAt)
+	return err
+}
+
+func (p *PostgresRepository) GetPerspectiveByID(ctx context.Context, id string) (*models.Perspective, error) {
+	query := `SELECT id, user_id, name, description, created_at, updated_at
+	          FROM perspectives WHERE id = $1`
+	var pers models.Perspective
+	err := p.db.QueryRowContext(ctx, query, id).Scan(&pers.ID, &pers.UserID, &pers.Name, &pers.Description, &pers.CreatedAt, &pers.UpdatedAt)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrNotFound
+		}
+		return nil, err
+	}
+	return &pers, nil
+}
+
+func (p *PostgresRepository) ListPerspectivesByUserID(ctx context.Context, userID string) ([]*models.Perspective, error) {
+	query := `SELECT DISTINCT p.id, p.user_id, p.name, p.description, p.created_at, p.updated_at
+	          FROM perspectives p
+	          LEFT JOIN perspective_access pa ON p.id = pa.perspective_id
+	          WHERE p.user_id = $1 OR pa.user_id = $1
+	          ORDER BY p.created_at ASC`
+	rows, err := p.db.QueryContext(ctx, query, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var result []*models.Perspective
+	for rows.Next() {
+		var pers models.Perspective
+		if err := rows.Scan(&pers.ID, &pers.UserID, &pers.Name, &pers.Description, &pers.CreatedAt, &pers.UpdatedAt); err != nil {
+			return nil, err
+		}
+		result = append(result, &pers)
+	}
+	if result == nil {
+		result = make([]*models.Perspective, 0)
+	}
+	return result, rows.Err()
+}
+
+func (p *PostgresRepository) UpdatePerspective(ctx context.Context, pers *models.Perspective) error {
+	query := `UPDATE perspectives
+	          SET name = $1, description = $2, updated_at = $3
+	          WHERE id = $4`
+	res, err := p.db.ExecContext(ctx, query, pers.Name, pers.Description, pers.UpdatedAt, pers.ID)
+	if err != nil {
+		return err
+	}
+	cnt, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if cnt == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+func (p *PostgresRepository) DeletePerspective(ctx context.Context, id string) error {
+	query := `DELETE FROM perspectives WHERE id = $1`
+	res, err := p.db.ExecContext(ctx, query, id)
+	if err != nil {
+		return err
+	}
+	cnt, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if cnt == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+func (p *PostgresRepository) GetPerspectiveSettings(ctx context.Context, perspectiveID string) (*models.PerspectiveSettings, error) {
+	query := `SELECT id, perspective_id, show_financial_trend, calculate_average_daily_spend, calculate_average_return_yoy, track_ruined_date, custom_daily_spend, created_at, updated_at
+	          FROM perspective_settings WHERE perspective_id = $1`
+	var s models.PerspectiveSettings
+	err := p.db.QueryRowContext(ctx, query, perspectiveID).Scan(
+		&s.ID, &s.PerspectiveID, &s.ShowFinancialTrend, &s.CalculateAverageDailySpend,
+		&s.CalculateAverageReturnYoY, &s.TrackRuinedDate, &s.CustomDailySpend, &s.CreatedAt, &s.UpdatedAt,
+	)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrNotFound
+		}
+		return nil, err
+	}
+	return &s, nil
+}
+
+func (p *PostgresRepository) UpsertPerspectiveSettings(ctx context.Context, s *models.PerspectiveSettings) error {
+	query := `INSERT INTO perspective_settings (id, perspective_id, show_financial_trend, calculate_average_daily_spend, calculate_average_return_yoy, track_ruined_date, custom_daily_spend, created_at, updated_at)
+	          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+	          ON CONFLICT (perspective_id)
+	          DO UPDATE SET show_financial_trend = EXCLUDED.show_financial_trend,
+	                        calculate_average_daily_spend = EXCLUDED.calculate_average_daily_spend,
+	                        calculate_average_return_yoy = EXCLUDED.calculate_average_return_yoy,
+	                        track_ruined_date = EXCLUDED.track_ruined_date,
+	                        custom_daily_spend = EXCLUDED.custom_daily_spend,
+	                        updated_at = EXCLUDED.updated_at`
+	_, err := p.db.ExecContext(ctx, query, s.ID, s.PerspectiveID, s.ShowFinancialTrend, s.CalculateAverageDailySpend, s.CalculateAverageReturnYoY, s.TrackRuinedDate, s.CustomDailySpend, s.CreatedAt, s.UpdatedAt)
+	return err
+}
+
+func (p *PostgresRepository) AddPerspectiveAccount(ctx context.Context, pa *models.PerspectiveAccount) error {
+	query := `INSERT INTO perspective_accounts (id, perspective_id, account_id, created_at)
+	          VALUES ($1, $2, $3, $4)`
+	_, err := p.db.ExecContext(ctx, query, pa.ID, pa.PerspectiveID, pa.AccountID, pa.CreatedAt)
+	if err != nil {
+		if isUniqueViolation(err) {
+			return ErrConflict
+		}
+		return err
+	}
+	return nil
+}
+
+func (p *PostgresRepository) RemovePerspectiveAccount(ctx context.Context, perspectiveID, accountID string) error {
+	query := `DELETE FROM perspective_accounts WHERE perspective_id = $1 AND account_id = $2`
+	res, err := p.db.ExecContext(ctx, query, perspectiveID, accountID)
+	if err != nil {
+		return err
+	}
+	cnt, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if cnt == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+func (p *PostgresRepository) ListPerspectiveAccountIDs(ctx context.Context, perspectiveID string) ([]string, error) {
+	query := `SELECT account_id FROM perspective_accounts WHERE perspective_id = $1 ORDER BY created_at ASC`
+	rows, err := p.db.QueryContext(ctx, query, perspectiveID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var result []string
+	for rows.Next() {
+		var accID string
+		if err := rows.Scan(&accID); err != nil {
+			return nil, err
+		}
+		result = append(result, accID)
+	}
+	if result == nil {
+		result = make([]string, 0)
+	}
+	return result, rows.Err()
+}
+
+func (p *PostgresRepository) GrantPerspectiveAccess(ctx context.Context, access *models.PerspectiveAccess) error {
+	query := `INSERT INTO perspective_access (id, perspective_id, user_id, access_level, created_at, updated_at)
+	          VALUES ($1, $2, $3, $4, $5, $6)
+	          ON CONFLICT (perspective_id, user_id)
+	          DO UPDATE SET access_level = EXCLUDED.access_level, updated_at = EXCLUDED.updated_at`
+	_, err := p.db.ExecContext(ctx, query, access.ID, access.PerspectiveID, access.UserID, access.AccessLevel, access.CreatedAt, access.UpdatedAt)
+	return err
+}
+
+func (p *PostgresRepository) GetPerspectiveAccess(ctx context.Context, perspectiveID, userID string) (*models.PerspectiveAccess, error) {
+	query := `SELECT id, perspective_id, user_id, access_level, created_at, updated_at
+	          FROM perspective_access WHERE perspective_id = $1 AND user_id = $2`
+	var a models.PerspectiveAccess
+	err := p.db.QueryRowContext(ctx, query, perspectiveID, userID).Scan(&a.ID, &a.PerspectiveID, &a.UserID, &a.AccessLevel, &a.CreatedAt, &a.UpdatedAt)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrNotFound
+		}
+		return nil, err
+	}
+	return &a, nil
+}
+
+func (p *PostgresRepository) ListPerspectiveAccess(ctx context.Context, perspectiveID string) ([]*models.PerspectiveAccess, error) {
+	query := `SELECT id, perspective_id, user_id, access_level, created_at, updated_at
+	          FROM perspective_access WHERE perspective_id = $1 ORDER BY created_at ASC`
+	rows, err := p.db.QueryContext(ctx, query, perspectiveID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var result []*models.PerspectiveAccess
+	for rows.Next() {
+		var a models.PerspectiveAccess
+		if err := rows.Scan(&a.ID, &a.PerspectiveID, &a.UserID, &a.AccessLevel, &a.CreatedAt, &a.UpdatedAt); err != nil {
+			return nil, err
+		}
+		result = append(result, &a)
+	}
+	if result == nil {
+		result = make([]*models.PerspectiveAccess, 0)
+	}
+	return result, rows.Err()
+}
+
+func (p *PostgresRepository) RevokePerspectiveAccess(ctx context.Context, perspectiveID, userID string) error {
+	query := `DELETE FROM perspective_access WHERE perspective_id = $1 AND user_id = $2`
+	res, err := p.db.ExecContext(ctx, query, perspectiveID, userID)
+	if err != nil {
+		return err
+	}
+	cnt, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if cnt == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+

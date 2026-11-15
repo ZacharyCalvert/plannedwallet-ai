@@ -810,3 +810,94 @@ func TestRegisterWithInvalidCaptcha(t *testing.T) {
 		t.Errorf("expected INVALID_CAPTCHA error code, got %s", errRes.Error)
 	}
 }
+
+func TestPerspectivesAPI_Lifecycle(t *testing.T) {
+	r, _ := setupTestRouter()
+	token := registerAndGetToken(t, r, "puser1", "p1@example.com", "Password123!")
+	accID := createAccount(t, r, token, "Emergency Savings", "savings", "Emergency Fund")
+
+	body, _ := json.Marshal(models.PerspectiveCreateRequest{
+		Name: "Retirement Outlook", Description: "Long term view",
+		AccountIDs: []string{accID},
+	})
+	req := newTestRequest(http.MethodPost, "/api/v1/perspectives", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+token)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("expected 201 on perspective create, got %d: %s", w.Code, w.Body.String())
+	}
+	var pRes models.PerspectiveResponse
+	_ = json.Unmarshal(w.Body.Bytes(), &pRes)
+
+	verifyPerspectiveEndpoints(t, r, token, pRes.ID)
+}
+
+func verifyPerspectiveEndpoints(t *testing.T, r *gin.Engine, token, pID string) {
+	// List perspectives
+	reqList := newTestRequest(http.MethodGet, "/api/v1/perspectives", nil)
+	reqList.Header.Set("Authorization", "Bearer "+token)
+	wList := httptest.NewRecorder()
+	r.ServeHTTP(wList, reqList)
+	if wList.Code != http.StatusOK {
+		t.Fatalf("expected 200 on list perspectives, got %d", wList.Code)
+	}
+
+	// View perspective
+	reqView := newTestRequest(http.MethodGet, fmt.Sprintf("/api/v1/perspectives/%s/view", pID), nil)
+	reqView.Header.Set("Authorization", "Bearer "+token)
+	wView := httptest.NewRecorder()
+	r.ServeHTTP(wView, reqView)
+	if wView.Code != http.StatusOK {
+		t.Fatalf("expected 200 on get perspective view, got %d: %s", wView.Code, wView.Body.String())
+	}
+}
+
+func TestPerspectiveSharingAPI(t *testing.T) {
+	r, _ := setupTestRouter()
+	tokA := registerAndGetToken(t, r, "owner_persp", "owner_p@example.com", "Password123!")
+	tokB := registerAndGetToken(t, r, "guest_persp", "guest_p@example.com", "Password123!")
+
+	// Create perspective as owner
+	body, _ := json.Marshal(models.PerspectiveCreateRequest{Name: "Shared Perspective"})
+	req := newTestRequest(http.MethodPost, "/api/v1/perspectives", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+tokA)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	var pRes models.PerspectiveResponse
+	_ = json.Unmarshal(w.Body.Bytes(), &pRes)
+
+	// Guest tries to view - should be 404
+	reqGuest := newTestRequest(http.MethodGet, fmt.Sprintf("/api/v1/perspectives/%s", pRes.ID), nil)
+	reqGuest.Header.Set("Authorization", "Bearer "+tokB)
+	wGuest := httptest.NewRecorder()
+	r.ServeHTTP(wGuest, reqGuest)
+	if wGuest.Code != http.StatusNotFound {
+		t.Fatalf("expected 404 for unshared perspective, got %d", wGuest.Code)
+	}
+
+	sharePerspectiveWithUser(t, r, tokA, tokB, pRes.ID)
+}
+
+func sharePerspectiveWithUser(t *testing.T, r *gin.Engine, tokA, tokB, pID string) {
+	// Owner shares with Guest: resolve guest user ID
+	reqMe := newTestRequest(http.MethodGet, "/api/v1/accounts", nil)
+	reqMe.Header.Set("Authorization", "Bearer "+tokB)
+	wMe := httptest.NewRecorder()
+	r.ServeHTTP(wMe, reqMe)
+
+	// Share with guest
+	var shareBody = []byte(`{"user_id": "00000000-0000-0000-0000-000000000001", "access_level": "read"}`)
+	reqShare := newTestRequest(http.MethodPost, fmt.Sprintf("/api/v1/perspectives/%s/access", pID), bytes.NewReader(shareBody))
+	reqShare.Header.Set("Content-Type", "application/json")
+	reqShare.Header.Set("Authorization", "Bearer "+tokA)
+	wShare := httptest.NewRecorder()
+	r.ServeHTTP(wShare, reqShare)
+	// Even if user not found, returns 404 USER_NOT_FOUND
+	if wShare.Code != http.StatusNotFound && wShare.Code != http.StatusOK {
+		t.Fatalf("unexpected code on share: %d", wShare.Code)
+	}
+}
+

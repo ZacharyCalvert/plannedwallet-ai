@@ -440,3 +440,122 @@ type ErrorResponse struct {
 	Message   string    `json:"message"`
 	Timestamp time.Time `json:"timestamp"`
 }
+
+// Perspective domain model representing a multi-account aggregated viewing window.
+type Perspective struct {
+	ID          string    `json:"id"`
+	UserID      string    `json:"user_id"`
+	Name        string    `json:"name"`
+	Description string    `json:"description"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
+}
+
+// PerspectiveSettings domain model holding viewing window calculation and display preferences.
+type PerspectiveSettings struct {
+	ID                         string    `json:"id"`
+	PerspectiveID              string    `json:"perspective_id"`
+	ShowFinancialTrend         bool      `json:"show_financial_trend"`
+	CalculateAverageDailySpend bool      `json:"calculate_average_daily_spend"`
+	CalculateAverageReturnYoY  bool      `json:"calculate_average_return_yoy"`
+	TrackRuinedDate            bool      `json:"track_ruined_date"`
+	CustomDailySpend           *float64  `json:"custom_daily_spend,omitempty"`
+	CreatedAt                  time.Time `json:"created_at"`
+	UpdatedAt                  time.Time `json:"updated_at"`
+}
+
+// PerspectiveAccount domain model representing the link between a perspective and an account.
+type PerspectiveAccount struct {
+	ID            string    `json:"id"`
+	PerspectiveID string    `json:"perspective_id"`
+	AccountID     string    `json:"account_id"`
+	CreatedAt     time.Time `json:"created_at"`
+}
+
+// PerspectiveAccess domain model representing user sharing and permission on a perspective.
+type PerspectiveAccess struct {
+	ID            string      `json:"id"`
+	PerspectiveID string      `json:"perspective_id"`
+	UserID        string      `json:"user_id"`
+	AccessLevel   AccessLevel `json:"access_level"`
+	CreatedAt     time.Time   `json:"created_at"`
+	UpdatedAt     time.Time   `json:"updated_at"`
+}
+
+// PerspectiveCreateRequest represents the payload to create a financial perspective.
+type PerspectiveCreateRequest struct {
+	Name        string                    `json:"name" binding:"required,min=1,max=100"`
+	Description string                    `json:"description" binding:"max=255"`
+	AccountIDs  []string                  `json:"account_ids,omitempty"`
+	Settings    *PerspectiveSettingsInput `json:"settings,omitempty"`
+}
+
+// PerspectiveUpdateRequest represents the payload to update perspective name/description.
+type PerspectiveUpdateRequest struct {
+	Name        string `json:"name" binding:"required,min=1,max=100"`
+	Description string `json:"description" binding:"max=255"`
+}
+
+// PerspectiveSettingsInput represents the configurable settings for a perspective.
+type PerspectiveSettingsInput struct {
+	ShowFinancialTrend         *bool    `json:"show_financial_trend,omitempty"`
+	CalculateAverageDailySpend *bool    `json:"calculate_average_daily_spend,omitempty"`
+	CalculateAverageReturnYoY  *bool    `json:"calculate_average_return_yoy,omitempty"`
+	TrackRuinedDate            *bool    `json:"track_ruined_date,omitempty"`
+	CustomDailySpend           *float64 `json:"custom_daily_spend,omitempty"`
+}
+
+// PerspectiveResponse represents a perspective returned by the API.
+type PerspectiveResponse struct {
+	ID          string               `json:"id"`
+	UserID      string               `json:"user_id"`
+	Name        string               `json:"name"`
+	Description string               `json:"description"`
+	AccessLevel AccessLevel          `json:"access_level"`
+	Settings    *PerspectiveSettings `json:"settings,omitempty"`
+	AccountIDs  []string             `json:"account_ids,omitempty"`
+	CreatedAt   time.Time            `json:"created_at"`
+	UpdatedAt   time.Time            `json:"updated_at"`
+}
+
+// PerspectiveAccessGrantRequest represents the request to grant or update sharing permissions.
+type PerspectiveAccessGrantRequest struct {
+	UserID      string      `json:"user_id" binding:"required"`
+	AccessLevel AccessLevel `json:"access_level" binding:"required"`
+}
+
+// PerspectiveAccessResponse represents access grant details returned by the API.
+type PerspectiveAccessResponse struct {
+	ID            string      `json:"id"`
+	PerspectiveID string      `json:"perspective_id"`
+	UserID        string      `json:"user_id"`
+	AccessLevel   AccessLevel `json:"access_level"`
+	CreatedAt     time.Time   `json:"created_at"`
+	UpdatedAt     time.Time   `json:"updated_at"`
+}
+
+// PerspectiveAccountLinkRequest represents the request to link an account to a perspective.
+type PerspectiveAccountLinkRequest struct {
+	AccountID string `json:"account_id" binding:"required"`
+}
+
+// PerspectiveTrendPoint represents a point-in-time aggregate valuation across linked accounts.
+type PerspectiveTrendPoint struct {
+	Date          string             `json:"date"`
+	TotalValue    float64            `json:"total_value"`
+	AccountValues map[string]float64 `json:"account_values,omitempty"`
+}
+
+// PerspectiveViewResponse represents the comprehensive aggregated viewing window response.
+type PerspectiveViewResponse struct {
+	Perspective       *PerspectiveResponse    `json:"perspective"`
+	Settings          *PerspectiveSettings    `json:"settings"`
+	Accounts          []*AccountResponse      `json:"accounts"`
+	CurrentTotalValue float64                 `json:"current_total_value"`
+	Trend             []PerspectiveTrendPoint `json:"trend,omitempty"`
+	AverageDailySpend *float64                `json:"average_daily_spend,omitempty"`
+	AverageReturnYoY  *float64                `json:"average_return_yoy,omitempty"`
+	RuinedDate        *string                 `json:"ruined_date,omitempty"`
+	DaysUntilRuined   *int                    `json:"days_until_ruined,omitempty"`
+}
+

@@ -795,3 +795,62 @@ func setupBtcHoldings(ctx context.Context, ctrl *controller.Controller, uID, acc
 	_, _ = ctrl.AddAccountAsset(ctx, uID, accID, models.AccountAssetAddRequest{AssetID: btcID, Quantity: &q2, AssetDate: "2026-07-01"})
 	_, _ = ctrl.AddAccountAsset(ctx, uID, accID, models.AccountAssetAddRequest{AssetID: btcID, Quantity: &q3, AssetDate: "2026-10-01"})
 }
+
+func TestPerspectiveController_LifecycleAndView(t *testing.T) {
+	ctrl, repo := setupController()
+	ctx := context.Background()
+
+	u, _ := ctrl.RegisterUser(ctx, models.UserRegistrationRequest{
+		Username: "perspective_user", Email: "persp@test.com", Password: "ValidPass123!",
+	})
+	snapAcc, _ := ctrl.CreateAccount(ctx, u.ID, models.AccountCreationRequest{
+		Name: "Retirement Snapshot", Type: "snapshot", Description: "IRA Account",
+	})
+	v1, v2 := 10000.0, 12000.0
+	_, _ = ctrl.CreateAccountSnapshot(ctx, u.ID, snapAcc.ID, models.AccountSnapshotCreateRequest{Value: &v1, SnapshotDate: "2025-01-01"})
+	_, _ = ctrl.CreateAccountSnapshot(ctx, u.ID, snapAcc.ID, models.AccountSnapshotCreateRequest{Value: &v2, SnapshotDate: "2026-01-01"})
+
+	chkAcc, _ := ctrl.CreateAccount(ctx, u.ID, models.AccountCreationRequest{
+		Name: "Checking Ledger", Type: "checking", Description: "Everyday Checking",
+	})
+	dep, exp := 5000.0, -100.0
+	_, _ = ctrl.CreateCheckingRecord(ctx, u.ID, chkAcc.ID, models.CheckingRecordCreateRequest{Value: &dep, DateSent: "2026-01-01", Entity: "Payroll"})
+	_, _ = ctrl.CreateCheckingRecord(ctx, u.ID, chkAcc.ID, models.CheckingRecordCreateRequest{Value: &exp, DateSent: "2026-01-11", Entity: "Store"})
+
+	testPerspectiveFlow(t, ctx, ctrl, repo, u.ID, snapAcc.ID, chkAcc.ID)
+}
+
+func testPerspectiveFlow(t *testing.T, ctx context.Context, ctrl *controller.Controller, _ repository.Repository, uID, snapID, chkID string) {
+	trendTrue, spendTrue, yoyTrue, ruinedTrue := true, true, true, true
+	pRes, err := ctrl.CreatePerspective(ctx, uID, models.PerspectiveCreateRequest{
+		Name: "Total Net Worth", Description: "Combined view",
+		AccountIDs: []string{snapID, chkID},
+		Settings: &models.PerspectiveSettingsInput{
+			ShowFinancialTrend:         &trendTrue,
+			CalculateAverageDailySpend: &spendTrue,
+			CalculateAverageReturnYoY:  &yoyTrue,
+			TrackRuinedDate:            &ruinedTrue,
+		},
+	})
+	if err != nil || pRes.Name != "Total Net Worth" {
+		t.Fatalf("failed to create perspective: %v", err)
+	}
+
+	view, err := ctrl.GetPerspectiveView(ctx, uID, pRes.ID)
+	if err != nil {
+		t.Fatalf("failed to get perspective view: %v", err)
+	}
+	if view.CurrentTotalValue != 16900.0 { // 12000 (snapshot) + 4900 (checking: 5000 - 100)
+		t.Fatalf("expected current total 16900.0, got %f", view.CurrentTotalValue)
+	}
+	if len(view.Trend) == 0 {
+		t.Fatalf("expected non-empty trend")
+	}
+	if view.AverageDailySpend == nil || *view.AverageDailySpend <= 0 {
+		t.Fatalf("expected calculated average daily spend, got %v", view.AverageDailySpend)
+	}
+	if view.RuinedDate == nil || view.DaysUntilRuined == nil {
+		t.Fatalf("expected ruined forecast date and days, got %v, %v", view.RuinedDate, view.DaysUntilRuined)
+	}
+}
+
