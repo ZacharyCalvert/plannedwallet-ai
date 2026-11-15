@@ -1,13 +1,15 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Account, UserSession } from '../lib/types';
-import { fetchAccounts } from '../lib/api';
+import { Account, Perspective, UserSession } from '../lib/types';
+import { fetchAccounts, fetchPerspectives } from '../lib/api';
 import { AccountsPane } from './AccountsPane';
 import { NewAccountForm } from './NewAccountForm';
+import { NewPerspectiveForm } from './NewPerspectiveForm';
 import { AccountDetail } from './AccountDetail';
 import { SnapshotAccountDetail } from './SnapshotAccountDetail';
 import { AssetAccountDetail } from './AssetAccountDetail';
+import { PerspectiveDetail } from './PerspectiveDetail';
 
 interface DashboardProps {
   session: UserSession;
@@ -15,60 +17,131 @@ interface DashboardProps {
 
 export function Dashboard({ session }: DashboardProps) {
   const [accounts, setAccounts] = useState<Account[]>([]);
-  const [selected, setSelected] = useState<Account | null>(null);
-  const [isCreating, setIsCreating] = useState(false);
+  const [perspectives, setPerspectives] = useState<Perspective[]>([]);
+  const [selectedAccount, setSelectedAccount] = useState<Account | null>(null);
+  const [selectedPerspective, setSelectedPerspective] = useState<Perspective | null>(null);
+  const [activeCreation, setActiveCreation] = useState<'account' | 'perspective' | null>(null);
 
-  const loadAccounts = async () => {
+  const loadData = async () => {
     try {
-      const list = await fetchAccounts(session.token);
-      setAccounts(list);
-      if (list.length > 0 && !selected) {
-        setSelected(list[0]);
+      const [accList, perspList] = await Promise.all([
+        fetchAccounts(session.token).catch(() => []),
+        fetchPerspectives(session.token).catch(() => []),
+      ]);
+      setAccounts(accList);
+      setPerspectives(perspList);
+
+      // Default selection on first load if nothing is selected
+      if (!selectedAccount && !selectedPerspective) {
+        if (perspList.length > 0) {
+          setSelectedPerspective(perspList[0]);
+        } else if (accList.length > 0) {
+          setSelectedAccount(accList[0]);
+        }
       }
     } catch {
-      // Network or empty load handled gracefully
+      // Graceful error handling
     }
   };
 
   useEffect(() => {
-    loadAccounts();
+    loadData();
   }, [session.token]);
 
-  const handleCreated = (newAcc: Account) => {
+  const handleAccountCreated = (newAcc: Account) => {
     setAccounts((prev) => [newAcc, ...prev]);
-    setSelected(newAcc);
-    setIsCreating(false);
+    setSelectedAccount(newAcc);
+    setSelectedPerspective(null);
+    setActiveCreation(null);
+  };
+
+  const handlePerspectiveCreated = (newPersp: Perspective) => {
+    setPerspectives((prev) => [newPersp, ...prev]);
+    setSelectedPerspective(newPersp);
+    setSelectedAccount(null);
+    setActiveCreation(null);
+  };
+
+  const handlePerspectiveUpdated = (updated: Perspective) => {
+    setPerspectives((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
+    if (selectedPerspective?.id === updated.id) {
+      setSelectedPerspective(updated);
+    }
+  };
+
+  const handlePerspectiveDeleted = (deletedId: string) => {
+    setPerspectives((prev) => prev.filter((p) => p.id !== deletedId));
+    if (selectedPerspective?.id === deletedId) {
+      setSelectedPerspective(null);
+      if (accounts.length > 0) {
+        setSelectedAccount(accounts[0]);
+      }
+    }
   };
 
   return (
     <div className="dashboard-layout">
       <AccountsPane
         accounts={accounts}
-        selectedId={selected?.id ?? null}
+        selectedAccountId={selectedAccount?.id ?? null}
         onSelectAccount={(acc) => {
-          setSelected(acc);
-          setIsCreating(false);
+          setSelectedAccount(acc);
+          setSelectedPerspective(null);
+          setActiveCreation(null);
         }}
-        onNewAccountClick={() => setIsCreating(true)}
+        perspectives={perspectives}
+        selectedPerspectiveId={selectedPerspective?.id ?? null}
+        onSelectPerspective={(p) => {
+          setSelectedPerspective(p);
+          setSelectedAccount(null);
+          setActiveCreation(null);
+        }}
+        onNewAccountClick={() => {
+          setActiveCreation('account');
+          setSelectedAccount(null);
+          setSelectedPerspective(null);
+        }}
+        onNewPerspectiveClick={() => {
+          setActiveCreation('perspective');
+          setSelectedAccount(null);
+          setSelectedPerspective(null);
+        }}
       />
       <main className="dashboard-content">
-        {isCreating ? (
+        {activeCreation === 'account' ? (
           <NewAccountForm
             token={session.token}
-            onSuccess={handleCreated}
-            onCancel={() => setIsCreating(false)}
+            onSuccess={handleAccountCreated}
+            onCancel={() => setActiveCreation(null)}
           />
-        ) : selected ? (
-          selected.type === 'snapshot' ? (
-            <SnapshotAccountDetail account={selected} token={session.token} />
-          ) : selected.type === 'asset' || selected.type === 'assets' ? (
-            <AssetAccountDetail account={selected} token={session.token} />
+        ) : activeCreation === 'perspective' ? (
+          <NewPerspectiveForm
+            token={session.token}
+            allAccounts={accounts}
+            onSuccess={handlePerspectiveCreated}
+            onCancel={() => setActiveCreation(null)}
+          />
+        ) : selectedPerspective ? (
+          <PerspectiveDetail
+            perspective={selectedPerspective}
+            token={session.token}
+            allAccounts={accounts}
+            onPerspectiveUpdated={handlePerspectiveUpdated}
+            onPerspectiveDeleted={handlePerspectiveDeleted}
+          />
+        ) : selectedAccount ? (
+          selectedAccount.type === 'snapshot' ? (
+            <SnapshotAccountDetail account={selectedAccount} token={session.token} />
+          ) : selectedAccount.type === 'asset' || selectedAccount.type === 'assets' ? (
+            <AssetAccountDetail account={selectedAccount} token={session.token} />
           ) : (
-            <AccountDetail account={selected} token={session.token} />
+            <AccountDetail account={selectedAccount} token={session.token} />
           )
         ) : (
           <div className="card empty-prompt">
-            <p>Select an account from the left pane or click <strong>+</strong> to create an account.</p>
+            <p>
+              Select an account or perspective from the left pane or click <strong>+</strong> to add one.
+            </p>
           </div>
         )}
       </main>

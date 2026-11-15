@@ -23,6 +23,10 @@
   --asset: #0d9488;
   --asset-bg: #f0fdfa;
   --asset-border: #99f6e4;
+  --perspective: #6366f1;
+  --perspective-hover: #4f46e5;
+  --perspective-bg: #eef2ff;
+  --perspective-border: #c7d2fe;
 }
 
 * {

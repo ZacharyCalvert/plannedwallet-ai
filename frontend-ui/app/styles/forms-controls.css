@@ -38,6 +38,44 @@
   color: #64748b;
 }
 
+/* Checkbox and Radio styling inside forms */
+.checkbox-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-top: 0.25rem;
+}
+
+.checkbox-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.65rem;
+  cursor: pointer;
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: #334155;
+  user-select: none;
+  line-height: 1.4;
+}
+
+.checkbox-label input[type="checkbox"],
+.account-checkbox-item input[type="checkbox"],
+.form-group input[type="checkbox"] {
+  width: 1.15rem;
+  min-width: 1.15rem;
+  height: 1.15rem;
+  margin: 0;
+  padding: 0;
+  cursor: pointer;
+  flex-shrink: 0;
+  accent-color: var(--primary);
+}
+
+.checkbox-label span {
+  display: inline-block;
+  color: #1e293b;
+}
+
 .form-hint {
   font-size: 0.75rem;
   color: var(--muted);

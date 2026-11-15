@@ -178,6 +178,113 @@
   box-shadow: 0 0 0 1px var(--asset);
 }
 
+.badge-perspective {
+  background-color: var(--perspective-bg);
+  color: var(--perspective);
+  border: 1px solid var(--perspective-border);
+}
+
+.account-card-perspective {
+  border-color: #e0e7ff;
+  background-color: #f8faff;
+}
+
+.account-card-perspective:hover {
+  border-color: #a5b4fc;
+  background-color: #eef2ff;
+}
+
+.account-card-perspective.selected {
+  border-color: var(--perspective);
+  background-color: #eef2ff;
+  box-shadow: 0 0 0 1px var(--perspective);
+}
+
+/* Plus Dropdown Menu */
+.plus-menu-container {
+  position: relative;
+  display: inline-block;
+}
+
+.plus-dropdown-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  background-color: #ffffff;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1);
+  padding: 0.35rem;
+  min-width: 175px;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  width: 100%;
+  padding: 0.55rem 0.75rem;
+  border: none;
+  background: transparent;
+  color: var(--foreground);
+  font-size: 0.875rem;
+  font-weight: 500;
+  border-radius: 6px;
+  cursor: pointer;
+  text-align: left;
+  transition: background-color 0.15s ease;
+}
+
+.dropdown-item:hover {
+  background-color: #f1f5f9;
+  color: var(--primary);
+}
+
+.dropdown-icon {
+  font-size: 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+}
+
+/* Accounts Pane Sections */
+.pane-section {
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 1.25rem;
+}
+
+.pane-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.25rem 0.35rem 0.5rem 0.35rem;
+  border-bottom: 1px solid #f1f5f9;
+  margin-bottom: 0.5rem;
+}
+
+.pane-section-title {
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+}
+
+.pane-section-count {
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: #64748b;
+  background-color: #f1f5f9;
+  padding: 0.1rem 0.45rem;
+  border-radius: 9999px;
+}
+
 /* Dashboard Main Content */
 .dashboard-content {
   flex: 1;

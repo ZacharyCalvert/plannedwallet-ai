@@ -25,6 +25,7 @@ Medium priority:
 - [x] Disaster recovery / backups / automation reload of data
 - [x] Data retention
 Add perspectives - graphical trending of net worth
+- [x] Bulk data upload (json/csv)
 rollup data (monthly)
 Reconcile calculations - locked records for edits + snapshot of net worth?
 account settings: reconcile account on month, or daily

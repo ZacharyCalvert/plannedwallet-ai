@@ -23,6 +23,13 @@ import {
   UpdateSnapshotRequest,
   UpdateStoreRecordRequest,
   UserRegistrationResponse,
+  Perspective,
+  PerspectiveSettings,
+  PerspectiveSettingsInput,
+  PerspectiveTrendPoint,
+  PerspectiveViewResponse,
+  PerspectiveAccess,
+  CreatePerspectiveRequest,
 } from './types';
 import { createTraceparent, logTraceError, logTraceInfo } from './trace';
 
@@ -768,3 +775,227 @@ export async function fetchAssetStoreTrend(
   const data = await res.json();
   return Array.isArray(data) ? data : [];
 }
+
+export async function fetchPerspectives(token: string): Promise<Perspective[]> {
+  const res = await tracedFetch('/api/v1/perspectives', {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) {
+    throw new Error('Failed to load perspectives');
+  }
+  const data = await res.json();
+  return Array.isArray(data) ? data : [];
+}
+
+export async function fetchPerspective(token: string, id: string): Promise<Perspective> {
+  const res = await tracedFetch(`/api/v1/perspectives/${encodeURIComponent(id)}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) {
+    throw new Error('Failed to load perspective');
+  }
+  return res.json();
+}
+
+export async function createPerspective(
+  token: string,
+  data: CreatePerspectiveRequest
+): Promise<Perspective> {
+  const res = await tracedFetch('/api/v1/perspectives', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || 'Failed to create perspective');
+  }
+  return res.json();
+}
+
+export async function updatePerspective(
+  token: string,
+  id: string,
+  name: string,
+  description: string
+): Promise<Perspective> {
+  const res = await tracedFetch(`/api/v1/perspectives/${encodeURIComponent(id)}`, {
+    method: 'PUT',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ name, description }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || 'Failed to update perspective');
+  }
+  return res.json();
+}
+
+export async function deletePerspective(token: string, id: string): Promise<void> {
+  const res = await tracedFetch(`/api/v1/perspectives/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || 'Failed to delete perspective');
+  }
+}
+
+export async function fetchPerspectiveSettings(
+  token: string,
+  id: string
+): Promise<PerspectiveSettings> {
+  const res = await tracedFetch(`/api/v1/perspectives/${encodeURIComponent(id)}/settings`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) {
+    throw new Error('Failed to load perspective settings');
+  }
+  return res.json();
+}
+
+export async function updatePerspectiveSettings(
+  token: string,
+  id: string,
+  settings: PerspectiveSettingsInput
+): Promise<PerspectiveSettings> {
+  const res = await tracedFetch(`/api/v1/perspectives/${encodeURIComponent(id)}/settings`, {
+    method: 'PUT',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(settings),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || 'Failed to update settings');
+  }
+  return res.json();
+}
+
+export async function fetchPerspectiveAccounts(
+  token: string,
+  id: string
+): Promise<Account[]> {
+  const res = await tracedFetch(`/api/v1/perspectives/${encodeURIComponent(id)}/accounts`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) {
+    throw new Error('Failed to load perspective accounts');
+  }
+  const data = await res.json();
+  return Array.isArray(data) ? data : [];
+}
+
+export async function linkPerspectiveAccount(
+  token: string,
+  id: string,
+  accountId: string
+): Promise<void> {
+  const res = await tracedFetch(`/api/v1/perspectives/${encodeURIComponent(id)}/accounts`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ account_id: accountId }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || 'Failed to link account');
+  }
+}
+
+export async function unlinkPerspectiveAccount(
+  token: string,
+  id: string,
+  accountId: string
+): Promise<void> {
+  const res = await tracedFetch(
+    `/api/v1/perspectives/${encodeURIComponent(id)}/accounts/${encodeURIComponent(accountId)}`,
+    {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${token}` },
+    }
+  );
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || 'Failed to unlink account');
+  }
+}
+
+export async function fetchPerspectiveAccess(
+  token: string,
+  id: string
+): Promise<PerspectiveAccess[]> {
+  const res = await tracedFetch(`/api/v1/perspectives/${encodeURIComponent(id)}/access`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) {
+    throw new Error('Failed to load perspective access');
+  }
+  const data = await res.json();
+  return Array.isArray(data) ? data : [];
+}
+
+export async function grantPerspectiveAccess(
+  token: string,
+  id: string,
+  userId: string,
+  accessLevel: string
+): Promise<PerspectiveAccess> {
+  const res = await tracedFetch(`/api/v1/perspectives/${encodeURIComponent(id)}/access`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ user_id: userId, access_level: accessLevel }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || 'Failed to grant perspective access');
+  }
+  return res.json();
+}
+
+export async function revokePerspectiveAccess(
+  token: string,
+  id: string,
+  userId: string
+): Promise<void> {
+  const res = await tracedFetch(
+    `/api/v1/perspectives/${encodeURIComponent(id)}/access/${encodeURIComponent(userId)}`,
+    {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${token}` },
+    }
+  );
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || 'Failed to revoke perspective access');
+  }
+}
+
+export async function fetchPerspectiveView(
+  token: string,
+  id: string
+): Promise<PerspectiveViewResponse> {
+  const res = await tracedFetch(`/api/v1/perspectives/${encodeURIComponent(id)}/view`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || 'Failed to load perspective view');
+  }
+  return res.json();
+}
+

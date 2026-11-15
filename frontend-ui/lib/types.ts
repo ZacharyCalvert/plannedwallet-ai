@@ -188,3 +188,70 @@ export interface UpdateAccountAssetRequest {
   quantity?: number;
   asset_date?: string;
 }
+
+export interface PerspectiveSettings {
+  id: string;
+  perspective_id: string;
+  show_financial_trend: boolean;
+  calculate_average_daily_spend: boolean;
+  calculate_average_return_yoy: boolean;
+  track_ruined_date: boolean;
+  custom_daily_spend?: number | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PerspectiveSettingsInput {
+  show_financial_trend?: boolean;
+  calculate_average_daily_spend?: boolean;
+  calculate_average_return_yoy?: boolean;
+  track_ruined_date?: boolean;
+  custom_daily_spend?: number | null;
+}
+
+export interface Perspective {
+  id: string;
+  user_id: string;
+  name: string;
+  description: string;
+  access_level: 'read' | 'edit' | 'admin';
+  settings?: PerspectiveSettings;
+  account_ids?: string[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreatePerspectiveRequest {
+  name: string;
+  description?: string;
+  account_ids?: string[];
+  settings?: PerspectiveSettingsInput;
+}
+
+export interface PerspectiveTrendPoint {
+  date: string;
+  total_value: number;
+  account_values?: Record<string, number>;
+}
+
+export interface PerspectiveViewResponse {
+  perspective: Perspective;
+  settings: PerspectiveSettings;
+  accounts: Account[];
+  current_total_value: number;
+  trend?: PerspectiveTrendPoint[];
+  average_daily_spend?: number | null;
+  average_return_yoy?: number | null;
+  ruined_date?: string | null;
+  days_until_ruined?: number | null;
+}
+
+export interface PerspectiveAccess {
+  id: string;
+  perspective_id: string;
+  user_id: string;
+  access_level: 'read' | 'edit' | 'admin';
+  created_at: string;
+  updated_at: string;
+}
+
