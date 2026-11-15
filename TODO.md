@@ -10,31 +10,27 @@ Top features:
 - [x] CAPTCHA for account setup
 - [x] asset account -> like X bitcoin / total worth of the account
 - [x] Enforce uniqueness of email as well as user
-Update user agent to enforce 12 factor behaviors
+- [x] Update user agent to enforce 12 factor behaviors
 
 Top priority:
-Infrastructure + auto deploy to staging
-enforce REQUIRE_CAPTCHA set to true as environment variable
-Create JWT secret and mount as required field for JWT issuance / signing
-
-Production ready:
-- legal disclaimer
-- Means to halt/disable signups (new accounts)
-- Establish means to observe activity / record counts
-- Calculate space, size, cost (confirm limits for usage planning)
+- [x] Infrastructure + auto deploy to staging
+- [x] enforce REQUIRE_CAPTCHA set to true as environment variable
+- [x] git statCreate JWT secret and mount as required field for JWT issuance / signing
 
 Medium priority:
-Add dependabot monitoring of npm, docker images, golang dependencies
-branch protections, code owners, etc.
-Captcha on account creation - creation only
-Infrastructure + auto deploy to production
-Disaster recovery / backups / automation reload of data
-Data retention
-graphical trending of net worth
+- [x] Add dependabot monitoring of npm, docker images, golang dependencies
+- [x] branch protections, code owners, etc.
+- [x] Captcha on account creation - creation only
+- [x] Infrastructure + auto deploy to production
+- [x] Disaster recovery / backups / automation reload of data
+- [x] Data retention
+Add perspectives - graphical trending of net worth
 rollup data (monthly)
 Reconcile calculations - locked records for edits + snapshot of net worth?
 account settings: reconcile account on month, or daily
 Bill reminders
+Add Money-in / Money-out features (trending) for asset and snapshot accounts to track growth/change
+create batch job for data grabs (indexes/prices, captcha cleanup)
 Monthly bill additions / automation
 cleanup UI
 full reconcile of records (monthly capture?)
@@ -52,6 +48,11 @@ Cookie to ignore TOTP challenge ?
 Snapshot extraction of gold / silver / stocks / gas
 Add categories (expense categories)
 
+Production ready:
+- legal disclaimer
+- Establish means to observe activity / record counts
+- Calculate space, size, cost (confirm limits for usage planning)
+
 Premium features:
 Bulk data upload (json/csv)
 over 5 accounts
@@ -66,6 +67,7 @@ Earmark / planning (5k for property taxes, earmark it for savings based on month
 payment plans (like buying an iPhone split up by 12 months)
 
 Low priority:
+Means to halt/disable signups (new accounts)
 Allow to rename account
 Add sql injection test cases
 Help text / features on hover
