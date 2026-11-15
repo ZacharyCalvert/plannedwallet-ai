@@ -1,0 +1,334 @@
+/* ==========================================================================
+   CSV Bulk Upload Modal & Review Table Styles
+   ========================================================================== */
+
+.csv-upload-modal {
+  max-width: 900px;
+  width: 95%;
+}
+
+.modal-title {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.modal-subtitle {
+  font-size: 0.85rem;
+  color: var(--muted);
+  margin-top: 0.2rem;
+}
+
+/* Stage 1: File Selection */
+.csv-select-stage {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.csv-drop-zone {
+  border: 2px dashed var(--border);
+  border-radius: 8px;
+  padding: 2.5rem 1.5rem;
+  text-align: center;
+  background-color: #f8fafc;
+  cursor: pointer;
+  transition: all 0.15s ease-in-out;
+}
+
+.csv-drop-zone:hover,
+.csv-drop-zone.active {
+  border-color: var(--primary);
+  background-color: var(--primary-light);
+}
+
+.drop-zone-icon {
+  font-size: 2.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.drop-zone-text {
+  font-size: 1rem;
+  color: #1e293b;
+}
+
+.drop-zone-subtext {
+  font-size: 0.8rem;
+  color: var(--muted);
+  margin-top: 0.25rem;
+}
+
+.csv-requirements-card {
+  background-color: #f8fafc;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 1rem 1.25rem;
+  margin-top: 0.5rem;
+}
+
+.csv-requirements-card h4 {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #334155;
+  margin-bottom: 0.5rem;
+  text-transform: uppercase;
+  letter-spacing: 0.025em;
+}
+
+.csv-requirements-card ul {
+  margin-left: 1.25rem;
+  font-size: 0.85rem;
+  color: #475569;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+/* Stage 2: Review Table */
+.csv-review-stage {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.csv-review-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.review-stats {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.stat-pill {
+  font-size: 0.8rem;
+  padding: 0.25rem 0.65rem;
+  border-radius: 9999px;
+  font-weight: 500;
+}
+
+.stat-pill.total {
+  background-color: #f1f5f9;
+  color: #334155;
+}
+
+.stat-pill.valid {
+  background-color: #dcfce7;
+  color: #166534;
+}
+
+.stat-pill.invalid {
+  background-color: #fee2e2;
+  color: #991b1b;
+}
+
+.stat-pill.selected {
+  background-color: #e0e7ff;
+  color: #3730a3;
+}
+
+.stat-pill.empty-warning {
+  background-color: #fef3c7;
+  color: #92400e;
+}
+
+.review-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.notice-banner {
+  background-color: #eff6ff;
+  border: 1px solid #bfdbfe;
+  color: #1e40af;
+  padding: 0.6rem 0.85rem;
+  border-radius: 6px;
+  font-size: 0.825rem;
+}
+
+.notice-banner.banner-invalid {
+  background-color: #fff1f2;
+  border-color: #fecdd3;
+  color: #991b1b;
+}
+
+.csv-table-wrapper {
+  max-height: 380px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.csv-preview-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+
+.csv-preview-table th {
+  background-color: #f8fafc;
+  padding: 0.55rem 0.75rem;
+  text-align: left;
+  font-weight: 600;
+  color: #475569;
+  border-bottom: 2px solid var(--border);
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.csv-preview-table td {
+  padding: 0.55rem 0.75rem;
+  border-bottom: 1px solid #f1f5f9;
+  color: #1e293b;
+}
+
+.csv-preview-table tr.row-invalid {
+  background-color: #fff5f5;
+}
+
+.csv-preview-table td.cell-invalid {
+  background-color: #fee2e2 !important;
+  color: #b91c1c !important;
+  font-weight: 600;
+  border-left: 2px solid #ef4444;
+}
+
+.invalid-errors-container {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.csv-preview-table tr.row-selected {
+  background-color: #f8faff;
+}
+
+.badge-status-valid {
+  display: inline-block;
+  padding: 0.15rem 0.5rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  background-color: #dcfce7;
+  color: #15803d;
+}
+
+.badge-status-invalid {
+  display: inline-block;
+  padding: 0.15rem 0.5rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  background-color: #fee2e2;
+  color: #dc2626;
+}
+
+.badge-pending {
+  display: inline-block;
+  padding: 0.1rem 0.45rem;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  background-color: #f1f5f9;
+  color: var(--muted);
+}
+
+.modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  margin-top: 1rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--border);
+}
+
+/* Stage 3: Progress */
+.csv-progress-stage {
+  padding: 2.5rem 1.5rem;
+  text-align: center;
+}
+
+.progress-title {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #0f172a;
+  margin-bottom: 0.5rem;
+}
+
+.progress-subtitle {
+  font-size: 0.9rem;
+  color: var(--muted);
+  margin-bottom: 1.5rem;
+}
+
+.progress-bar-container {
+  width: 100%;
+  height: 12px;
+  background-color: #e2e8f0;
+  border-radius: 9999px;
+  overflow: hidden;
+}
+
+.progress-bar-fill {
+  height: 100%;
+  background-color: var(--primary);
+  transition: width 0.15s ease-in-out;
+}
+
+/* Stage 4: Complete */
+.csv-complete-stage {
+  padding: 2rem 1.5rem;
+  text-align: center;
+}
+
+.complete-icon {
+  font-size: 2.5rem;
+  color: var(--success);
+  margin-bottom: 0.5rem;
+}
+
+.complete-title {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #0f172a;
+  margin-bottom: 0.5rem;
+}
+
+.complete-stats {
+  font-size: 0.95rem;
+  color: #334155;
+}
+
+.failed-rows-report {
+  text-align: left;
+  background-color: #fff1f2;
+  border: 1px solid #fecdd3;
+  border-radius: 6px;
+  padding: 0.75rem 1rem;
+  max-height: 150px;
+  overflow-y: auto;
+}
+
+.failed-rows-report h4 {
+  font-size: 0.85rem;
+  color: #991b1b;
+  font-weight: 700;
+  margin-bottom: 0.35rem;
+}
+
+.failed-rows-report ul {
+  margin-left: 1.25rem;
+  font-size: 0.8rem;
+  color: #b91c1c;
+}
+
+.btn-import-csv {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}

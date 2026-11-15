@@ -1,0 +1,87 @@
+:root {
+  --background: #f1f5f9;
+  --foreground: #0f172a;
+  --card-bg: #ffffff;
+  --primary: #2563eb;
+  --primary-hover: #1d4ed8;
+  --primary-light: #eff6ff;
+  --border: #e2e8f0;
+  --muted: #64748b;
+  --success: #16a34a;
+  --danger: #dc2626;
+  --danger-bg: #fee2e2;
+  --checking: #0284c7;
+  --checking-bg: #e0f2fe;
+  --savings: #059669;
+  --savings-bg: #d1fae5;
+  --credit-card: #e11d48;
+  --credit-card-bg: #ffe4e6;
+  --credit-card-border: #fecdd3;
+  --snapshot: #7c3aed;
+  --snapshot-bg: #f5f3ff;
+  --snapshot-border: #ddd6fe;
+  --asset: #0d9488;
+  --asset-bg: #f0fdfa;
+  --asset-border: #99f6e4;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background-color: var(--background);
+  color: var(--foreground);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  line-height: 1.5;
+  min-height: 100vh;
+}
+
+.app-root {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+/* Banner */
+.banner {
+  background-color: #1e293b;
+  color: #ffffff;
+  padding: 1rem 1.5rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.banner-logo {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.banner-icon {
+  font-size: 1.5rem;
+}
+
+.banner-title {
+  font-size: 1.25rem;
+  font-weight: 700;
+  letter-spacing: -0.025em;
+}
+
+.banner-user {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  font-size: 0.875rem;
+}
+
+/* App Content Area */
+.app-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}

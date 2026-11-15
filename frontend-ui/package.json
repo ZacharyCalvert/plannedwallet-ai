@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "tsc --noEmit",
-    "test": "echo \"Testing static frontend assets\" && exit 0"
+    "test": "node --no-warnings --experimental-strip-types --test lib/csvParser.test.ts"
   },
   "dependencies": {
     "next": "^16.4.6",

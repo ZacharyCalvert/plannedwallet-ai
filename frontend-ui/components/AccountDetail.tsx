@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { Account, AccountRecord } from '../lib/types';
 import { DateInput } from './DateInput';
+import CsvUploadModal from './CsvUploadModal';
 import {
   fetchAccountRecords,
   createAccountRecord,
@@ -145,6 +146,7 @@ export function AccountDetail({ account, token }: AccountDetailProps) {
   const [description, setDescription] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState('');
+  const [csvModalOpen, setCsvModalOpen] = useState(false);
 
   const resetForm = () => {
     setSelectedRecordId(null);
@@ -455,8 +457,18 @@ export function AccountDetail({ account, token }: AccountDetailProps) {
       {/* Existing Records Presentation below */}
       <section className="existing-records-section">
         <div className="section-title-row">
-          <h3>Account Records</h3>
-          <span className="records-count-badge">{records.length} record{records.length === 1 ? '' : 's'}</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+            <h3>Account Records</h3>
+            <span className="records-count-badge">{records.length} record{records.length === 1 ? '' : 's'}</span>
+          </div>
+          <button
+            type="button"
+            className="btn-secondary btn-sm btn-import-csv"
+            onClick={() => setCsvModalOpen(true)}
+            title="Import checking records from CSV"
+          >
+            &#128196; Import CSV
+          </button>
         </div>
 
         {loading ? (
@@ -558,6 +570,18 @@ export function AccountDetail({ account, token }: AccountDetailProps) {
           </div>
         )}
       </section>
+
+      <CsvUploadModal
+        isOpen={csvModalOpen}
+        onClose={() => setCsvModalOpen(false)}
+        token={token}
+        accountId={account.id}
+        accountName={account.name}
+        accountType={account.type}
+        onSuccess={() => {
+          loadRecords();
+        }}
+      />
     </div>
   );
 }

@@ -1,0 +1,347 @@
+/* Dashboard Two-Pane Layout */
+.dashboard-layout {
+  flex: 1;
+  display: flex;
+  min-height: calc(100vh - 65px);
+}
+
+.accounts-pane {
+  width: 320px;
+  min-width: 280px;
+  background-color: #ffffff;
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+}
+
+.accounts-pane-header {
+  padding: 1.25rem 1rem;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.pane-title {
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: #1e293b;
+}
+
+.accounts-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.accounts-empty {
+  color: var(--muted);
+  font-size: 0.875rem;
+  text-align: center;
+  margin-top: 2rem;
+  padding: 0 1rem;
+}
+
+.account-card {
+  width: 100%;
+  text-align: left;
+  background-color: #ffffff;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  padding: 0.85rem;
+  cursor: pointer;
+  transition: all 0.15s ease-in-out;
+}
+
+.account-card:hover {
+  border-color: #cbd5e1;
+  background-color: #f8fafc;
+}
+
+.account-card.selected {
+  border-color: var(--primary);
+  background-color: var(--primary-light);
+  box-shadow: 0 0 0 1px var(--primary);
+}
+
+.account-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.35rem;
+}
+
+.account-card-name {
+  font-weight: 600;
+  font-size: 0.95rem;
+  color: #0f172a;
+}
+
+.account-card-desc {
+  font-size: 0.825rem;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.badge-checking,
+.badge-savings,
+.badge-credit-card,
+.badge-credit_card,
+.badge-account-type {
+  display: inline-block;
+  padding: 0.15rem 0.5rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  background-color: var(--checking-bg);
+  color: var(--checking);
+  text-transform: capitalize;
+}
+
+.badge-savings {
+  background-color: var(--savings-bg);
+  color: var(--savings);
+}
+
+.badge-credit-card,
+.badge-credit_card {
+  background-color: var(--credit-card-bg);
+  color: var(--credit-card);
+  border: 1px solid var(--credit-card-border);
+}
+
+.account-card-credit-card,
+.account-card-credit_card {
+  border-color: #fecdd3;
+  background-color: #fffafb;
+}
+
+.account-card-credit-card:hover,
+.account-card-credit_card:hover {
+  border-color: #fda4af;
+  background-color: #fff1f2;
+}
+
+.account-card-credit-card.selected,
+.account-card-credit_card.selected {
+  border-color: var(--credit-card);
+  background-color: #fff1f2;
+  box-shadow: 0 0 0 1px var(--credit-card);
+}
+
+.badge-snapshot {
+  background-color: var(--snapshot-bg);
+  color: var(--snapshot);
+  border: 1px solid var(--snapshot-border);
+}
+
+.account-card-snapshot {
+  border-color: #e9d5ff;
+  background-color: #faf5ff;
+}
+
+.account-card-snapshot:hover {
+  border-color: #c084fc;
+  background-color: #f3e8ff;
+}
+
+.account-card-snapshot.selected {
+  border-color: var(--snapshot);
+  background-color: #f3e8ff;
+  box-shadow: 0 0 0 1px var(--snapshot);
+}
+
+.badge-asset {
+  background-color: var(--asset-bg);
+  color: var(--asset);
+  border: 1px solid var(--asset-border);
+}
+
+.account-card-asset {
+  border-color: #ccfbf1;
+  background-color: #f0fdfa;
+}
+
+.account-card-asset:hover {
+  border-color: #5eead4;
+  background-color: #ccfbf1;
+}
+
+.account-card-asset.selected {
+  border-color: var(--asset);
+  background-color: #ccfbf1;
+  box-shadow: 0 0 0 1px var(--asset);
+}
+
+/* Dashboard Main Content */
+.dashboard-content {
+  flex: 1;
+  padding: 2rem;
+  background-color: var(--background);
+  overflow-y: auto;
+}
+
+.card {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  padding: 1.5rem;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05);
+}
+
+.new-account-card {
+  max-width: 560px;
+}
+
+.new-account-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.25rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.account-detail-card {
+  max-width: 1100px;
+  width: 100%;
+}
+
+.account-detail-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1.5rem;
+  margin-bottom: 1.5rem;
+  padding-bottom: 1.25rem;
+  border-bottom: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+
+.account-detail-info {
+  flex: 1;
+  min-width: 250px;
+}
+
+.account-title-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.35rem;
+}
+
+.account-title-row h2 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.account-desc-text {
+  font-size: 0.95rem;
+  color: var(--muted);
+  margin-bottom: 0.35rem;
+}
+
+.account-id-label {
+  font-size: 0.75rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  color: #94a3b8;
+}
+
+/* Rightmost Balances */
+.account-balances {
+  display: flex;
+  gap: 1rem;
+  align-items: stretch;
+  margin-left: auto;
+}
+
+.balance-box {
+  background-color: #f8fafc;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  padding: 0.75rem 1rem;
+  min-width: 155px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+}
+
+.balance-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  margin-bottom: 0.2rem;
+}
+
+.balance-value {
+  font-size: 1.35rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+}
+
+.balance-positive {
+  color: #15803d;
+}
+
+.balance-negative {
+  color: #b91c1c;
+}
+
+.balance-zero {
+  color: #64748b;
+}
+
+.balance-cell {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  font-size: 0.9rem;
+}
+
+.td-balance {
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.balance-subtext {
+  font-size: 0.7rem;
+  color: #94a3b8;
+  margin-top: 0.2rem;
+}
+
+/* Section Titles */
+.section-title-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 0.85rem;
+}
+
+.section-title-row h3 {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #1e293b;
+}
+
+.section-subtitle {
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.records-count-badge {
+  font-size: 0.75rem;
+  background-color: #f1f5f9;
+  color: #475569;
+  padding: 0.15rem 0.5rem;
+  border-radius: 9999px;
+  font-weight: 600;
+}
