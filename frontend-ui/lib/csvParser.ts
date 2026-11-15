@@ -276,10 +276,17 @@ export function parseDate(val: string): { dateStr: string | null; error?: string
 }
 
 /**
- * Parses numeric monetary amounts, handling $, commas, and accounting parentheses
+ * Parses numeric monetary amounts commonly found in spreadsheets:
+ * strips $ currency symbols, commas, and quotes, and treats values surrounded
+ * by parentheses e.g. (105.10), $(105.10), or ($105.10) as negative numbers.
  */
 export function parseAmount(val: string): { value: number | null; error?: string } {
-  let clean = val.trim().replace(/\$/g, '').replace(/,/g, '');
+  let clean = val
+    .trim()
+    .replace(/["']/g, '')
+    .replace(/\$/g, '')
+    .replace(/,/g, '')
+    .trim();
 
   if (!clean) {
     return { value: null, error: 'Amount is required' };
@@ -287,8 +294,11 @@ export function parseAmount(val: string): { value: number | null; error?: string
 
   let isNegative = false;
 
-  // Accounting parenthesis format: (12.34) -> -12.34
-  if (clean.startsWith('(') && clean.endsWith(')')) {
+  // Accounting parenthesis format: (105.10), $(105.10), -(105.10) -> negative
+  if (clean.startsWith('-(') && clean.endsWith(')')) {
+    isNegative = true;
+    clean = clean.slice(2, -1).trim();
+  } else if (clean.startsWith('(') && clean.endsWith(')')) {
     isNegative = true;
     clean = clean.slice(1, -1).trim();
   } else if (clean.startsWith('-')) {
@@ -298,13 +308,20 @@ export function parseAmount(val: string): { value: number | null; error?: string
     clean = clean.slice(1).trim();
   }
 
+  // Handle redundant inner negative sign if present: (-105.10)
+  if (clean.startsWith('-')) {
+    isNegative = true;
+    clean = clean.slice(1).trim();
+  }
+
   const num = parseFloat(clean);
   if (isNaN(num) || !isFinite(num)) {
     return { value: null, error: `Invalid numeric amount: "${val}"` };
   }
 
   const finalVal = isNegative ? -Math.abs(num) : num;
-  return { value: Math.round(finalVal * 100) / 100 };
+  const rounded = Math.round(finalVal * 100) / 100;
+  return { value: rounded === 0 ? 0 : rounded };
 }
 
 /**

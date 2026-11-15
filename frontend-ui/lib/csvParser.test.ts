@@ -161,4 +161,39 @@ describe('CSV Parser Unit Tests', () => {
     assert.strictEqual(smallRes.success, true);
     assert.strictEqual(smallRes.validCount, 5);
   });
+
+  it('supports spreadsheet currency formatting with $ and parentheses', () => {
+    // Specific user requested examples:
+    // $(105.10) is equivalent to -105.10
+    // $105.10 is equivalent to 105.10
+    assert.strictEqual(parseAmount('$(105.10)').value, -105.1);
+    assert.strictEqual(parseAmount('$105.10').value, 105.1);
+
+    // Additional common spreadsheet accounting variations
+    assert.strictEqual(parseAmount('($105.10)').value, -105.1);
+    assert.strictEqual(parseAmount('(105.10)').value, -105.1);
+    assert.strictEqual(parseAmount('-$105.10').value, -105.1);
+    assert.strictEqual(parseAmount('$-105.10').value, -105.1);
+    assert.strictEqual(parseAmount('-$3,399.17').value, -3399.17);
+    assert.strictEqual(parseAmount('$ (105.10)').value, -105.1);
+    assert.strictEqual(parseAmount('($ 105.10)').value, -105.1);
+    assert.strictEqual(parseAmount('+$105.10').value, 105.1);
+    assert.strictEqual(parseAmount('$0.00').value, 0);
+    assert.strictEqual(parseAmount('$(0.00)').value, 0);
+
+    // Full CSV test with spreadsheet money formats
+    const moneyCsv = `Date Sent,Recipient,Amount
+11/20/2026,Corner Grocery,$(105.10)
+11/20/2026,Employer Payroll,$105.10
+11/20/2026,Coffee Shop,($15.25)
+11/20/2026,Bookstore,"-$3,399.17"
+`;
+    const res = parseAndValidateCsv(moneyCsv);
+    assert.strictEqual(res.success, true);
+    assert.strictEqual(res.validCount, 4);
+    assert.strictEqual(res.rows.find((r) => r.rowNumber === 2)?.amount, -105.1);
+    assert.strictEqual(res.rows.find((r) => r.rowNumber === 3)?.amount, 105.1);
+    assert.strictEqual(res.rows.find((r) => r.rowNumber === 4)?.amount, -15.25);
+    assert.strictEqual(res.rows.find((r) => r.rowNumber === 5)?.amount, -3399.17);
+  });
 });
