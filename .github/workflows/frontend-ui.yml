@@ -149,6 +149,9 @@ jobs:
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     environment: ${{ (github.event_name == 'workflow_dispatch' && (inputs.environment == 'production' || inputs.environment == 'prod')) && 'production' || 'stage' }}
+    concurrency:
+      group: deployment-${{ (github.event_name == 'workflow_dispatch' && (inputs.environment == 'production' || inputs.environment == 'prod')) && 'production' || 'stage' }}
+      cancel-in-progress: false
 
     steps:
       - name: Validate target environment and branch

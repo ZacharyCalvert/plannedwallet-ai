@@ -26,6 +26,9 @@ jobs:
     name: Apply SQL to ${{ inputs.environment || 'stage' }}
     runs-on: ubuntu-latest
     environment: ${{ inputs.environment || 'stage' }}
+    concurrency:
+      group: deployment-${{ inputs.environment || 'stage' }}
+      cancel-in-progress: false
 
     steps:
       - name: Checkout code
