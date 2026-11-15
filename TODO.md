@@ -29,6 +29,7 @@ rollup data (monthly)
 Reconcile calculations - locked records for edits + snapshot of net worth?
 account settings: reconcile account on month, or daily
 Bill reminders
+Review labels on credit card such that outgoing (negative) implies spend and positive implies you paid off CC
 Add Money-in / Money-out features (trending) for asset and snapshot accounts to track growth/change
 create batch job for data grabs (indexes/prices, captcha cleanup)
 Monthly bill additions / automation
@@ -54,6 +55,7 @@ Production ready:
 - Calculate space, size, cost (confirm limits for usage planning)
 
 Premium features:
+Add financial records over 365 days old
 Bulk data upload (json/csv)
 over 5 accounts
 over 5 credit cards
