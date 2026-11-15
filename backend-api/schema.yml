@@ -2597,6 +2597,7 @@ components:
       bearerFormat: JWT
       description: |
         Authenticate using a JWT issued by POST `/api/v1/users/{username}/token`.
+        The JWT contains `user_id`, `username`, and `subscriber` (boolean flag) claims.
         Provide the token in the HTTP `Authorization` header with the format: `Bearer <token>`.
 
   parameters:
@@ -2735,7 +2736,7 @@ components:
       properties:
         access_token:
           type: string
-          description: The signed JWT access token.
+          description: The signed JWT access token containing user_id, username, and subscriber claims.
           example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
         token_type:
           type: string

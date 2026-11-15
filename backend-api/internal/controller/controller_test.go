@@ -158,9 +158,41 @@ func TestExchangeToken_TOTP(t *testing.T) {
 		t.Fatalf("expected successful token exchange, got %v", err)
 	}
 
+	authSvc := auth.NewService("test-secret-123456", 3600)
+	claims, _ := authSvc.ValidateToken(tok.AccessToken)
+	if claims.Subscriber {
+		t.Error("expected new user to have subscriber claim false")
+	}
+
 	_, err = ctrl.ExchangeToken(ctx, "totp_user", "ValidPassword123!", "000000")
 	if err == nil {
 		t.Fatal("expected error with invalid TOTP code")
+	}
+}
+
+func TestExchangeToken_SubscriberClaim(t *testing.T) {
+	ctrl, repo := setupController()
+	ctx := context.Background()
+
+	userRes, _ := ctrl.RegisterUser(ctx, models.UserRegistrationRequest{
+		Username: "sub_user",
+		Email:    "sub@example.com",
+		Password: "ValidPassword123!",
+	})
+	_ = repo.CreateSubscription(ctx, &models.Subscription{
+		ID: "sub-ctrl-1", UserID: userRes.ID, PaidDate: "2026-01-01", SubscriberEnds: "2099-12-31",
+	})
+
+	code, _ := auth.GenerateCode(userRes.TOTPSecret, time.Now().Unix()/30)
+	tok, err := ctrl.ExchangeToken(ctx, "sub_user", "ValidPassword123!", code)
+	if err != nil {
+		t.Fatalf("ExchangeToken failed: %v", err)
+	}
+
+	authSvc := auth.NewService("test-secret-123456", 3600)
+	claims, err := authSvc.ValidateToken(tok.AccessToken)
+	if err != nil || !claims.Subscriber {
+		t.Fatalf("expected subscriber true, got %v (err: %v)", claims.Subscriber, err)
 	}
 }
 

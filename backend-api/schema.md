@@ -117,12 +117,22 @@ Stores manual point-in-time valuations for `snapshot` accounts.
 - **Constraint**: `CONSTRAINT uq_account_snapshots_account_date UNIQUE (account_id, snapshot_date)`
 - **Index**: `idx_account_snapshots_account_date (account_id, snapshot_date ASC)`
 
-### 1.9 `captchas`
+### 1.11 `captchas`
 Shared backing store for ephemeral CAPTCHA challenges to support 12-factor stateless application instances. Expired challenges older than 5 minutes are purged on application startup and expired on retrieval.
 - `id` (VARCHAR(64), Primary Key) - Challenge identifier
 - `digits` (BYTEA, Not Null) - Challenge solution digits
 - `created_at` (TIMESTAMPTZ, Not Null, Default NOW())
 - **Index**: `idx_captchas_created_at (created_at)`
+
+### 1.12 `subscriptions`
+Stores paid subscriber membership records defining service periods for users.
+- `id` (UUID, Primary Key)
+- `user_id` (UUID, Not Null, FK -> `users(id)` ON DELETE CASCADE)
+- `paid_date` (DATE, Not Null) - Date payment was recorded
+- `subscriber_ends` (DATE, Not Null) - Final full day of paid services being active
+- `created_at` (TIMESTAMPTZ, Not Null, Default NOW())
+- `updated_at` (TIMESTAMPTZ, Not Null, Default NOW())
+- **Indexes**: `idx_subscriptions_user_id`, `idx_subscriptions_user_ends (user_id, subscriber_ends DESC)`
 
 ---
 
@@ -138,7 +148,7 @@ Shared backing store for ephemeral CAPTCHA challenges to support 12-factor state
 
 ## 3. API Specification
 
-All HTTP requests require the `X-Client-ID` header. Protected endpoints require the `Authorization: Bearer <JWT>` header.
+All HTTP requests require the `X-Client-ID` header. Protected endpoints require the `Authorization: Bearer <JWT>` header. The JWT payload includes `user_id`, `username`, and `subscriber` (boolean flag denoting active paid subscription status).
 
 ### 3.1 Health
 - `GET /api/health`: Database-confirmed health check endpoint (`{"status": "up"}`).

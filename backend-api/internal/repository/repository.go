@@ -89,4 +89,11 @@ type Repository interface {
 	SetCaptcha(ctx context.Context, id string, digits []byte) error
 	GetCaptcha(ctx context.Context, id string, clear bool) ([]byte, error)
 	DeleteExpiredCaptchas(ctx context.Context, olderThan time.Duration) (int64, error)
+
+	// Subscription operations
+	CreateSubscription(ctx context.Context, sub *models.Subscription) error
+	GetSubscriptionByID(ctx context.Context, id string) (*models.Subscription, error)
+	ListSubscriptionsByUserID(ctx context.Context, userID string) ([]*models.Subscription, error)
+	IsUserSubscriber(ctx context.Context, userID string) (bool, error)
+	DeleteSubscription(ctx context.Context, id string) error
 }

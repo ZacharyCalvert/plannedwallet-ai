@@ -135,5 +135,17 @@ CREATE TABLE IF NOT EXISTS captchas (
 
 CREATE INDEX IF NOT EXISTS idx_captchas_created_at ON captchas(created_at);
 
+CREATE TABLE IF NOT EXISTS subscriptions (
+    id UUID PRIMARY KEY,
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    paid_date DATE NOT NULL,
+    subscriber_ends DATE NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_subscriptions_user_id ON subscriptions(user_id);
+CREATE INDEX IF NOT EXISTS idx_subscriptions_user_ends ON subscriptions(user_id, subscriber_ends DESC);
+
 
 

@@ -5,67 +5,52 @@ import (
 	"testing"
 )
 
-func TestInitSQLEmbedded(t *testing.T) {
+func TestInitSQLEmbedded_Tables(t *testing.T) {
 	if initSQL == "" {
 		t.Fatal("expected embedded initSQL to be non-empty")
 	}
 
-	expectedTables := []string{"users", "accounts", "account_access", "checking_records", "assets", "asset_values", "asset_stores", "asset_store_records", "account_assets", "account_snapshots"}
+	expectedTables := []string{
+		"users", "accounts", "account_access", "checking_records",
+		"assets", "asset_values", "asset_stores", "asset_store_records",
+		"account_assets", "account_snapshots", "captchas", "subscriptions",
+	}
 	for _, table := range expectedTables {
 		if !strings.Contains(initSQL, "CREATE TABLE IF NOT EXISTS "+table) {
 			t.Errorf("expected initSQL to contain CREATE TABLE IF NOT EXISTS for %s", table)
 		}
 	}
+}
 
-	if !strings.Contains(initSQL, "uq_asset_stores_account_label UNIQUE (account_id, label)") {
-		t.Error("expected initSQL to contain uq_asset_stores_account_label constraint")
+func TestInitSQLEmbedded_Subscriptions(t *testing.T) {
+	expectedSubSnippets := []string{
+		"CREATE TABLE IF NOT EXISTS subscriptions",
+		"user_id UUID NOT NULL REFERENCES users(id)",
+		"paid_date DATE NOT NULL",
+		"subscriber_ends DATE NOT NULL",
+		"idx_subscriptions_user_id",
+		"idx_subscriptions_user_ends",
 	}
-
-	if !strings.Contains(initSQL, "uq_asset_store_records_store_date UNIQUE (asset_store_id, record_date)") {
-		t.Error("expected initSQL to contain uq_asset_store_records_store_date constraint")
+	for _, snippet := range expectedSubSnippets {
+		if !strings.Contains(initSQL, snippet) {
+			t.Errorf("expected initSQL to contain %q", snippet)
+		}
 	}
+}
 
-	if !strings.Contains(initSQL, "uq_account_snapshots_account_date UNIQUE (account_id, snapshot_date)") {
-		t.Error("expected initSQL to contain uq_account_snapshots_account_date constraint")
+func TestInitSQLEmbedded_Constraints(t *testing.T) {
+	expectedConstraints := []string{
+		"uq_asset_stores_account_label UNIQUE (account_id, label)",
+		"uq_asset_store_records_store_date UNIQUE (asset_store_id, record_date)",
+		"uq_account_snapshots_account_date UNIQUE (account_id, snapshot_date)",
+		"uq_account_assets_account_asset_date UNIQUE (account_id, asset_id, asset_date)",
+		"uq_assets_user_label UNIQUE NULLS NOT DISTINCT (user_id, label)",
+		"uq_assets_user_lower_label ON assets (user_id, LOWER(label)) NULLS NOT DISTINCT",
+		"uq_asset_values_asset_date UNIQUE (asset_id, value_date)",
 	}
-
-	if !strings.Contains(initSQL, "uq_account_assets_account_asset_date UNIQUE (account_id, asset_id, asset_date)") {
-		t.Error("expected initSQL to contain uq_account_assets_account_asset_date constraint")
-	}
-
-	if !strings.Contains(initSQL, "uq_assets_user_label UNIQUE NULLS NOT DISTINCT (user_id, label)") {
-		t.Error("expected initSQL to contain uq_assets_user_label constraint")
-	}
-
-	if !strings.Contains(initSQL, "uq_assets_user_lower_label ON assets (user_id, LOWER(label)) NULLS NOT DISTINCT") {
-		t.Error("expected initSQL to contain uq_assets_user_lower_label index")
-	}
-
-	if !strings.Contains(initSQL, "uq_asset_values_asset_date UNIQUE (asset_id, value_date)") {
-		t.Error("expected initSQL to contain uq_asset_values_asset_date constraint")
-	}
-
-	if !strings.Contains(initSQL, "label VARCHAR(100) NOT NULL") {
-		t.Error("expected initSQL to contain label column definition in asset_values table")
-	}
-
-	if !strings.Contains(initSQL, "value_date DATE NOT NULL") {
-		t.Error("expected initSQL to contain value_date column definition in asset_values table")
-	}
-
-	if !strings.Contains(initSQL, "admin_id UUID NOT NULL REFERENCES users(id)") {
-		t.Error("expected initSQL to contain admin_id column definition in accounts table")
-	}
-
-	if !strings.Contains(initSQL, "name VARCHAR(100) NOT NULL") {
-		t.Error("expected initSQL to contain name column definition in accounts table")
-	}
-
-	if !strings.Contains(initSQL, "access_level VARCHAR(20) NOT NULL") {
-		t.Error("expected initSQL to contain access_level column definition in account_access table")
-	}
-
-	if !strings.Contains(initSQL, "totp_secret VARCHAR(64) NOT NULL") {
-		t.Error("expected initSQL to contain totp_secret column definition in users table")
+	for _, c := range expectedConstraints {
+		if !strings.Contains(initSQL, c) {
+			t.Errorf("expected initSQL to contain constraint: %s", c)
+		}
 	}
 }

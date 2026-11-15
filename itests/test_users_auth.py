@@ -65,7 +65,30 @@ def test_login_and_validate_jwt(api_context: APIRequestContext):
     payload = decode_jwt_unverified(token_data["access_token"])
     assert payload.get("sub") == user_id
     assert payload.get("username") == user_data["username"]
+    assert payload.get("subscriber") is False
     assert payload.get("exp", 0) > payload.get("iat", 0)
+
+def test_new_account_jwt_subscriber_is_false(api_context: APIRequestContext):
+    """Test: Confirm the issued JWT for a new account has subscriber value of false."""
+    user_data = generate_user_data(prefix="subtest")
+    create_res = api_context.post("/api/v1/users", data=user_data)
+    assert create_res.status == 201
+    create_data = create_res.json()
+    user_id = create_data["id"]
+    totp_secret = create_data["totp_secret"]
+
+    totp_code = compute_totp_code(totp_secret)
+    login_res = api_context.post(
+        f"/api/v1/users/{user_data['username']}/token",
+        data={"password": user_data["password"], "totp_code": totp_code},
+    )
+    assert login_res.status == 200, f"Login failed: {login_res.text()}"
+    token_data = login_res.json()
+    payload = decode_jwt_unverified(token_data["access_token"])
+    assert "subscriber" in payload
+    assert payload["subscriber"] is False
+    assert payload.get("sub") == user_id
+    assert payload.get("username") == user_data["username"]
 
 def test_login_invalid_totp_fails(api_context: APIRequestContext):
     """Test: Attempting login with invalid TOTP code returns 401."""

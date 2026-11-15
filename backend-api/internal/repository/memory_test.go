@@ -322,3 +322,72 @@ func TestMemoryRepo_AssetStoreAndRecords(t *testing.T) {
 		t.Errorf("expected 0 records after cascade delete, got %d", len(recs))
 	}
 }
+
+func TestMemoryRepo_SubscriptionsCRUD(t *testing.T) {
+	repo := repository.NewMemoryRepository()
+	ctx := context.Background()
+	now := time.Now().UTC()
+	user := &models.User{ID: "sub-user-1", Username: "subuser", Email: "sub@example.com"}
+	_ = repo.CreateUser(ctx, user)
+
+	sub := &models.Subscription{
+		ID: "sub-1", UserID: user.ID, PaidDate: "2026-11-01",
+		SubscriberEnds: "2026-12-01", CreatedAt: now, UpdatedAt: now,
+	}
+	if err := repo.CreateSubscription(ctx, sub); err != nil {
+		t.Fatalf("CreateSubscription failed: %v", err)
+	}
+	// duplicate fails
+	if err := repo.CreateSubscription(ctx, sub); !errors.Is(err, repository.ErrConflict) {
+		t.Fatalf("expected ErrConflict, got: %v", err)
+	}
+	// nonexistent user fails
+	orphan := &models.Subscription{ID: "sub-orphan", UserID: "nonexistent"}
+	if err := repo.CreateSubscription(ctx, orphan); !errors.Is(err, repository.ErrNotFound) {
+		t.Fatalf("expected ErrNotFound for missing user, got: %v", err)
+	}
+
+	got, err := repo.GetSubscriptionByID(ctx, "sub-1")
+	if err != nil || got.ID != "sub-1" {
+		t.Fatalf("GetSubscriptionByID failed: %v", err)
+	}
+	list, err := repo.ListSubscriptionsByUserID(ctx, user.ID)
+	if err != nil || len(list) != 1 {
+		t.Fatalf("ListSubscriptionsByUserID failed: %v", err)
+	}
+	if err := repo.DeleteSubscription(ctx, "sub-1"); err != nil {
+		t.Fatalf("DeleteSubscription failed: %v", err)
+	}
+}
+
+func TestMemoryRepo_IsUserSubscriber(t *testing.T) {
+	repo := repository.NewMemoryRepository()
+	ctx := context.Background()
+	user := &models.User{ID: "sub-user-2", Username: "subuser2", Email: "sub2@example.com"}
+	_ = repo.CreateUser(ctx, user)
+
+	isSub, _ := repo.IsUserSubscriber(ctx, user.ID)
+	if isSub {
+		t.Fatal("expected false for user without subscription")
+	}
+
+	// Expired subscription
+	expired := &models.Subscription{
+		ID: "sub-exp", UserID: user.ID, PaidDate: "2020-01-01", SubscriberEnds: "2020-01-31",
+	}
+	_ = repo.CreateSubscription(ctx, expired)
+	isSub, _ = repo.IsUserSubscriber(ctx, user.ID)
+	if isSub {
+		t.Fatal("expected false for expired subscription")
+	}
+
+	// Active subscription (future end date)
+	active := &models.Subscription{
+		ID: "sub-act", UserID: user.ID, PaidDate: "2026-01-01", SubscriberEnds: "2099-12-31",
+	}
+	_ = repo.CreateSubscription(ctx, active)
+	isSub, _ = repo.IsUserSubscriber(ctx, user.ID)
+	if !isSub {
+		t.Fatal("expected true for active subscription")
+	}
+}

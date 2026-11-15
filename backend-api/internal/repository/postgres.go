@@ -32,6 +32,14 @@ func isUniqueViolation(err error) bool {
 	return false
 }
 
+func isForeignKeyViolation(err error) bool {
+	var pqErr *pq.Error
+	if errors.As(err, &pqErr) {
+		return pqErr.Code == "23503"
+	}
+	return false
+}
+
 func (p *PostgresRepository) CreateUser(ctx context.Context, user *models.User) error {
 	query := `INSERT INTO users (id, username, email, password_hash, totp_secret, created_at)
 	          VALUES ($1, $2, $3, $4, $5, $6)`
@@ -1135,4 +1143,88 @@ func (p *PostgresRepository) GetAssetStoreTrend(ctx context.Context, storeID str
 		points = append(points, pt)
 	}
 	return points, rows.Err()
+}
+
+func (p *PostgresRepository) CreateSubscription(ctx context.Context, sub *models.Subscription) error {
+	query := `INSERT INTO subscriptions (id, user_id, paid_date, subscriber_ends, created_at, updated_at)
+	          VALUES ($1, $2, $3::date, $4::date, $5, $6)`
+	_, err := p.db.ExecContext(ctx, query, sub.ID, sub.UserID, sub.PaidDate, sub.SubscriberEnds, sub.CreatedAt, sub.UpdatedAt)
+	if err != nil {
+		if isForeignKeyViolation(err) {
+			return ErrNotFound
+		}
+		if isUniqueViolation(err) {
+			return ErrConflict
+		}
+		return err
+	}
+	return nil
+}
+
+func (p *PostgresRepository) GetSubscriptionByID(ctx context.Context, id string) (*models.Subscription, error) {
+	query := `SELECT id, user_id, TO_CHAR(paid_date, 'YYYY-MM-DD'), TO_CHAR(subscriber_ends, 'YYYY-MM-DD'), created_at, updated_at
+	          FROM subscriptions
+	          WHERE id = $1`
+	var s models.Subscription
+	err := p.db.QueryRowContext(ctx, query, id).Scan(&s.ID, &s.UserID, &s.PaidDate, &s.SubscriberEnds, &s.CreatedAt, &s.UpdatedAt)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrNotFound
+		}
+		return nil, err
+	}
+	return &s, nil
+}
+
+func (p *PostgresRepository) ListSubscriptionsByUserID(ctx context.Context, userID string) ([]*models.Subscription, error) {
+	query := `SELECT id, user_id, TO_CHAR(paid_date, 'YYYY-MM-DD'), TO_CHAR(subscriber_ends, 'YYYY-MM-DD'), created_at, updated_at
+	          FROM subscriptions
+	          WHERE user_id = $1
+	          ORDER BY subscriber_ends DESC, created_at DESC`
+	rows, err := p.db.QueryContext(ctx, query, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	return scanSubscriptionRows(rows)
+}
+
+func scanSubscriptionRows(rows *sql.Rows) ([]*models.Subscription, error) {
+	result := make([]*models.Subscription, 0)
+	for rows.Next() {
+		var s models.Subscription
+		if err := rows.Scan(&s.ID, &s.UserID, &s.PaidDate, &s.SubscriberEnds, &s.CreatedAt, &s.UpdatedAt); err != nil {
+			return nil, err
+		}
+		result = append(result, &s)
+	}
+	return result, rows.Err()
+}
+
+func (p *PostgresRepository) IsUserSubscriber(ctx context.Context, userID string) (bool, error) {
+	query := `SELECT EXISTS (
+		SELECT 1 FROM subscriptions
+		WHERE user_id = $1 AND subscriber_ends >= CURRENT_DATE
+	)`
+	var isSub bool
+	err := p.db.QueryRowContext(ctx, query, userID).Scan(&isSub)
+	if err != nil {
+		return false, err
+	}
+	return isSub, nil
+}
+
+func (p *PostgresRepository) DeleteSubscription(ctx context.Context, id string) error {
+	res, err := p.db.ExecContext(ctx, `DELETE FROM subscriptions WHERE id = $1`, id)
+	if err != nil {
+		return err
+	}
+	cnt, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if cnt == 0 {
+		return ErrNotFound
+	}
+	return nil
 }

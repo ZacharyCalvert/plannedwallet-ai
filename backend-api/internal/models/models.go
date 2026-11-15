@@ -23,6 +23,16 @@ type User struct {
 	CreatedAt    time.Time `json:"created_at"`
 }
 
+// Subscription domain model representing a user's subscription.
+type Subscription struct {
+	ID             string    `json:"id"`
+	UserID         string    `json:"user_id"`
+	PaidDate       string    `json:"paid_date"`
+	SubscriberEnds string    `json:"subscriber_ends"`
+	CreatedAt      time.Time `json:"created_at"`
+	UpdatedAt      time.Time `json:"updated_at"`
+}
+
 // UserRegistrationRequest represents the payload to register a new user.
 type UserRegistrationRequest struct {
 	Username        string `json:"username" binding:"required,min=3,max=50"`

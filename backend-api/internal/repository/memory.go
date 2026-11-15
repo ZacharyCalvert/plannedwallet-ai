@@ -11,20 +11,21 @@ import (
 )
 
 type MemoryRepository struct {
-	mu              sync.RWMutex
-	users           map[string]*models.User           // id -> User
-	usersByUsername map[string]*models.User           // username -> User
-	usersByEmail    map[string]*models.User           // email -> User
-	accounts        map[string]*models.Account        // id -> Account
-	accountAccess   map[string]*models.AccountAccess  // accountID:userID -> AccountAccess
-	checkingRecords map[string]*models.CheckingRecord // id -> CheckingRecord
-	assets          map[string]*models.Asset          // id -> Asset
-	assetValues     map[string]*models.AssetValue     // id -> AssetValue
-	accountAssets   map[string]*models.AccountAsset   // id -> AccountAsset
-	assetStores     map[string]*models.AssetStore     // id -> AssetStore
+	mu                sync.RWMutex
+	users             map[string]*models.User             // id -> User
+	usersByUsername   map[string]*models.User             // username -> User
+	usersByEmail      map[string]*models.User             // email -> User
+	accounts          map[string]*models.Account          // id -> Account
+	accountAccess     map[string]*models.AccountAccess    // accountID:userID -> AccountAccess
+	checkingRecords   map[string]*models.CheckingRecord   // id -> CheckingRecord
+	assets            map[string]*models.Asset            // id -> Asset
+	assetValues       map[string]*models.AssetValue       // id -> AssetValue
+	accountAssets     map[string]*models.AccountAsset     // id -> AccountAsset
+	assetStores       map[string]*models.AssetStore       // id -> AssetStore
 	assetStoreRecords map[string]*models.AssetStoreRecord // id -> AssetStoreRecord
-	accountSnapshots map[string]*models.AccountSnapshot // id -> AccountSnapshot
-	captchas        map[string]*memoryCaptcha         // id -> memoryCaptcha
+	accountSnapshots  map[string]*models.AccountSnapshot  // id -> AccountSnapshot
+	captchas          map[string]*memoryCaptcha           // id -> memoryCaptcha
+	subscriptions     map[string]*models.Subscription     // id -> Subscription
 }
 
 type memoryCaptcha struct {
@@ -34,19 +35,20 @@ type memoryCaptcha struct {
 
 func NewMemoryRepository() *MemoryRepository {
 	return &MemoryRepository{
-		users:           make(map[string]*models.User),
-		usersByUsername: make(map[string]*models.User),
-		usersByEmail:    make(map[string]*models.User),
-		accounts:        make(map[string]*models.Account),
-		accountAccess:   make(map[string]*models.AccountAccess),
-		checkingRecords: make(map[string]*models.CheckingRecord),
-		assets:          make(map[string]*models.Asset),
-		assetValues:     make(map[string]*models.AssetValue),
-		accountAssets:   make(map[string]*models.AccountAsset),
-		assetStores:     make(map[string]*models.AssetStore),
+		users:             make(map[string]*models.User),
+		usersByUsername:   make(map[string]*models.User),
+		usersByEmail:      make(map[string]*models.User),
+		accounts:          make(map[string]*models.Account),
+		accountAccess:     make(map[string]*models.AccountAccess),
+		checkingRecords:   make(map[string]*models.CheckingRecord),
+		assets:            make(map[string]*models.Asset),
+		assetValues:       make(map[string]*models.AssetValue),
+		accountAssets:     make(map[string]*models.AccountAsset),
+		assetStores:       make(map[string]*models.AssetStore),
 		assetStoreRecords: make(map[string]*models.AssetStoreRecord),
-		accountSnapshots: make(map[string]*models.AccountSnapshot),
-		captchas:        make(map[string]*memoryCaptcha),
+		accountSnapshots:  make(map[string]*models.AccountSnapshot),
+		captchas:          make(map[string]*memoryCaptcha),
+		subscriptions:     make(map[string]*models.Subscription),
 	}
 }
 
@@ -1110,4 +1112,78 @@ func (m *MemoryRepository) GetAssetStoreTrend(_ context.Context, storeID string)
 		})
 	}
 	return points, nil
+}
+
+func (m *MemoryRepository) CreateSubscription(_ context.Context, sub *models.Subscription) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if _, ok := m.users[sub.UserID]; !ok {
+		return ErrNotFound
+	}
+	if _, ok := m.subscriptions[sub.ID]; ok {
+		return ErrConflict
+	}
+	copied := *sub
+	m.subscriptions[sub.ID] = &copied
+	return nil
+}
+
+func (m *MemoryRepository) GetSubscriptionByID(_ context.Context, id string) (*models.Subscription, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	sub, ok := m.subscriptions[id]
+	if !ok {
+		return nil, ErrNotFound
+	}
+	copied := *sub
+	return &copied, nil
+}
+
+func (m *MemoryRepository) ListSubscriptionsByUserID(_ context.Context, userID string) ([]*models.Subscription, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	var result []*models.Subscription
+	for _, sub := range m.subscriptions {
+		if sub.UserID == userID {
+			copied := *sub
+			result = append(result, &copied)
+		}
+	}
+	sort.Slice(result, func(i, j int) bool {
+		if result[i].SubscriberEnds == result[j].SubscriberEnds {
+			return result[i].CreatedAt.After(result[j].CreatedAt)
+		}
+		return result[i].SubscriberEnds > result[j].SubscriberEnds
+	})
+	if result == nil {
+		result = make([]*models.Subscription, 0)
+	}
+	return result, nil
+}
+
+func (m *MemoryRepository) IsUserSubscriber(_ context.Context, userID string) (bool, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	today := time.Now().UTC().Format("2006-01-02")
+	for _, sub := range m.subscriptions {
+		if sub.UserID == userID && sub.SubscriberEnds >= today {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+func (m *MemoryRepository) DeleteSubscription(_ context.Context, id string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if _, ok := m.subscriptions[id]; !ok {
+		return ErrNotFound
+	}
+	delete(m.subscriptions, id)
+	return nil
 }
