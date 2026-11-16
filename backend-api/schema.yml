@@ -395,6 +395,46 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
+    delete:
+      tags:
+        - Accounts
+      summary: Delete a financial account
+      description: |
+        Permanently deletes a financial account and cascades deletion to all associated records,
+        holdings, snapshots, and perspective links. Enforces that only the creator (admin_id) can delete it.
+      operationId: deleteAccount
+      security:
+        - BearerAuth: []
+      responses:
+        '204':
+          description: Account deleted successfully.
+        '400':
+          summary: Bad request
+          description: Missing or invalid required X-Client-ID header.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          summary: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          summary: Forbidden
+          description: Only the account creator can delete the account.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          summary: Account not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
   /api/v1/accounts/{accountId}/records:
     parameters:
       - $ref: '#/components/parameters/XClientId'

@@ -169,6 +169,22 @@ func (h *Handler) GetAccount(c *gin.Context) {
 	c.JSON(http.StatusOK, res)
 }
 
+// DeleteAccount handles DELETE /api/v1/accounts/:accountId
+func (h *Handler) DeleteAccount(c *gin.Context) {
+	userID, ok := h.getUserID(c)
+	if !ok {
+		return
+	}
+
+	accountID := strings.TrimSpace(c.Param("accountId"))
+	if err := h.ctrl.DeleteAccount(c.Request.Context(), userID, accountID); err != nil {
+		h.handleError(c, err)
+		return
+	}
+
+	c.Status(http.StatusNoContent)
+}
+
 // CreateCheckingRecord handles POST /api/v1/accounts/{accountId}/records
 func (h *Handler) CreateCheckingRecord(c *gin.Context) {
 	userID, ok := h.getUserID(c)
@@ -407,6 +423,7 @@ func (h *Handler) registerAccountRoutes(p *gin.RouterGroup) {
 	p.POST("/accounts", h.CreateAccount)
 	p.GET("/accounts", h.ListAccounts)
 	p.GET("/accounts/:accountId", h.GetAccount)
+	p.DELETE("/accounts/:accountId", h.DeleteAccount)
 	p.POST("/accounts/:accountId/access", h.GrantAccountAccess)
 	p.GET("/accounts/:accountId/access/:userId", h.GetAccountAccess)
 	p.DELETE("/accounts/:accountId/access/:userId", h.RevokeAccountAccess)

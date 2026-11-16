@@ -164,6 +164,61 @@ func (m *MemoryRepository) ListAccountsByUserID(_ context.Context, userID string
 	return result, nil
 }
 
+func (m *MemoryRepository) cascadeDeleteAccountStores(accountID string) {
+	for k, as := range m.assetStores {
+		if as.AccountID == accountID {
+			for rk, asr := range m.assetStoreRecords {
+				if asr.AssetStoreID == as.ID {
+					delete(m.assetStoreRecords, rk)
+				}
+			}
+			delete(m.assetStores, k)
+		}
+	}
+}
+
+func (m *MemoryRepository) cascadeDeleteAccountData(id string) {
+	for k, aa := range m.accountAccess {
+		if aa.AccountID == id {
+			delete(m.accountAccess, k)
+		}
+	}
+	for k, cr := range m.checkingRecords {
+		if cr.AccountID == id {
+			delete(m.checkingRecords, k)
+		}
+	}
+	for k, ca := range m.accountAssets {
+		if ca.AccountID == id {
+			delete(m.accountAssets, k)
+		}
+	}
+	for k, snap := range m.accountSnapshots {
+		if snap.AccountID == id {
+			delete(m.accountSnapshots, k)
+		}
+	}
+	for k, pa := range m.perspectiveAccounts {
+		if pa.AccountID == id {
+			delete(m.perspectiveAccounts, k)
+		}
+	}
+	m.cascadeDeleteAccountStores(id)
+}
+
+func (m *MemoryRepository) DeleteAccount(_ context.Context, accountID, adminID string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	acc, ok := m.accounts[accountID]
+	if !ok || acc.AdminID != adminID {
+		return ErrNotFound
+	}
+	delete(m.accounts, accountID)
+	m.cascadeDeleteAccountData(accountID)
+	return nil
+}
+
 func (m *MemoryRepository) GrantAccountAccess(_ context.Context, access *models.AccountAccess) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()

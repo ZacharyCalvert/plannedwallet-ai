@@ -74,3 +74,51 @@ def test_create_checking_account_and_records(api_context: APIRequestContext):
     assert rec_res.status == 200, f"Get records failed: {rec_res.text()}"
     records = rec_res.json()
     assert any(r["id"] == record["id"] and r["entity"] == "Corner Grocery" for r in records)
+
+
+def test_account_deletion_and_recreation(api_context: APIRequestContext):
+    """Validate account deletion (admin only) and recreation with the same name."""
+    # 1. Create User A and an account
+    _, token_a = create_authenticated_user(api_context)
+    headers_a = {"Authorization": f"Bearer {token_a}"}
+
+    account_name = f"Everyday_Checking_{uuid.uuid4().hex[:6]}"
+    create_payload = {
+        "name": account_name,
+        "type": "checking",
+        "description": "Primary daily operating checking account",
+    }
+    create_res = api_context.post("/api/v1/accounts", data=create_payload, headers=headers_a)
+    assert create_res.status == 201, f"Failed to create account: {create_res.text()}"
+    account = create_res.json()
+    account_id = account["id"]
+
+    # 2. Add record to account
+    record = add_checking_record(api_context, account_id, headers_a)
+    assert record["id"]
+
+    # 3. Create User B and verify User B cannot delete User A's account (403 Forbidden)
+    _, token_b = create_authenticated_user(api_context)
+    headers_b = {"Authorization": f"Bearer {token_b}"}
+    del_forbidden_res = api_context.delete(f"/api/v1/accounts/{account_id}", headers=headers_b)
+    assert del_forbidden_res.status == 403, (
+        f"Expected 403 when non-creator deletes account, got {del_forbidden_res.status}: {del_forbidden_res.text()}"
+    )
+
+    # 4. User A deletes account (204 No Content)
+    del_res = api_context.delete(f"/api/v1/accounts/{account_id}", headers=headers_a)
+    assert del_res.status == 204, f"Delete account failed: {del_res.status} {del_res.text()}"
+
+    # 5. Verify account is gone (404 Not Found)
+    get_res = api_context.get(f"/api/v1/accounts/{account_id}", headers=headers_a)
+    assert get_res.status == 404, f"Expected 404 for deleted account, got {get_res.status}"
+
+    # 6. Re-create a similar account with the exact same name (201 Created)
+    recreate_res = api_context.post("/api/v1/accounts", data=create_payload, headers=headers_a)
+    assert recreate_res.status == 201, (
+        f"Re-creating account with same name failed: {recreate_res.status} {recreate_res.text()}"
+    )
+    new_account = recreate_res.json()
+    assert new_account["id"] != account_id
+    assert new_account["name"] == account_name
+

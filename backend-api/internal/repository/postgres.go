@@ -143,6 +143,22 @@ func (p *PostgresRepository) ListAccountsByUserID(ctx context.Context, userID st
 	return accounts, rows.Err()
 }
 
+func (p *PostgresRepository) DeleteAccount(ctx context.Context, accountID, adminID string) error {
+	query := `DELETE FROM accounts WHERE id = $1 AND admin_id = $2`
+	res, err := p.db.ExecContext(ctx, query, accountID, adminID)
+	if err != nil {
+		return err
+	}
+	cnt, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if cnt == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
 func (p *PostgresRepository) GrantAccountAccess(ctx context.Context, access *models.AccountAccess) error {
 	query := `INSERT INTO account_access (id, account_id, user_id, access_level, created_at, updated_at)
 	          VALUES ($1, $2, $3, $4, $5, $6)

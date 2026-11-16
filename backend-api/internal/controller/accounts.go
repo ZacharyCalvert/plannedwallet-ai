@@ -2,6 +2,7 @@ package controller
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"strings"
 	"time"
@@ -9,6 +10,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/plannedwallet/internal/models"
+	"github.com/plannedwallet/internal/repository"
 	"github.com/plannedwallet/internal/trace"
 )
 
@@ -83,3 +85,29 @@ func (c *Controller) CreateAccount(ctx context.Context, userID string, req model
 		UpdatedAt:   account.UpdatedAt,
 	}, nil
 }
+
+// DeleteAccount deletes an account. Enforces that only the creator (admin_id) can delete it.
+func (c *Controller) DeleteAccount(ctx context.Context, userID, accountID string) error {
+	account, err := c.repo.GetAccountByID(ctx, accountID)
+	if err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			return ErrAccountNotFound
+		}
+		return NewAppError(http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to retrieve account.")
+	}
+
+	if account.AdminID != userID {
+		return NewAppError(http.StatusForbidden, "FORBIDDEN", "Only the account creator can delete the account.")
+	}
+
+	if err := c.repo.DeleteAccount(ctx, accountID, userID); err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			return ErrAccountNotFound
+		}
+		trace.LogError(ctx, err, "Failed to delete account %s", accountID)
+		return NewAppError(http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to delete account.")
+	}
+	trace.LogInfo(ctx, "Account deleted successfully: %s by user: %s", accountID, userID)
+	return nil
+}
+

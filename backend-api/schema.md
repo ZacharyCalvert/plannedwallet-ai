@@ -208,6 +208,7 @@ All HTTP requests require the `X-Client-ID` header. Protected endpoints require 
 - `POST /api/v1/accounts`: Create account (`checking`, `savings`, `credit card`, `asset`, `snapshot`).
 - `GET /api/v1/accounts`: List accounts accessible by the user.
 - `GET /api/v1/accounts/{accountId}`: Get account metadata.
+- `DELETE /api/v1/accounts/{accountId}`: Permanently delete account and cascade all associated records, holdings, snapshots, and perspective links (creator/admin only).
 
 ### 3.4 Account Access
 - `POST /api/v1/accounts/{accountId}/access`: Grant or update user access permissions (`read`, `edit`, `admin`).

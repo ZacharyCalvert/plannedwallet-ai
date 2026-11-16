@@ -368,6 +368,40 @@ func TestListAndGetAccounts(t *testing.T) {
 	}
 }
 
+func TestDeleteAccountAPI(t *testing.T) {
+	r, _ := setupTestRouter()
+	token := registerAndGetToken(t, r, "owneruser", "owner@example.com", "Password123!")
+	otherToken := registerAndGetToken(t, r, "otheruser", "other@example.com", "Password123!")
+	accountID := createAccount(t, r, token, "Everyday Checking", "checking", "My Everyday Checking")
+
+	// Non-admin attempt to delete should return 403 Forbidden
+	reqForbidden := newTestRequest(http.MethodDelete, "/api/v1/accounts/"+accountID, nil)
+	reqForbidden.Header.Set("Authorization", "Bearer "+otherToken)
+	wForbidden := httptest.NewRecorder()
+	r.ServeHTTP(wForbidden, reqForbidden)
+	if wForbidden.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 when non-admin deletes account, got %d: %s", wForbidden.Code, wForbidden.Body.String())
+	}
+
+	// Admin delete should return 204 No Content
+	reqDelete := newTestRequest(http.MethodDelete, "/api/v1/accounts/"+accountID, nil)
+	reqDelete.Header.Set("Authorization", "Bearer "+token)
+	wDelete := httptest.NewRecorder()
+	r.ServeHTTP(wDelete, reqDelete)
+	if wDelete.Code != http.StatusNoContent {
+		t.Fatalf("expected 204 on delete account, got %d: %s", wDelete.Code, wDelete.Body.String())
+	}
+
+	// Verify account is now 404
+	reqGet := newTestRequest(http.MethodGet, "/api/v1/accounts/"+accountID, nil)
+	reqGet.Header.Set("Authorization", "Bearer "+token)
+	wGet := httptest.NewRecorder()
+	r.ServeHTTP(wGet, reqGet)
+	if wGet.Code != http.StatusNotFound {
+		t.Fatalf("expected 404 after account deletion, got %d", wGet.Code)
+	}
+}
+
 func TestCheckingRecordsCRUD(t *testing.T) {
 	r, _ := setupTestRouter()
 	token := registerAndGetToken(t, r, "checkinguser", "checking@example.com", "Password123!")

@@ -155,9 +155,10 @@ Perspectives provide unified multi-account lenses aggregating disparate accounts
 ---
 
 ### 3.6 Account Deletion Lifecycle & Re-Creation Guarantee
-- **Strict Creator-Only Authorization**:
+- **Strict Creator-Only Authorization & Defensive Repository Contract**:
   - Account deletion is exclusively restricted to the account's original creator (`accounts.admin_id == user_id`).
   - Read-only, editor, or even granted admin accounts are prohibited from executing account deletion, yielding an immediate `403 Forbidden` (`FORBIDDEN`).
+  - **Defensive Repository Contract**: As an additional layer of defensive coding, the repository contract itself (`DeleteAccount(ctx, accountID, adminID)`) enforces dual-matching: both the account ID and the account creator's `admin_id` must match as a prerequisite for deletion (`DELETE ... WHERE id = $1 AND admin_id = $2`), preventing unauthorized deletion even if caller validation is bypassed.
 - **Full Cascade Cleanup**:
   - Atomic database cascades permanently eliminate orphan data across `account_access`, `checking_records`, `asset_stores`, `asset_store_records`, `account_assets`, `account_snapshots`, and `perspective_accounts`.
   - In-memory repository mirrors cascade semantics identically.

@@ -478,3 +478,31 @@ func TestMemoryRepo_PerspectiveSharingAndAccounts(t *testing.T) {
 	}
 }
 
+func TestMemoryRepo_DeleteAccountCascade(t *testing.T) {
+	repo := repository.NewMemoryRepository()
+	ctx := context.Background()
+
+	acc := &models.Account{ID: "acc-del", AdminID: "u-1", Name: "Everyday Checking", Type: "checking"}
+	_ = repo.CreateAccount(ctx, acc)
+	_ = repo.CreateCheckingRecord(ctx, &models.CheckingRecord{ID: "cr-1", AccountID: acc.ID, Value: 100})
+	_ = repo.CreateAccountSnapshot(ctx, &models.AccountSnapshot{ID: "snap-1", AccountID: acc.ID, Value: 200, SnapshotDate: "2026-01-01"})
+
+	// Defensive check: non-matching adminID must return ErrNotFound
+	if err := repo.DeleteAccount(ctx, acc.ID, "wrong-admin"); !errors.Is(err, repository.ErrNotFound) {
+		t.Fatalf("expected ErrNotFound for non-creator adminID, got %v", err)
+	}
+
+	// Matching adminID succeeds
+	if err := repo.DeleteAccount(ctx, acc.ID, acc.AdminID); err != nil {
+		t.Fatalf("expected successful delete: %v", err)
+	}
+
+	if _, err := repo.GetAccountByID(ctx, acc.ID); !errors.Is(err, repository.ErrNotFound) {
+		t.Fatalf("expected ErrNotFound for deleted account, got %v", err)
+	}
+	if err := repo.DeleteAccount(ctx, acc.ID, acc.AdminID); !errors.Is(err, repository.ErrNotFound) {
+		t.Fatalf("expected ErrNotFound on second delete, got %v", err)
+	}
+}
+
+

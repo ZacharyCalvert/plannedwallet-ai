@@ -27,6 +27,7 @@ type Repository interface {
 	CreateAccount(ctx context.Context, account *models.Account) error
 	GetAccountByID(ctx context.Context, id string) (*models.Account, error)
 	ListAccountsByUserID(ctx context.Context, userID string) ([]*models.Account, error)
+	DeleteAccount(ctx context.Context, accountID, adminID string) error
 
 	// Account Access operations
 	GrantAccountAccess(ctx context.Context, access *models.AccountAccess) error
