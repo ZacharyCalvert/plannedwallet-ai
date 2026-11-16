@@ -81,6 +81,8 @@ function AccountRouteView({
       key={account.id}
       account={account}
       token={token}
+      urlTab={tab}
+      onTabChange={handleTabChange}
       onAccountDeleted={onAccountDeleted}
     />
   );

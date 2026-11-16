@@ -6,6 +6,7 @@ import { DateInput } from './DateInput';
 import CsvUploadModal from './CsvUploadModal';
 import { DeleteAccountModal } from './DeleteAccountModal';
 import { CopyLinkButton } from './CopyLinkButton';
+import { AccountBalanceTrendGraph } from './AccountBalanceTrendGraph';
 import {
   fetchAccountRecords,
   createAccountRecord,
@@ -16,7 +17,15 @@ import {
 interface AccountDetailProps {
   account: Account;
   token: string;
+  urlTab?: string;
+  onTabChange?: (tab: string, replace?: boolean) => void;
   onAccountDeleted?: (deletedId: string) => void;
+}
+
+type AccountTab = 'records' | 'trend';
+
+function resolveAccountTab(tab?: string): AccountTab {
+  return tab === 'trend' ? 'trend' : 'records';
 }
 
 function getTodayDateString(): string {
@@ -110,11 +119,34 @@ function compareRecordsForDisplay(a: AccountRecord, b: AccountRecord): number {
   return a.id.localeCompare(b.id);
 }
 
-export function AccountDetail({ account, token, onAccountDeleted }: AccountDetailProps) {
+export function AccountDetail({
+  account,
+  token,
+  urlTab,
+  onTabChange,
+  onAccountDeleted,
+}: AccountDetailProps) {
   const [records, setRecords] = useState<AccountRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [activeTab, setActiveTab] = useState<AccountTab>(() => resolveAccountTab(urlTab));
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+
+  useEffect(() => {
+    const resolved = resolveAccountTab(urlTab);
+    setActiveTab(resolved);
+    if (!urlTab) {
+      onTabChange?.(resolved, true);
+    }
+  }, [urlTab]);
+
+  const selectTab = (nextTab: AccountTab) => {
+    setActiveTab(nextTab);
+    onTabChange?.(nextTab);
+    if (nextTab === 'records') {
+      setFocusCounter((c) => c + 1);
+    }
+  };
 
   // Selected record for edit mode (null means New Record mode)
   const [selectedRecordId, setSelectedRecordId] = useState<string | null>(null);
@@ -348,8 +380,61 @@ export function AccountDetail({ account, token, onAccountDeleted }: AccountDetai
 
       {error && <div className="alert-error mb-4">{error}</div>}
 
-      {/* New / Edit Checking Record Form Row at the top */}
-      <section className="new-record-section">
+      {/* Account View Tab Bar */}
+      <div className="snapshot-tabs-bar">
+        <button
+          type="button"
+          className={`snapshot-tab-button ${activeTab === 'records' ? 'active' : ''}`}
+          onClick={() => selectTab('records')}
+        >
+          <svg
+            width="18"
+            height="18"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <line x1="8" y1="6" x2="21" y2="6" />
+            <line x1="8" y1="12" x2="21" y2="12" />
+            <line x1="8" y1="18" x2="21" y2="18" />
+            <line x1="3" y1="6" x2="3.01" y2="6" />
+            <line x1="3" y1="12" x2="3.01" y2="12" />
+            <line x1="3" y1="18" x2="3.01" y2="18" />
+          </svg>
+          Records
+          <span className="tab-count-pill">{records.length}</span>
+        </button>
+
+        <button
+          type="button"
+          className={`snapshot-tab-button ${activeTab === 'trend' ? 'active' : ''}`}
+          onClick={() => selectTab('trend')}
+        >
+          <svg
+            width="18"
+            height="18"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
+          </svg>
+          Trend
+        </button>
+      </div>
+
+      {activeTab === 'trend' ? (
+        <AccountBalanceTrendGraph records={records} accountType={account.type} />
+      ) : (
+        <>
+          {/* New / Edit Checking Record Form Row at the top */}
+          <section className="new-record-section">
         <div className="section-title-row">
           <h3>{selectedRecordId ? 'Edit Record' : 'New Record'}</h3>
           <span className="section-subtitle">
@@ -584,6 +669,8 @@ export function AccountDetail({ account, token, onAccountDeleted }: AccountDetai
           </div>
         )}
       </section>
+        </>
+      )}
 
       <CsvUploadModal
         isOpen={csvModalOpen}
