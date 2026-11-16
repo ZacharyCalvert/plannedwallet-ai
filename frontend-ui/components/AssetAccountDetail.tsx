@@ -35,14 +35,23 @@ import {
   deleteAssetValue,
 } from '../lib/api';
 import { DeleteAccountModal } from './DeleteAccountModal';
+import { CopyLinkButton } from './CopyLinkButton';
 
 interface AssetAccountDetailProps {
   account: Account;
   token: string;
+  urlTab?: string;
+  onTabChange?: (tab: string, replace?: boolean) => void;
   onAccountDeleted?: (deletedId: string) => void;
 }
 
 type AssetTab = 'classes' | 'values' | 'storage' | 'records' | 'trend';
+
+const VALID_ASSET_TABS: readonly AssetTab[] = ['classes', 'values', 'storage', 'records', 'trend'];
+
+function isValidAssetTab(tab?: string): tab is AssetTab {
+  return Boolean(tab && (VALID_ASSET_TABS as readonly string[]).includes(tab));
+}
 
 function getTodayDateString(): string {
   const d = new Date();
@@ -85,7 +94,13 @@ function parseAmount(amtStr: string): number {
   return parseFloat(clean);
 }
 
-export function AssetAccountDetail({ account, token, onAccountDeleted }: AssetAccountDetailProps) {
+export function AssetAccountDetail({
+  account,
+  token,
+  urlTab,
+  onTabChange,
+  onAccountDeleted,
+}: AssetAccountDetailProps) {
   const [stores, setStores] = useState<AssetStore[]>([]);
   const [summary, setSummary] = useState<AssetAccountSummary | null>(null);
   const [trendPoints, setTrendPoints] = useState<AssetAccountTrendPoint[]>([]);
@@ -96,9 +111,23 @@ export function AssetAccountDetail({ account, token, onAccountDeleted }: AssetAc
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
 
   // 5 Tabs: classes, values, storage, records, trend
-  const [activeTab, setActiveTab] = useState<AssetTab>('classes');
-  const [initialTabSet, setInitialTabSet] = useState(false);
+  const [activeTab, setActiveTab] = useState<AssetTab>(() =>
+    isValidAssetTab(urlTab) ? urlTab : 'classes'
+  );
+  const [initialTabSet, setInitialTabSet] = useState(() => isValidAssetTab(urlTab));
   const [hasAnyAssetValue, setHasAnyAssetValue] = useState(false);
+
+  const selectTab = (nextTab: AssetTab, replace = false) => {
+    setActiveTab(nextTab);
+    onTabChange?.(nextTab, replace);
+  };
+
+  useEffect(() => {
+    if (isValidAssetTab(urlTab)) {
+      setActiveTab(urlTab);
+      setInitialTabSet(true);
+    }
+  }, [urlTab]);
 
   // Dynamic column hiding for Storage table
   const [hideDescription, setHideDescription] = useState(false);
@@ -207,13 +236,9 @@ export function AssetAccountDetail({ account, token, onAccountDeleted }: AssetAc
       }
 
       if (!initialTabSet) {
-        if (safeStores.length > 0) {
-          setActiveTab('storage');
-        } else if (safeCatalog.length > 0) {
-          setActiveTab('storage');
-        } else {
-          setActiveTab('classes');
-        }
+        const defaultTab: AssetTab =
+          safeStores.length > 0 || safeCatalog.length > 0 ? 'storage' : 'classes';
+        selectTab(defaultTab, true);
         setInitialTabSet(true);
       }
     } catch (err: unknown) {
@@ -409,13 +434,13 @@ export function AssetAccountDetail({ account, token, onAccountDeleted }: AssetAc
   useEffect(() => {
     if (loading) return;
     if (!showValuesTab && activeTab === 'values') {
-      setActiveTab('classes');
+      selectTab('classes', true);
     } else if (!showStorageTab && activeTab === 'storage') {
-      setActiveTab('classes');
+      selectTab('classes', true);
     } else if (!showRecordsTab && activeTab === 'records') {
-      setActiveTab(showStorageTab ? 'storage' : 'classes');
+      selectTab(showStorageTab ? 'storage' : 'classes', true);
     } else if (!showTrendTab && activeTab === 'trend') {
-      setActiveTab(showRecordsTab ? 'records' : showStorageTab ? 'storage' : 'classes');
+      selectTab(showRecordsTab ? 'records' : showStorageTab ? 'storage' : 'classes', true);
     }
   }, [loading, showValuesTab, showStorageTab, showRecordsTab, showTrendTab, activeTab]);
 
@@ -724,6 +749,7 @@ export function AssetAccountDetail({ account, token, onAccountDeleted }: AssetAc
             <span className="badge-account-type badge-asset">
               {account.type}
             </span>
+            <CopyLinkButton className="ml-2" />
             <button
               type="button"
               className="btn-danger-outline btn-sm ml-2"
@@ -768,7 +794,7 @@ export function AssetAccountDetail({ account, token, onAccountDeleted }: AssetAc
           <button
             type="button"
             className={`snapshot-tab-button ${activeTab === 'classes' ? 'active' : ''}`}
-            onClick={() => { setActiveTab('classes'); setMessage(''); setError(''); }}
+            onClick={() => { selectTab('classes'); setMessage(''); setError(''); }}
           >
             Asset Classes
           </button>
@@ -776,7 +802,7 @@ export function AssetAccountDetail({ account, token, onAccountDeleted }: AssetAc
             <button
               type="button"
               className={`snapshot-tab-button ${activeTab === 'values' ? 'active' : ''}`}
-              onClick={() => { setActiveTab('values'); setMessage(''); setError(''); }}
+              onClick={() => { selectTab('values'); setMessage(''); setError(''); }}
             >
               Asset Values
             </button>
@@ -785,7 +811,7 @@ export function AssetAccountDetail({ account, token, onAccountDeleted }: AssetAc
             <button
               type="button"
               className={`snapshot-tab-button ${activeTab === 'storage' ? 'active' : ''}`}
-              onClick={() => { setActiveTab('storage'); setMessage(''); setError(''); }}
+              onClick={() => { selectTab('storage'); setMessage(''); setError(''); }}
             >
               Asset Storage ({(stores || []).length})
             </button>
@@ -794,7 +820,7 @@ export function AssetAccountDetail({ account, token, onAccountDeleted }: AssetAc
             <button
               type="button"
               className={`snapshot-tab-button ${activeTab === 'records' ? 'active' : ''}`}
-              onClick={() => { setActiveTab('records'); setMessage(''); setError(''); }}
+              onClick={() => { selectTab('records'); setMessage(''); setError(''); }}
             >
               Quantity Records
             </button>
@@ -803,7 +829,7 @@ export function AssetAccountDetail({ account, token, onAccountDeleted }: AssetAc
             <button
               type="button"
               className={`snapshot-tab-button ${activeTab === 'trend' ? 'active' : ''}`}
-              onClick={() => { setActiveTab('trend'); setMessage(''); setError(''); }}
+              onClick={() => { selectTab('trend'); setMessage(''); setError(''); }}
             >
               Account Value Trend
             </button>
@@ -913,7 +939,7 @@ export function AssetAccountDetail({ account, token, onAccountDeleted }: AssetAc
                                   className="btn-table-action"
                                   onClick={() => {
                                     setSelectedAssetForValues(asset.id);
-                                    setActiveTab('values');
+                                    selectTab('values');
                                   }}
                                 >
                                   Manage Values
@@ -1218,7 +1244,7 @@ export function AssetAccountDetail({ account, token, onAccountDeleted }: AssetAc
                                   title="Manage Quantity Records by Date"
                                   onClick={() => {
                                     setSelectedStoreIdForRecords(s.id);
-                                    setActiveTab('records');
+                                    selectTab('records');
                                   }}
                                 >
                                   Records
@@ -1292,7 +1318,7 @@ export function AssetAccountDetail({ account, token, onAccountDeleted }: AssetAc
                     <button
                       type="button"
                       className="btn-primary"
-                      onClick={() => setActiveTab('storage')}
+                      onClick={() => selectTab('storage')}
                       style={{ marginTop: '1rem' }}
                     >
                       Go to Asset Storage

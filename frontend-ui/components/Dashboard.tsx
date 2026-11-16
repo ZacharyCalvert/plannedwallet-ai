@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { Routes, Route, Navigate, useNavigate, useParams, useMatch } from 'react-router-dom';
 import { Account, UserSession } from '../lib/types';
 import { fetchAccounts } from '../lib/api';
 import { AccountsPane } from './AccountsPane';
@@ -13,84 +14,171 @@ interface DashboardProps {
   session: UserSession;
 }
 
-export function Dashboard({ session }: DashboardProps) {
-  const [accounts, setAccounts] = useState<Account[]>([]);
-  const [selected, setSelected] = useState<Account | null>(null);
-  const [isCreating, setIsCreating] = useState(false);
+interface AccountRouteViewProps {
+  accounts: Account[];
+  accountsLoaded: boolean;
+  token: string;
+  onAccountDeleted: (deletedId: string) => void;
+}
 
-  const loadAccounts = async () => {
-    try {
-      const list = await fetchAccounts(session.token);
-      setAccounts(list);
-      if (list.length > 0 && !selected) {
-        setSelected(list[0]);
-      }
-    } catch {
-      // Network or empty load handled gracefully
-    }
+function AccountRouteView({
+  accounts,
+  accountsLoaded,
+  token,
+  onAccountDeleted,
+}: AccountRouteViewProps) {
+  const { accountId, tab } = useParams<{ accountId: string; tab?: string }>();
+  const navigate = useNavigate();
+  const account = accounts.find((a) => a.id === accountId);
+
+  if (!accountsLoaded) {
+    return <div className="card empty-prompt"><p>Loading account...</p></div>;
+  }
+
+  if (!account) {
+    return (
+      <div className="card empty-prompt">
+        <p>Account not found or you do not have access.</p>
+        <button type="button" className="btn-secondary btn-sm" onClick={() => navigate('/')}>
+          Go to Accounts
+        </button>
+      </div>
+    );
+  }
+
+  const handleTabChange = (nextTab: string, replace = false) => {
+    navigate(`/accounts/${account.id}/${nextTab}`, { replace });
   };
 
+  if (account.type === 'snapshot') {
+    return (
+      <SnapshotAccountDetail
+        key={account.id}
+        account={account}
+        token={token}
+        urlTab={tab}
+        onTabChange={handleTabChange}
+        onAccountDeleted={onAccountDeleted}
+      />
+    );
+  }
+
+  if (account.type === 'asset' || account.type === 'assets') {
+    return (
+      <AssetAccountDetail
+        key={account.id}
+        account={account}
+        token={token}
+        urlTab={tab}
+        onTabChange={handleTabChange}
+        onAccountDeleted={onAccountDeleted}
+      />
+    );
+  }
+
+  return (
+    <AccountDetail
+      key={account.id}
+      account={account}
+      token={token}
+      onAccountDeleted={onAccountDeleted}
+    />
+  );
+}
+
+function DashboardIndex({ accounts, accountsLoaded }: { accounts: Account[]; accountsLoaded: boolean }) {
+  if (!accountsLoaded) {
+    return <div className="card empty-prompt"><p>Loading accounts...</p></div>;
+  }
+  if (accounts.length > 0) {
+    return <Navigate to={`/accounts/${accounts[0].id}`} replace />;
+  }
+  return (
+    <div className="card empty-prompt">
+      <p>Select an account from the left pane or click <strong>+</strong> to create an account.</p>
+    </div>
+  );
+}
+
+export function Dashboard({ session }: DashboardProps) {
+  const [accounts, setAccounts] = useState<Account[]>([]);
+  const [accountsLoaded, setAccountsLoaded] = useState(false);
+  const navigate = useNavigate();
+  const accountMatch = useMatch('/accounts/:accountId/*');
+  const matchedId = accountMatch?.params.accountId;
+  const selectedId = matchedId && matchedId !== 'new' ? matchedId : null;
+
   useEffect(() => {
-    loadAccounts();
+    let cancelled = false;
+    fetchAccounts(session.token)
+      .then((list) => {
+        if (!cancelled) setAccounts(list);
+      })
+      .catch(() => {
+        // Network or empty load handled gracefully
+      })
+      .finally(() => {
+        if (!cancelled) setAccountsLoaded(true);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [session.token]);
 
   const handleCreated = (newAcc: Account) => {
     setAccounts((prev) => [newAcc, ...prev]);
-    setSelected(newAcc);
-    setIsCreating(false);
+    navigate(`/accounts/${newAcc.id}`);
   };
 
   const handleAccountDeleted = (deletedId: string) => {
-    setAccounts((prev) => {
-      const remaining = prev.filter((a) => a.id !== deletedId);
-      setSelected(remaining.length > 0 ? remaining[0] : null);
-      return remaining;
-    });
+    const remaining = accounts.filter((a) => a.id !== deletedId);
+    setAccounts(remaining);
+    navigate(remaining.length > 0 ? `/accounts/${remaining[0].id}` : '/', { replace: true });
+  };
+
+  const handleCancelCreate = () => {
+    navigate(accounts.length > 0 ? `/accounts/${accounts[0].id}` : '/');
   };
 
   return (
     <div className="dashboard-layout">
       <AccountsPane
         accounts={accounts}
-        selectedId={selected?.id ?? null}
-        onSelectAccount={(acc) => {
-          setSelected(acc);
-          setIsCreating(false);
-        }}
-        onNewAccountClick={() => setIsCreating(true)}
+        selectedId={selectedId}
+        onSelectAccount={(acc) => navigate(`/accounts/${acc.id}`)}
+        onNewAccountClick={() => navigate('/accounts/new')}
       />
       <main className="dashboard-content">
-        {isCreating ? (
-          <NewAccountForm
-            token={session.token}
-            onSuccess={handleCreated}
-            onCancel={() => setIsCreating(false)}
+        <Routes>
+          <Route path="/" element={<DashboardIndex accounts={accounts} accountsLoaded={accountsLoaded} />} />
+          <Route
+            path="/accounts/new"
+            element={<NewAccountForm token={session.token} onSuccess={handleCreated} onCancel={handleCancelCreate} />}
           />
-        ) : selected ? (
-          selected.type === 'snapshot' ? (
-            <SnapshotAccountDetail
-              account={selected}
-              token={session.token}
-              onAccountDeleted={handleAccountDeleted}
-            />
-          ) : selected.type === 'asset' || selected.type === 'assets' ? (
-            <AssetAccountDetail
-              account={selected}
-              token={session.token}
-              onAccountDeleted={handleAccountDeleted}
-            />
-          ) : (
-            <AccountDetail
-              account={selected}
-              token={session.token}
-              onAccountDeleted={handleAccountDeleted}
-            />
-          )
-        ) : (
-          <div className="card empty-prompt">
-            <p>Select an account from the left pane or click <strong>+</strong> to create an account.</p>
-          </div>
-        )}
+          <Route
+            path="/accounts/:accountId"
+            element={
+              <AccountRouteView
+                accounts={accounts}
+                accountsLoaded={accountsLoaded}
+                token={session.token}
+                onAccountDeleted={handleAccountDeleted}
+              />
+            }
+          />
+          <Route
+            path="/accounts/:accountId/:tab"
+            element={
+              <AccountRouteView
+                accounts={accounts}
+                accountsLoaded={accountsLoaded}
+                token={session.token}
+                onAccountDeleted={handleAccountDeleted}
+              />
+            }
+          />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
       </main>
     </div>
   );

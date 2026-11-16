@@ -24,6 +24,8 @@ Medium priority:
 - [x] Infrastructure + auto deploy to production
 - [x] Disaster recovery / backups / automation reload of data
 - [x] Data retention
+- [x] Protect collision on imported records
+- [x] Add routing for deep linking to asset and asset tab
 Add categories (expense categories)
 rollup data (monthly)
 Reconcile calculations - locked records for edits + snapshot of net worth?

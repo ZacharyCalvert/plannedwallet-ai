@@ -1,13 +1,15 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { BrowserRouter, useNavigate } from 'react-router-dom';
 import { UserSession } from '../lib/types';
 import { Banner } from '../components/Banner';
 import { AuthCenter } from '../components/AuthCenter';
 import { Dashboard } from '../components/Dashboard';
 
-export default function HomePage() {
+function AppShell() {
   const [session, setSession] = useState<UserSession | null>(null);
+  const navigate = useNavigate();
 
   const handleAuthSuccess = (username: string, token: string) => {
     setSession({ username, token });
@@ -15,6 +17,7 @@ export default function HomePage() {
 
   const handleSignOut = () => {
     setSession(null);
+    navigate('/', { replace: true });
   };
 
   return (
@@ -28,5 +31,23 @@ export default function HomePage() {
         )}
       </div>
     </div>
+  );
+}
+
+export default function HomePage() {
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  if (!mounted) {
+    return <div className="app-root" />;
+  }
+
+  return (
+    <BrowserRouter>
+      <AppShell />
+    </BrowserRouter>
   );
 }

@@ -5,6 +5,7 @@ import { Account, AccountSnapshot } from '../lib/types';
 import { DateInput, displayDateToIso } from './DateInput';
 import { SnapshotTrendGraph } from './SnapshotTrendGraph';
 import { DeleteAccountModal } from './DeleteAccountModal';
+import { CopyLinkButton } from './CopyLinkButton';
 import {
   fetchAccountSnapshots,
   createAccountSnapshot,
@@ -15,7 +16,15 @@ import {
 interface SnapshotAccountDetailProps {
   account: Account;
   token: string;
+  urlTab?: string;
+  onTabChange?: (tab: string, replace?: boolean) => void;
   onAccountDeleted?: (deletedId: string) => void;
+}
+
+type SnapshotTab = 'snapshots' | 'graph';
+
+function resolveSnapshotTab(tab?: string): SnapshotTab {
+  return tab === 'graph' ? 'graph' : 'snapshots';
 }
 
 function getTodayDateString(): string {
@@ -56,13 +65,32 @@ function getAmountColorClass(amtStr: string): string {
   return num > 0 ? 'amount-text-positive' : 'amount-text-negative';
 }
 
-export function SnapshotAccountDetail({ account, token, onAccountDeleted }: SnapshotAccountDetailProps) {
+export function SnapshotAccountDetail({
+  account,
+  token,
+  urlTab,
+  onTabChange,
+  onAccountDeleted,
+}: SnapshotAccountDetailProps) {
   const [snapshots, setSnapshots] = useState<AccountSnapshot[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [formError, setFormError] = useState('');
-  const [activeTab, setActiveTab] = useState<'snapshots' | 'graph'>('snapshots');
+  const [activeTab, setActiveTab] = useState<SnapshotTab>(() => resolveSnapshotTab(urlTab));
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+
+  useEffect(() => {
+    const resolved = resolveSnapshotTab(urlTab);
+    setActiveTab(resolved);
+    if (!urlTab) {
+      onTabChange?.(resolved, true);
+    }
+  }, [urlTab]);
+
+  const selectTab = (nextTab: SnapshotTab) => {
+    setActiveTab(nextTab);
+    onTabChange?.(nextTab);
+  };
 
   // Add / Edit Form State
   const [selectedSnapshotId, setSelectedSnapshotId] = useState<string | null>(null);
@@ -250,6 +278,7 @@ export function SnapshotAccountDetail({ account, token, onAccountDeleted }: Snap
             <span className="badge-account-type badge-snapshot">
               {account.type}
             </span>
+            <CopyLinkButton className="ml-2" />
             <button
               type="button"
               className="btn-danger-outline btn-sm ml-2"
@@ -299,7 +328,7 @@ export function SnapshotAccountDetail({ account, token, onAccountDeleted }: Snap
         <button
           type="button"
           className={`snapshot-tab-button ${activeTab === 'snapshots' ? 'active' : ''}`}
-          onClick={() => setActiveTab('snapshots')}
+          onClick={() => selectTab('snapshots')}
         >
           <svg
             width="18"
@@ -325,7 +354,7 @@ export function SnapshotAccountDetail({ account, token, onAccountDeleted }: Snap
         <button
           type="button"
           className={`snapshot-tab-button ${activeTab === 'graph' ? 'active' : ''}`}
-          onClick={() => setActiveTab('graph')}
+          onClick={() => selectTab('graph')}
         >
           <svg
             width="18"

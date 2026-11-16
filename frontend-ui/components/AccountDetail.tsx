@@ -5,6 +5,7 @@ import { Account, AccountRecord } from '../lib/types';
 import { DateInput } from './DateInput';
 import CsvUploadModal from './CsvUploadModal';
 import { DeleteAccountModal } from './DeleteAccountModal';
+import { CopyLinkButton } from './CopyLinkButton';
 import {
   fetchAccountRecords,
   createAccountRecord,
@@ -303,6 +304,7 @@ export function AccountDetail({ account, token, onAccountDeleted }: AccountDetai
             <span className={`badge-account-type badge-${(account.type || '').toLowerCase().replace(/\s+/g, '-')}`}>
               {account.type}
             </span>
+            <CopyLinkButton className="ml-2" />
             <button
               type="button"
               className="btn-danger-outline btn-sm ml-2"
