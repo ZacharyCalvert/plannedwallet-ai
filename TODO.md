@@ -26,9 +26,9 @@ Medium priority:
 - [x] Data retention
 - [x] Protect collision on imported records
 - [x] Add routing for deep linking to asset and asset tab
-Add categories (expense categories)
-rollup data (monthly)
+- [x] Add categories (expense categories)
 Reconcile calculations - locked records for edits + snapshot of net worth?
+rollup data (monthly)
 account settings: reconcile account on month, or daily
 Bill reminders
 Review labels on credit card such that outgoing (negative) implies spend and positive implies you paid off CC
