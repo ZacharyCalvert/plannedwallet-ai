@@ -1,12 +1,22 @@
 import type { AccountRecord } from './types.ts';
 
 export type BalanceRange = '30d' | '60d' | '90d' | '1y' | 'all';
+export type RollupPeriod = 'daily' | 'weekly' | 'monthly' | 'yearly';
 
 export interface BalanceTrendPoint {
   date: string;
   balance: number;
   delta: number;
   transactionCount: number;
+  sampleCount?: number;
+  periodLabel?: string;
+}
+
+export interface RolledUpValuePoint {
+  date: string;
+  value: number;
+  sampleCount: number;
+  periodLabel: string;
 }
 
 export interface BalanceMetrics {
@@ -253,4 +263,121 @@ export function computeYAxisScale(minVal: number, maxVal: number): YAxisScale {
     step,
     ticks,
   };
+}
+
+function formatUtcShortDate(isoDate: string): string {
+  const [y, m, d] = isoDate.split('-').map((n) => parseInt(n, 10));
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  return dt.toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    timeZone: 'UTC',
+  });
+}
+
+function formatUtcMonthYear(ym: string): string {
+  const [y, m] = ym.split('-').map((n) => parseInt(n, 10));
+  const dt = new Date(Date.UTC(y, m - 1, 1));
+  return dt.toLocaleDateString('en-US', {
+    month: 'short',
+    year: 'numeric',
+    timeZone: 'UTC',
+  });
+}
+
+function getWeekMondayIso(isoDate: string): string {
+  const [y, m, d] = isoDate.split('-').map((n) => parseInt(n, 10));
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  const offset = (dt.getUTCDay() + 6) % 7;
+  dt.setUTCDate(dt.getUTCDate() - offset);
+  return dt.toISOString().slice(0, 10);
+}
+
+function getBucketInfo(
+  isoDate: string,
+  rollup: Exclude<RollupPeriod, 'daily'>
+): { key: string; date: string; label: string } {
+  if (rollup === 'weekly') {
+    const monday = getWeekMondayIso(isoDate);
+    return { key: monday, date: monday, label: `Week of ${formatUtcShortDate(monday)}` };
+  }
+  if (rollup === 'monthly') {
+    const ym = isoDate.slice(0, 7);
+    return { key: ym, date: `${ym}-01`, label: formatUtcMonthYear(ym) };
+  }
+  const yr = isoDate.slice(0, 4);
+  return { key: yr, date: `${yr}-01-01`, label: yr };
+}
+
+export function rollupValuesByPeriod<T>(
+  points: T[],
+  rollup: RollupPeriod,
+  getDate: (pt: T) => string,
+  getValue: (pt: T) => number
+): RolledUpValuePoint[] {
+  if (points.length === 0) return [];
+  if (rollup === 'daily') {
+    return points.map((pt) => {
+      const d = getDate(pt);
+      return {
+        date: d,
+        value: getValue(pt),
+        sampleCount: 1,
+        periodLabel: formatUtcShortDate(d),
+      };
+    });
+  }
+
+  const buckets = new Map<
+    string,
+    { date: string; label: string; sum: number; count: number }
+  >();
+  for (const pt of points) {
+    const bucket = getBucketInfo(getDate(pt), rollup);
+    const cur = buckets.get(bucket.key) || {
+      date: bucket.date,
+      label: bucket.label,
+      sum: 0,
+      count: 0,
+    };
+    cur.sum += getValue(pt);
+    cur.count += 1;
+    buckets.set(bucket.key, cur);
+  }
+
+  return Array.from(buckets.values())
+    .sort((a, b) => a.date.localeCompare(b.date))
+    .map((b) => ({
+      date: b.date,
+      value: b.sum / b.count,
+      sampleCount: b.count,
+      periodLabel: b.label,
+    }));
+}
+
+export function rollupAccountBalanceSeries(
+  points: BalanceTrendPoint[],
+  rollup: RollupPeriod
+): BalanceTrendPoint[] {
+  if (rollup === 'daily') return points;
+  return rollupValuesByPeriod(
+    points,
+    rollup,
+    (p) => p.date,
+    (p) => p.balance
+  ).map((r) => ({
+    date: r.date,
+    balance: r.value,
+    delta: 0,
+    transactionCount: 0,
+    sampleCount: r.sampleCount,
+    periodLabel: r.periodLabel,
+  }));
+}
+
+export function formatRollupXAxisLabel(isoDate: string, rollup: RollupPeriod): string {
+  if (rollup === 'monthly') return isoDate.slice(0, 7);
+  if (rollup === 'yearly') return isoDate.slice(0, 4);
+  return isoDate.slice(5);
 }

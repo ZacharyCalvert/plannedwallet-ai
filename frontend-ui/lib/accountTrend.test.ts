@@ -7,6 +7,8 @@ import {
   computeBalanceMetrics,
   selectHighlightPoints,
   computeYAxisScale,
+  rollupValuesByPeriod,
+  rollupAccountBalanceSeries,
 } from './accountTrend.ts';
 
 function makeRecord(id: string, dateSent: string, value: number): AccountRecord {
@@ -164,5 +166,43 @@ describe('Account Balance Trend Helpers', () => {
     assert.ok(mixed.ticks.includes(0));
     assert.ok(mixed.yMin < 0 && mixed.yMax > 0);
     assert.ok(mixed.ticks.every((t) => Number.isInteger(t)));
+  });
+
+  it('rolls up values by weekly, monthly, and yearly averages while preserving daily', () => {
+    const daily = [
+      { date: '2025-12-10', value: 100 },
+      { date: '2026-11-09', value: 200 }, // Monday
+      { date: '2026-11-11', value: 400 }, // Wednesday same week
+      { date: '2026-11-20', value: 600 }, // Later week in Nov 2026
+    ];
+
+    assert.strictEqual(rollupValuesByPeriod(daily, 'daily', (p) => p.date, (p) => p.value).length, 4);
+
+    const weekly = rollupValuesByPeriod(daily, 'weekly', (p) => p.date, (p) => p.value);
+    assert.strictEqual(weekly.length, 3);
+    assert.strictEqual(weekly[1].date, '2026-11-09');
+    assert.strictEqual(weekly[1].value, 300);
+    assert.strictEqual(weekly[1].sampleCount, 2);
+
+    const monthly = rollupValuesByPeriod(daily, 'monthly', (p) => p.date, (p) => p.value);
+    assert.strictEqual(monthly.length, 2);
+    assert.strictEqual(monthly[1].date, '2026-11-01');
+    assert.strictEqual(monthly[1].value, 400);
+    assert.strictEqual(monthly[1].sampleCount, 3);
+
+    const yearly = rollupValuesByPeriod(daily, 'yearly', (p) => p.date, (p) => p.value);
+    assert.strictEqual(yearly.length, 2);
+    assert.strictEqual(yearly[0].value, 100);
+    assert.strictEqual(yearly[1].date, '2026-01-01');
+    assert.strictEqual(yearly[1].value, 400);
+
+    const balSeries = buildAccountBalanceSeries([
+      makeRecord('1', '2026-11-09', 1000),
+      makeRecord('2', '2026-11-11', -200),
+    ]);
+    const rolledBal = rollupAccountBalanceSeries(balSeries, 'weekly');
+    assert.strictEqual(rolledBal.length, 1);
+    assert.strictEqual(rolledBal[0].balance, 900); // avg of 1000 and 800
+    assert.strictEqual(rolledBal[0].sampleCount, 2);
   });
 });

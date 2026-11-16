@@ -4,12 +4,15 @@ import { useState, useMemo, useRef, useEffect } from 'react';
 import { AccountRecord } from '../lib/types';
 import {
   BalanceRange,
+  RollupPeriod,
   BalanceTrendPoint,
   buildAccountBalanceSeries,
   filterBalanceSeriesByRange,
+  rollupAccountBalanceSeries,
   computeBalanceMetrics,
   selectHighlightPoints,
   computeYAxisScale,
+  formatRollupXAxisLabel,
 } from '../lib/accountTrend';
 
 interface AccountBalanceTrendGraphProps {
@@ -23,6 +26,13 @@ const RANGE_OPTIONS: { value: BalanceRange; label: string }[] = [
   { value: '90d', label: '90 Days' },
   { value: '60d', label: '60 Days' },
   { value: '30d', label: '30 Days' },
+];
+
+const ROLLUP_OPTIONS: { value: RollupPeriod; label: string }[] = [
+  { value: 'daily', label: 'Daily' },
+  { value: 'weekly', label: 'Weekly' },
+  { value: 'monthly', label: 'Monthly' },
+  { value: 'yearly', label: 'Yearly' },
 ];
 
 const SVG_WIDTH = 840;
@@ -126,6 +136,7 @@ function shouldShowXLabel(index: number, total: number): boolean {
 export function AccountBalanceTrendGraph({ records, accountType }: AccountBalanceTrendGraphProps) {
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
   const [rangeFilter, setRangeFilter] = useState<BalanceRange>('all');
+  const [rollupPeriod, setRollupPeriod] = useState<RollupPeriod>('daily');
   const [svgRenderedWidth, setSvgRenderedWidth] = useState<number>(SVG_WIDTH);
   const svgRef = useRef<SVGSVGElement>(null);
 
@@ -139,12 +150,16 @@ export function AccountBalanceTrendGraph({ records, accountType }: AccountBalanc
     const observer = new ResizeObserver(updateWidth);
     observer.observe(el);
     return () => observer.disconnect();
-  }, [records.length, rangeFilter]);
+  }, [records.length, rangeFilter, rollupPeriod]);
 
   const fullSeries = useMemo(() => buildAccountBalanceSeries(records), [records]);
-  const filtered = useMemo(
+  const rangeFiltered = useMemo(
     () => filterBalanceSeriesByRange(fullSeries, rangeFilter),
     [fullSeries, rangeFilter]
+  );
+  const filtered = useMemo(
+    () => rollupAccountBalanceSeries(rangeFiltered, rollupPeriod),
+    [rangeFiltered, rollupPeriod]
   );
   const metrics = useMemo(() => computeBalanceMetrics(filtered), [filtered]);
   const chartData = useMemo(() => computeChartGeometry(filtered), [filtered]);
@@ -164,23 +179,42 @@ export function AccountBalanceTrendGraph({ records, accountType }: AccountBalanc
         <div>
           <h3 className="graph-title">Balance Over Time</h3>
           <p className="graph-subtitle">
-            Cumulative account balance across recorded transactions
+            {rollupPeriod === 'daily'
+              ? 'Cumulative account balance across recorded transactions'
+              : `Average balance rolled up ${rollupPeriod}`}
           </p>
         </div>
-        <div className="graph-range-pills" role="group" aria-label="Timeframe filter">
-          {RANGE_OPTIONS.map((opt) => (
-            <button
-              key={opt.value}
-              type="button"
-              className={`pill-btn ${rangeFilter === opt.value ? 'active' : ''}`}
-              onClick={() => {
-                setHoveredIndex(null);
-                setRangeFilter(opt.value);
-              }}
-            >
-              {opt.label}
-            </button>
-          ))}
+        <div className="graph-pills-cluster">
+          <div className="graph-range-pills" role="group" aria-label="Rollup period">
+            {ROLLUP_OPTIONS.map((opt) => (
+              <button
+                key={opt.value}
+                type="button"
+                className={`pill-btn ${rollupPeriod === opt.value ? 'active' : ''}`}
+                onClick={() => {
+                  setHoveredIndex(null);
+                  setRollupPeriod(opt.value);
+                }}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+          <div className="graph-range-pills" role="group" aria-label="Timeframe filter">
+            {RANGE_OPTIONS.map((opt) => (
+              <button
+                key={opt.value}
+                type="button"
+                className={`pill-btn ${rangeFilter === opt.value ? 'active' : ''}`}
+                onClick={() => {
+                  setHoveredIndex(null);
+                  setRangeFilter(opt.value);
+                }}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -212,7 +246,9 @@ export function AccountBalanceTrendGraph({ records, accountType }: AccountBalanc
             <span className="metric-val">
               {formatCurrency(metrics.minVal)} - {formatCurrency(metrics.maxVal)}
             </span>
-            <span className="metric-sub">{filtered.length} daily points</span>
+            <span className="metric-sub">
+              {filtered.length} {rollupPeriod === 'daily' ? 'daily points' : `${rollupPeriod} buckets`}
+            </span>
           </div>
         </div>
       )}
@@ -243,14 +279,23 @@ export function AccountBalanceTrendGraph({ records, accountType }: AccountBalanc
                 top: `${(activePoint.y / SVG_HEIGHT) * 100}%`,
               }}
             >
-              <div className="tooltip-date">{formatDateDisplay(activePoint.point.date)}</div>
+              <div className="tooltip-date">
+                {activePoint.point.periodLabel || formatDateDisplay(activePoint.point.date)}
+              </div>
               <div className="tooltip-value">{formatCurrency(activePoint.point.balance)}</div>
-              {activePoint.point.transactionCount > 0 && (
+              {rollupPeriod !== 'daily' && activePoint.point.sampleCount ? (
                 <div className="tooltip-diff">
-                  {activePoint.point.delta >= 0 ? '+' : ''}
-                  {formatCurrency(activePoint.point.delta)} ({activePoint.point.transactionCount}{' '}
-                  {activePoint.point.transactionCount === 1 ? 'record' : 'records'})
+                  Avg of {activePoint.point.sampleCount}{' '}
+                  {activePoint.point.sampleCount === 1 ? 'daily point' : 'daily points'}
                 </div>
+              ) : (
+                activePoint.point.transactionCount > 0 && (
+                  <div className="tooltip-diff">
+                    {activePoint.point.delta >= 0 ? '+' : ''}
+                    {formatCurrency(activePoint.point.delta)} ({activePoint.point.transactionCount}{' '}
+                    {activePoint.point.transactionCount === 1 ? 'record' : 'records'})
+                  </div>
+                )
               )}
             </div>
           )}
@@ -342,7 +387,7 @@ export function AccountBalanceTrendGraph({ records, accountType }: AccountBalanc
                   fill="#64748b"
                   fontFamily="inherit"
                 >
-                  {pt.point.date.slice(5)}
+                  {formatRollupXAxisLabel(pt.point.date, rollupPeriod)}
                 </text>
               ) : null
             )}
