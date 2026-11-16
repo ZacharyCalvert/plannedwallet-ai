@@ -278,3 +278,87 @@ def test_perspective_sharing_and_access_control(api_context: APIRequestContext):
     # User B gets 404 again
     res_b_after = api_context.get(f"/api/v1/perspectives/{p_id}", headers=headers_b)
     assert res_b_after.status == 404
+
+
+def test_perspective_credit_card_transfer_deduction_and_windows(api_context: APIRequestContext):
+    """
+    Test that checking/savings debits matching a credit card income within 35 days
+    are recognized as credit card payment transfers and excluded from spend calculations,
+    and verify 30d, 90d, 365d spend and runway fields.
+    """
+    user, token = create_authenticated_user(api_context)
+    headers = {"Authorization": f"Bearer {token}"}
+
+    # 1. Create checking and credit card accounts
+    chk_res = api_context.post(
+        "/api/v1/accounts",
+        data={"name": "Everyday Checking", "type": "checking", "description": "Primary checking"},
+        headers=headers,
+    )
+    assert chk_res.status == 201
+    chk_id = chk_res.json()["id"]
+
+    cc_res = api_context.post(
+        "/api/v1/accounts",
+        data={"name": "Travel Credit Card", "type": "credit card", "description": "Everyday card"},
+        headers=headers,
+    )
+    assert cc_res.status == 201
+    cc_id = cc_res.json()["id"]
+
+    # 2. Add records
+    # Initial deposit into checking
+    api_context.post(f"/api/v1/accounts/{chk_id}/records", data={"value": 5000.0, "date_sent": "2026-01-01", "entity": "Payroll Deposit"}, headers=headers)
+    # Checking spend of 521.45 on Jan 1
+    api_context.post(f"/api/v1/accounts/{chk_id}/records", data={"value": -521.45, "date_sent": "2026-01-01", "entity": "Credit Card Payment"}, headers=headers)
+    # Credit card income of 521.45 on Feb 2 (32 days later <= 35 days)
+    api_context.post(f"/api/v1/accounts/{cc_id}/records", data={"value": 521.45, "date_sent": "2026-02-02", "entity": "Automatic Payment"}, headers=headers)
+    # Credit card purchase of 100.00 on Jan 15
+    api_context.post(f"/api/v1/accounts/{cc_id}/records", data={"value": -100.0, "date_sent": "2026-01-15", "entity": "Grocery Market"}, headers=headers)
+
+    # 3. Create perspective linking checking and credit card
+    p_res = api_context.post(
+        "/api/v1/perspectives",
+        data={
+            "name": "Combined Cash & Credit",
+            "description": "Checking and Card perspective",
+            "account_ids": [chk_id, cc_id],
+            "settings": {
+                "show_financial_trend": True,
+                "calculate_average_daily_spend": True,
+                "track_ruined_date": True,
+            },
+        },
+        headers=headers,
+    )
+    assert p_res.status == 201
+    p_id = p_res.json()["id"]
+
+    # 4. Fetch perspective view
+    view_res = api_context.get(f"/api/v1/perspectives/{p_id}/view", headers=headers)
+    assert view_res.status == 200
+    view = view_res.json()
+
+    # Total savings: (5000 - 521.45) + (521.45 - 100) = 4900.0
+    assert view["current_total_value"] == 4900.0
+
+    # The 521.45 payment from checking to credit card within 32 days is excluded.
+    # The only remaining spend is 100.0 over 1 day = 100.0/day.
+    assert view["average_daily_spend"] is not None
+    assert round(view["average_daily_spend"], 1) == 100.0
+
+    # Days until ruined: 4900 / 100 = 49 days
+    assert view["days_until_ruined"] == 49
+    assert view["ruined_date"] is not None
+
+    # Multi-window spend and runway metrics
+    assert "daily_spend_30d" in view
+    assert "daily_spend_90d" in view
+    assert "daily_spend_365d" in view
+    assert "days_until_ruined_30d" in view
+    assert "days_until_ruined_90d" in view
+    assert "days_until_ruined_365d" in view
+    assert "ruined_date_30d" in view
+    assert "ruined_date_90d" in view
+    assert "ruined_date_365d" in view
+

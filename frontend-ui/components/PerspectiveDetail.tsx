@@ -4,7 +4,6 @@ import { useState, useEffect, useMemo } from 'react';
 import {
   Account,
   Perspective,
-  PerspectiveAccess,
   PerspectiveSettings,
   PerspectiveViewResponse,
 } from '../lib/types';
@@ -13,12 +12,10 @@ import {
   updatePerspectiveSettings,
   linkPerspectiveAccount,
   unlinkPerspectiveAccount,
-  fetchPerspectiveAccess,
-  grantPerspectiveAccess,
-  revokePerspectiveAccess,
   deletePerspective,
 } from '../lib/api';
 import { PerspectiveTrendGraph } from './PerspectiveTrendGraph';
+import { RuinedTrajectoryChart } from './RuinedTrajectoryChart';
 
 interface PerspectiveDetailProps {
   perspective: Perspective;
@@ -57,7 +54,16 @@ export function PerspectiveDetail({
   const [view, setView] = useState<PerspectiveViewResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [activeTab, setActiveTab] = useState<TabKey>('trend');
+  // Helper to resolve the leftmost available tab from perspective settings
+  const getLeftmostTab = (s?: PerspectiveSettings): TabKey => {
+    if (!s || s.show_financial_trend) return 'trend';
+    if (s.calculate_average_daily_spend) return 'spend';
+    if (s.calculate_average_return_yoy) return 'return';
+    if (s.track_ruined_date) return 'ruined';
+    return 'settings';
+  };
+
+  const [activeTab, setActiveTab] = useState<TabKey>(() => getLeftmostTab(perspective?.settings));
 
   // Settings form state
   const [settingsForm, setSettingsForm] = useState({
@@ -74,12 +80,6 @@ export function PerspectiveDetail({
   const [selectedAccountToAdd, setSelectedAccountToAdd] = useState('');
   const [linkingAccount, setLinkingAccount] = useState(false);
 
-  // Sharing state
-  const [accessList, setAccessList] = useState<PerspectiveAccess[]>([]);
-  const [shareUserId, setShareUserId] = useState('');
-  const [shareLevel, setShareLevel] = useState<'read' | 'edit' | 'admin'>('read');
-  const [sharingLoading, setSharingLoading] = useState(false);
-
   const loadView = async () => {
     try {
       setLoading(true);
@@ -87,6 +87,7 @@ export function PerspectiveDetail({
       const data = await fetchPerspectiveView(token, perspective.id);
       setView(data);
       if (data.settings) {
+        setActiveTab(getLeftmostTab(data.settings));
         setSettingsForm({
           show_financial_trend: data.settings.show_financial_trend,
           calculate_average_daily_spend: data.settings.calculate_average_daily_spend,
@@ -105,25 +106,16 @@ export function PerspectiveDetail({
     }
   };
 
-  const loadAccess = async () => {
-    try {
-      const list = await fetchPerspectiveAccess(token, perspective.id);
-      setAccessList(list);
-    } catch {
-      // Non-admin may not have access to list
-    }
-  };
-
   useEffect(() => {
+    setActiveTab(getLeftmostTab(perspective?.settings));
     loadView();
-    loadAccess();
   }, [perspective.id, token]);
 
   // Compute tabs dynamically based on perspective settings
   const dynamicTabs = useMemo(() => {
-    const s = view?.settings;
+    const s = view?.settings || perspective?.settings;
     const tabs: { key: TabKey; label: string; icon: string }[] = [];
-    if (s?.show_financial_trend) {
+    if (!s || s.show_financial_trend) {
       tabs.push({ key: 'trend', label: 'Financial Trend', icon: '📈' });
     }
     if (s?.calculate_average_daily_spend) {
@@ -137,7 +129,7 @@ export function PerspectiveDetail({
     }
     tabs.push({ key: 'settings', label: 'Settings', icon: '⚙️' });
     return tabs;
-  }, [view?.settings]);
+  }, [view?.settings, perspective?.settings]);
 
   // Ensure active tab is valid
   useEffect(() => {
@@ -210,31 +202,6 @@ export function PerspectiveDetail({
       await loadView();
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to unlink account');
-    }
-  };
-
-  const handleGrantAccess = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!shareUserId.trim()) return;
-    setSharingLoading(true);
-    try {
-      await grantPerspectiveAccess(token, perspective.id, shareUserId.trim(), shareLevel);
-      setShareUserId('');
-      await loadAccess();
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Failed to share perspective');
-    } finally {
-      setSharingLoading(false);
-    }
-  };
-
-  const handleRevokeAccess = async (targetId: string) => {
-    if (!confirm('Are you sure you want to revoke this user access?')) return;
-    try {
-      await revokePerspectiveAccess(token, perspective.id, targetId);
-      await loadAccess();
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Failed to revoke access');
     }
   };
 
@@ -381,29 +348,114 @@ export function PerspectiveDetail({
       {activeTab === 'ruined' && view?.settings.track_ruined_date && (
         <div className="perspective-tab-content">
           <div className="metric-spotlight-card card ruined-spotlight-card">
-            <h3>Loss of Income Trajectory (Spend to $0)</h3>
-            {view.ruined_date && view.days_until_ruined != null ? (
-              <>
-                <div className="spotlight-metric-value">
-                  {view.days_until_ruined}
-                  <span className="spotlight-unit">days of financial runway</span>
-                </div>
-                <div className="ruined-date-pill">
-                  Projected Zero-Balance Date: <strong>{formatDateDisplay(view.ruined_date)}</strong>
-                </div>
-                <p className="spotlight-description">
-                  Forecasting scenario: Assuming all current revenue and employment income ceased today, your combined
-                  liquid and invested savings of <strong>{formatCurrency(currentTotal)}</strong> at your daily spend pace of{' '}
-                  <strong>{formatCurrency(view.average_daily_spend || 0)}/day</strong> would trend down to zero on{' '}
-                  <strong>{formatDateDisplay(view.ruined_date)}</strong>.
+            <div className="ruined-spotlight-header">
+              <div>
+                <h3 className="ruined-spotlight-title">Loss of Income Trajectory (Spend to $0)</h3>
+                <p className="ruined-spotlight-desc">
+                  Simulation modeling how long your accumulated savings will last if all incoming revenue ceases today.
                 </p>
-              </>
-            ) : (
-              <p className="spotlight-description">
-                Infinite runway: No daily spending detected across linked accounts.
-              </p>
+              </div>
+              <div className="ruined-date-pill">
+                Current Savings: <strong>{formatCurrency(currentTotal)}</strong>
+              </div>
+            </div>
+
+            {/* 30, 90, 365 Days Spending & Runway Comparison */}
+            <div className="runway-windows-grid mt-2">
+              {/* 30 Day Card */}
+              <div className="runway-window-card">
+                <span className="window-label">Last 30 Days Pace</span>
+                <div className="window-spend-amount">
+                  {formatCurrency(view.daily_spend_30d ?? 0)}
+                  <span className="window-unit">/ day</span>
+                </div>
+                <div className="window-runway-stat">
+                  <span className="stat-label">Runway:</span>
+                  <span className="stat-val">
+                    {view.days_until_ruined_30d != null ? `${view.days_until_ruined_30d} days` : 'Infinite'}
+                  </span>
+                </div>
+                <div className="window-runway-stat">
+                  <span className="stat-label">Zero-Balance:</span>
+                  <span className="stat-val font-semibold">
+                    {view.ruined_date_30d ? formatDateDisplay(view.ruined_date_30d) : 'Never'}
+                  </span>
+                </div>
+              </div>
+
+              {/* 90 Day Card */}
+              <div className="runway-window-card">
+                <span className="window-label">Last 90 Days Pace</span>
+                <div className="window-spend-amount">
+                  {formatCurrency(view.daily_spend_90d ?? 0)}
+                  <span className="window-unit">/ day</span>
+                </div>
+                <div className="window-runway-stat">
+                  <span className="stat-label">Runway:</span>
+                  <span className="stat-val">
+                    {view.days_until_ruined_90d != null ? `${view.days_until_ruined_90d} days` : 'Infinite'}
+                  </span>
+                </div>
+                <div className="window-runway-stat">
+                  <span className="stat-label">Zero-Balance:</span>
+                  <span className="stat-val font-semibold">
+                    {view.ruined_date_90d ? formatDateDisplay(view.ruined_date_90d) : 'Never'}
+                  </span>
+                </div>
+              </div>
+
+              {/* 365 Day Card */}
+              <div className="runway-window-card">
+                <span className="window-label">Last 365 Days Pace</span>
+                <div className="window-spend-amount">
+                  {formatCurrency(view.daily_spend_365d ?? 0)}
+                  <span className="window-unit">/ day</span>
+                </div>
+                <div className="window-runway-stat">
+                  <span className="stat-label">Runway:</span>
+                  <span className="stat-val">
+                    {view.days_until_ruined_365d != null ? `${view.days_until_ruined_365d} days` : 'Infinite'}
+                  </span>
+                </div>
+                <div className="window-runway-stat">
+                  <span className="stat-label">Zero-Balance:</span>
+                  <span className="stat-val font-semibold">
+                    {view.ruined_date_365d ? formatDateDisplay(view.ruined_date_365d) : 'Never'}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Custom simulation pace if configured */}
+            {view.settings.custom_daily_spend != null && view.settings.custom_daily_spend > 0 && (
+              <div className="custom-pace-callout mt-2">
+                <span>Custom Daily Spend Override: <strong>{formatCurrency(view.settings.custom_daily_spend)}/day</strong></span>
+                <span> → Projected Runway: <strong>{view.days_until_ruined} days</strong> ({formatDateDisplay(view.ruined_date || '')})</span>
+              </div>
             )}
+
+            {/* Transfer & CC payment deduction notice */}
+            <div className="transfer-filter-notice mt-2">
+              <span className="notice-icon">💳</span>
+              <span className="notice-text">
+                Transfers between checking/savings and credit cards within a 35-day window are automatically recognized and removed from spend calculations to avoid double-counting.
+              </span>
+            </div>
           </div>
+
+          {/* Visual Trajectory Chart */}
+          <RuinedTrajectoryChart
+            currentSavings={currentTotal}
+            dailySpend30d={view.daily_spend_30d ?? 0}
+            daysUntilRuined30d={view.days_until_ruined_30d ?? null}
+            ruinedDate30d={view.ruined_date_30d ?? null}
+            dailySpend90d={view.daily_spend_90d ?? 0}
+            daysUntilRuined90d={view.days_until_ruined_90d ?? null}
+            ruinedDate90d={view.ruined_date_90d ?? null}
+            dailySpend365d={view.daily_spend_365d ?? 0}
+            daysUntilRuined365d={view.days_until_ruined_365d ?? null}
+            ruinedDate365d={view.ruined_date_365d ?? null}
+          />
         </div>
       )}
 
@@ -575,73 +627,7 @@ export function PerspectiveDetail({
             </div>
           </div>
 
-          {/* Section 3: Multi-User Sharing */}
-          <div className="settings-section card mt-4">
-            <h3>Perspective Sharing & Access Control</h3>
-            <p className="section-help-text">
-              Share this aggregated viewing perspective with other users by User ID.
-            </p>
-
-            <form onSubmit={handleGrantAccess} className="share-form-row">
-              <input
-                type="text"
-                placeholder="User ID (UUID)"
-                required
-                value={shareUserId}
-                onChange={(e) => setShareUserId(e.target.value)}
-              />
-              <select
-                value={shareLevel}
-                onChange={(e) => setShareLevel(e.target.value as 'read' | 'edit' | 'admin')}
-              >
-                <option value="read">Read Only</option>
-                <option value="edit">Editor</option>
-                <option value="admin">Admin</option>
-              </select>
-              <button type="submit" className="btn-secondary" disabled={sharingLoading}>
-                {sharingLoading ? 'Sharing...' : 'Grant Access'}
-              </button>
-            </form>
-
-            <div className="linked-accounts-table-wrapper mt-3">
-              <table className="table-records">
-                <thead>
-                  <tr>
-                    <th>User ID</th>
-                    <th>Access Level</th>
-                    <th className="text-right">Action</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {accessList.length === 0 ? (
-                    <tr>
-                      <td colSpan={3} className="text-muted text-center py-2">
-                        No shared users yet.
-                      </td>
-                    </tr>
-                  ) : (
-                    accessList.map((a) => (
-                      <tr key={a.id}>
-                        <td><code>{a.user_id}</code></td>
-                        <td><span className="badge-account-type badge-asset">{a.access_level}</span></td>
-                        <td className="text-right">
-                          <button
-                            type="button"
-                            className="btn-delete"
-                            onClick={() => handleRevokeAccess(a.user_id)}
-                          >
-                            Revoke
-                          </button>
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          {/* Section 4: Danger Zone */}
+          {/* Section 3: Danger Zone */}
           <div className="settings-section card card-danger mt-4">
             <h3>Delete Perspective</h3>
             <p className="section-help-text">

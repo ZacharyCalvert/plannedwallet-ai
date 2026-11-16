@@ -852,5 +852,57 @@ func testPerspectiveFlow(t *testing.T, ctx context.Context, ctrl *controller.Con
 	if view.RuinedDate == nil || view.DaysUntilRuined == nil {
 		t.Fatalf("expected ruined forecast date and days, got %v, %v", view.RuinedDate, view.DaysUntilRuined)
 	}
+	if view.DailySpend30d == nil || view.DailySpend90d == nil || view.DailySpend365d == nil {
+		t.Fatalf("expected 30d/90d/365d spend metrics, got %v, %v, %v", view.DailySpend30d, view.DailySpend90d, view.DailySpend365d)
+	}
+}
+
+func TestCreditCardSpendDeductionAndWindows(t *testing.T) {
+	ctrl, _ := setupController()
+	ctx := context.Background()
+
+	u, _ := ctrl.RegisterUser(ctx, models.UserRegistrationRequest{
+		Username: "cc_user", Email: "cc@example.com", Password: "ValidPassword1!",
+	})
+	chk, err := ctrl.CreateAccount(ctx, u.ID, models.AccountCreationRequest{Name: "Everyday Checking", Type: "checking", Description: "Checking account"})
+	if err != nil {
+		t.Fatalf("failed to create checking account: %v", err)
+	}
+	cc, err := ctrl.CreateAccount(ctx, u.ID, models.AccountCreationRequest{Name: "Travel Credit Card", Type: "credit card", Description: "Credit card"})
+	if err != nil {
+		t.Fatalf("failed to create credit card account: %v", err)
+	}
+
+	vDep, vChkPay, vCCIncome, vCCSpend := 5000.0, -521.45, 521.45, -100.00
+	_, _ = ctrl.CreateCheckingRecord(ctx, u.ID, chk.ID, models.CheckingRecordCreateRequest{Value: &vDep, DateSent: "2026-01-01", Entity: "Payroll Deposit"})
+	// Checking debit of 521.45 on Jan 1
+	_, _ = ctrl.CreateCheckingRecord(ctx, u.ID, chk.ID, models.CheckingRecordCreateRequest{Value: &vChkPay, DateSent: "2026-01-01", Entity: "Credit Card Payment"})
+	// Credit card payment income of 521.45 on Feb 2 (32 days later <= 35 days)
+	_, _ = ctrl.CreateCheckingRecord(ctx, u.ID, cc.ID, models.CheckingRecordCreateRequest{Value: &vCCIncome, DateSent: "2026-02-02", Entity: "Automatic Payment"})
+	// Real credit card purchase of 100.00 on Jan 15
+	_, _ = ctrl.CreateCheckingRecord(ctx, u.ID, cc.ID, models.CheckingRecordCreateRequest{Value: &vCCSpend, DateSent: "2026-01-15", Entity: "Grocery Market"})
+
+	spendTrue, ruinedTrue := true, true
+	pRes, err := ctrl.CreatePerspective(ctx, u.ID, models.PerspectiveCreateRequest{
+		Name: "Liquid Perspective", Description: "Checking and Credit Card",
+		AccountIDs: []string{chk.ID, cc.ID},
+		Settings:   &models.PerspectiveSettingsInput{CalculateAverageDailySpend: &spendTrue, TrackRuinedDate: &ruinedTrue},
+	})
+	if err != nil {
+		t.Fatalf("failed to create perspective: %v", err)
+	}
+
+	view, err := ctrl.GetPerspectiveView(ctx, u.ID, pRes.ID)
+	if err != nil {
+		t.Fatalf("failed to get perspective view: %v", err)
+	}
+	// The 521.45 debit must be excluded as a transfer matching the credit card payment.
+	// Total remaining spend is 100.00 (not 621.45).
+	if view.AverageDailySpend == nil || *view.AverageDailySpend > 105.0 {
+		t.Fatalf("expected average daily spend to exclude 521.45 payment, got %v", *view.AverageDailySpend)
+	}
+	if view.DailySpend30d == nil || view.DailySpend365d == nil {
+		t.Fatalf("expected 30d and 365d spend to be calculated")
+	}
 }
 

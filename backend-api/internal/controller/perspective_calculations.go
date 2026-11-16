@@ -104,27 +104,202 @@ func buildPerspectiveTrend(accIDs []string, accTrends []map[string]float64) []mo
 	return trend
 }
 
-func (c *Controller) calculatePerspectiveSpend(ctx context.Context, accIDs []string) float64 {
-	var totalExpense float64
-	var earliest, latest string
-	for _, id := range accIDs {
-		recs, err := c.repo.ListCheckingRecords(ctx, id, nil, nil, nil)
-		if err != nil {
-			continue
-		}
-		for _, r := range recs {
-			if r.Value < 0 {
-				totalExpense += math.Abs(r.Value)
-				if earliest == "" || r.DateSent < earliest {
-					earliest = r.DateSent
-				}
-				if latest == "" || r.DateSent > latest {
-					latest = r.DateSent
-				}
+type spendItem struct {
+	Amount   float64
+	DateSent string
+}
+
+type perspectiveSpendMetrics struct {
+	overallSpend float64
+	spend30d     float64
+	spend90d     float64
+	spend365d    float64
+	refDate      time.Time
+}
+
+type perspectiveAnalytics struct {
+	avgSpend            *float64
+	yoyReturn           *float64
+	ruinedDate          *string
+	daysUntilRuined     *int
+	dailySpend30d       *float64
+	daysUntilRuined30d  *int
+	ruinedDate30d       *string
+	dailySpend90d       *float64
+	daysUntilRuined90d  *int
+	ruinedDate90d       *string
+	dailySpend365d      *float64
+	daysUntilRuined365d *int
+	ruinedDate365d      *string
+}
+
+func collectRecordDates(sent string, cleared *string) []string {
+	dates := []string{sent}
+	if cleared != nil && *cleared != "" {
+		dates = append(dates, *cleared)
+	}
+	return dates
+}
+
+func dateDiffDays(d1, d2 string) float64 {
+	t1, err1 := time.Parse("2006-01-02", d1)
+	t2, err2 := time.Parse("2006-01-02", d2)
+	if err1 != nil || err2 != nil {
+		return 999999.0
+	}
+	diff := t1.Sub(t2).Hours() / 24.0
+	return math.Abs(diff)
+}
+
+func isWithin35Days(r1Sent string, r1Cleared *string, r2Sent string, r2Cleared *string) bool {
+	dates1 := collectRecordDates(r1Sent, r1Cleared)
+	dates2 := collectRecordDates(r2Sent, r2Cleared)
+	for _, d1 := range dates1 {
+		for _, d2 := range dates2 {
+			if dateDiffDays(d1, d2) <= 35.0 {
+				return true
 			}
 		}
 	}
-	return computeDailySpendFromRange(totalExpense, earliest, latest)
+	return false
+}
+
+func findExcludedDebitIDs(chkDebits, ccIncomes []*models.CheckingRecord) map[string]bool {
+	excluded := make(map[string]bool)
+	matchedCC := make(map[string]bool)
+	for _, chk := range chkDebits {
+		chkAmt := math.Round(math.Abs(chk.Value)*100.0) / 100.0
+		for _, cc := range ccIncomes {
+			if matchedCC[cc.ID] {
+				continue
+			}
+			ccAmt := math.Round(cc.Value*100.0) / 100.0
+			if math.Abs(chkAmt-ccAmt) < 0.001 && isWithin35Days(chk.DateSent, chk.DateCleared, cc.DateSent, cc.DateCleared) {
+				excluded[chk.ID] = true
+				matchedCC[cc.ID] = true
+				break
+			}
+		}
+	}
+	return excluded
+}
+
+func collectPerspectiveSpendItems(chkDebits, ccDebits []*models.CheckingRecord, excluded map[string]bool) []spendItem {
+	var items []spendItem
+	for _, chk := range chkDebits {
+		if !excluded[chk.ID] {
+			items = append(items, spendItem{Amount: math.Abs(chk.Value), DateSent: chk.DateSent})
+		}
+	}
+	for _, cc := range ccDebits {
+		items = append(items, spendItem{Amount: math.Abs(cc.Value), DateSent: cc.DateSent})
+	}
+	return items
+}
+
+func categorizeRecordsForSpend(accType string, recs []*models.CheckingRecord, chkDebits, ccDebits, ccIncomes *[]*models.CheckingRecord) {
+	isCC := accType == "credit card" || accType == "credit_card"
+	for _, r := range recs {
+		if isCC && r.Value < 0 {
+			*ccDebits = append(*ccDebits, r)
+		} else if isCC && r.Value > 0 {
+			*ccIncomes = append(*ccIncomes, r)
+		} else if !isCC && r.Value < 0 {
+			*chkDebits = append(*chkDebits, r)
+		}
+	}
+}
+
+func (c *Controller) loadAccountRecordsForSpend(ctx context.Context, accounts []*models.AccountResponse) ([]*models.CheckingRecord, []*models.CheckingRecord, []*models.CheckingRecord) {
+	var chkDebits, ccDebits, ccIncomes []*models.CheckingRecord
+	for _, acc := range accounts {
+		recs, err := c.repo.ListCheckingRecords(ctx, acc.ID, nil, nil, nil)
+		if err != nil {
+			continue
+		}
+		categorizeRecordsForSpend(acc.Type, recs, &chkDebits, &ccDebits, &ccIncomes)
+	}
+	return chkDebits, ccDebits, ccIncomes
+}
+
+func findSpendItemDateRange(items []spendItem) (string, string) {
+	var earliest, latest string
+	for _, item := range items {
+		if earliest == "" || item.DateSent < earliest {
+			earliest = item.DateSent
+		}
+		if latest == "" || item.DateSent > latest {
+			latest = item.DateSent
+		}
+	}
+	return earliest, latest
+}
+
+func determineSpendRefDate(latestDate string) time.Time {
+	now := time.Now().UTC()
+	if latestDate == "" {
+		return now
+	}
+	tLatest, err := time.Parse("2006-01-02", latestDate)
+	if err != nil {
+		return now
+	}
+	if tLatest.After(now) || now.Sub(tLatest) > 30*24*time.Hour {
+		return tLatest
+	}
+	return now
+}
+
+func resolveWindowDays(windowDays float64, refDate time.Time, earliestDate string) float64 {
+	days := windowDays
+	if earliestDate != "" {
+		if t0, err := time.Parse("2006-01-02", earliestDate); err == nil {
+			available := refDate.Sub(t0).Hours()/24.0 + 1.0
+			if available < days && available > 0 {
+				days = available
+			}
+		}
+	}
+	if days < 1.0 {
+		return 1.0
+	}
+	return days
+}
+
+func calculateWindowSpend(items []spendItem, refDate time.Time, windowDays int, earliestDate string) float64 {
+	cutoff := refDate.AddDate(0, 0, -windowDays).Format("2006-01-02")
+	refDateStr := refDate.Format("2006-01-02")
+	var total float64
+	for _, item := range items {
+		if item.DateSent >= cutoff && item.DateSent <= refDateStr {
+			total += item.Amount
+		}
+	}
+	days := resolveWindowDays(float64(windowDays), refDate, earliestDate)
+	return total / days
+}
+
+func calculateOverallSpend(items []spendItem, earliest, latest string) float64 {
+	var total float64
+	for _, item := range items {
+		total += item.Amount
+	}
+	return computeDailySpendFromRange(total, earliest, latest)
+}
+
+func (c *Controller) calculatePerspectiveSpendMetrics(ctx context.Context, accounts []*models.AccountResponse) perspectiveSpendMetrics {
+	chkDebits, ccDebits, ccIncomes := c.loadAccountRecordsForSpend(ctx, accounts)
+	excluded := findExcludedDebitIDs(chkDebits, ccIncomes)
+	items := collectPerspectiveSpendItems(chkDebits, ccDebits, excluded)
+	earliest, latest := findSpendItemDateRange(items)
+	refDate := determineSpendRefDate(latest)
+	return perspectiveSpendMetrics{
+		overallSpend: calculateOverallSpend(items, earliest, latest),
+		spend30d:     calculateWindowSpend(items, refDate, 30, earliest),
+		spend90d:     calculateWindowSpend(items, refDate, 90, earliest),
+		spend365d:    calculateWindowSpend(items, refDate, 365, earliest),
+		refDate:      refDate,
+	}
 }
 
 func computeDailySpendFromRange(totalExpense float64, earliest, latest string) float64 {
@@ -166,43 +341,51 @@ func calculatePerspectiveYoY(trend []models.PerspectiveTrendPoint) *float64 {
 	return &cagr
 }
 
-func calculateRuinedForecast(currentTotal, dailySpend float64) (*string, *int) {
+func calculateRuinedForecast(currentTotal, dailySpend float64, refDate time.Time) (*string, *int) {
 	if dailySpend <= 0 {
 		return nil, nil
 	}
 	if currentTotal <= 0 {
-		today := time.Now().UTC().Format("2006-01-02")
+		refStr := refDate.Format("2006-01-02")
 		zero := 0
-		return &today, &zero
+		return &refStr, &zero
 	}
 	days := int(currentTotal / dailySpend)
-	ruined := time.Now().UTC().AddDate(0, 0, days).Format("2006-01-02")
+	ruined := refDate.AddDate(0, 0, days).Format("2006-01-02")
 	return &ruined, &days
 }
 
-func (c *Controller) resolvePerspectiveDailySpend(ctx context.Context, s *models.PerspectiveSettings, accIDs []string) float64 {
-	if s.CustomDailySpend != nil && *s.CustomDailySpend > 0 {
-		return *s.CustomDailySpend
+func (c *Controller) populateWindowAnalytics(res *perspectiveAnalytics, s *models.PerspectiveSettings, m perspectiveSpendMetrics, currentTotal float64) {
+	if !s.TrackRuinedDate && !s.CalculateAverageDailySpend {
+		return
 	}
-	return c.calculatePerspectiveSpend(ctx, accIDs)
+	s30, s90, s365 := m.spend30d, m.spend90d, m.spend365d
+	res.dailySpend30d, res.dailySpend90d, res.dailySpend365d = &s30, &s90, &s365
+	if s.TrackRuinedDate {
+		res.ruinedDate30d, res.daysUntilRuined30d = calculateRuinedForecast(currentTotal, s30, m.refDate)
+		res.ruinedDate90d, res.daysUntilRuined90d = calculateRuinedForecast(currentTotal, s90, m.refDate)
+		res.ruinedDate365d, res.daysUntilRuined365d = calculateRuinedForecast(currentTotal, s365, m.refDate)
+	}
 }
 
-func (c *Controller) computePerspectiveAnalytics(ctx context.Context, s *models.PerspectiveSettings, accIDs []string, currentTotal float64, trend []models.PerspectiveTrendPoint) (*float64, *float64, *string, *int) {
-	var avgSpend *float64
-	dailySpend := c.resolvePerspectiveDailySpend(ctx, s, accIDs)
+func (c *Controller) computePerspectiveAnalytics(ctx context.Context, s *models.PerspectiveSettings, accounts []*models.AccountResponse, currentTotal float64, trend []models.PerspectiveTrendPoint) perspectiveAnalytics {
+	metrics := c.calculatePerspectiveSpendMetrics(ctx, accounts)
+	dailySpend := metrics.overallSpend
+	if s.CustomDailySpend != nil && *s.CustomDailySpend > 0 {
+		dailySpend = *s.CustomDailySpend
+	}
+	var res perspectiveAnalytics
 	if s.CalculateAverageDailySpend {
-		avgSpend = &dailySpend
+		res.avgSpend = &dailySpend
 	}
-	var yoyReturn *float64
 	if s.CalculateAverageReturnYoY && len(trend) >= 2 {
-		yoyReturn = calculatePerspectiveYoY(trend)
+		res.yoyReturn = calculatePerspectiveYoY(trend)
 	}
-	var ruinedDate *string
-	var daysUntilRuined *int
 	if s.TrackRuinedDate {
-		ruinedDate, daysUntilRuined = calculateRuinedForecast(currentTotal, dailySpend)
+		res.ruinedDate, res.daysUntilRuined = calculateRuinedForecast(currentTotal, dailySpend, metrics.refDate)
 	}
-	return avgSpend, yoyReturn, ruinedDate, daysUntilRuined
+	c.populateWindowAnalytics(&res, s, metrics, currentTotal)
+	return res
 }
 
 // GetPerspectiveView computes the aggregated financial trend and analytical metrics for a perspective.
@@ -217,7 +400,7 @@ func (c *Controller) GetPerspectiveView(ctx context.Context, userID, perspective
 	}
 	accounts, accIDs, currentTotal := c.loadPerspectiveAccountsSummary(ctx, perspectiveID)
 	trend := c.computePerspectiveTrend(ctx, settings.ShowFinancialTrend, accIDs, accounts)
-	avgSpend, yoyReturn, ruinedDate, daysRuined := c.computePerspectiveAnalytics(ctx, settings, accIDs, currentTotal, trend)
+	a := c.computePerspectiveAnalytics(ctx, settings, accounts, currentTotal, trend)
 
 	return &models.PerspectiveViewResponse{
 		Perspective: &models.PerspectiveResponse{
@@ -231,14 +414,23 @@ func (c *Controller) GetPerspectiveView(ctx context.Context, userID, perspective
 			CreatedAt:   p.CreatedAt,
 			UpdatedAt:   p.UpdatedAt,
 		},
-		Settings:          settings,
-		Accounts:          accounts,
-		CurrentTotalValue: currentTotal,
-		Trend:             trend,
-		AverageDailySpend: avgSpend,
-		AverageReturnYoY:  yoyReturn,
-		RuinedDate:        ruinedDate,
-		DaysUntilRuined:   daysRuined,
+		Settings:            settings,
+		Accounts:            accounts,
+		CurrentTotalValue:   currentTotal,
+		Trend:               trend,
+		AverageDailySpend:   a.avgSpend,
+		AverageReturnYoY:    a.yoyReturn,
+		RuinedDate:          a.ruinedDate,
+		DaysUntilRuined:     a.daysUntilRuined,
+		DailySpend30d:       a.dailySpend30d,
+		DaysUntilRuined30d:  a.daysUntilRuined30d,
+		RuinedDate30d:       a.ruinedDate30d,
+		DailySpend90d:       a.dailySpend90d,
+		DaysUntilRuined90d:  a.daysUntilRuined90d,
+		RuinedDate90d:       a.ruinedDate90d,
+		DailySpend365d:      a.dailySpend365d,
+		DaysUntilRuined365d: a.daysUntilRuined365d,
+		RuinedDate365d:      a.ruinedDate365d,
 	}, nil
 }
 

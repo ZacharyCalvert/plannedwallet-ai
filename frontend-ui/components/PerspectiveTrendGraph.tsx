@@ -2,6 +2,7 @@
 
 import { useState, useMemo } from 'react';
 import { Account, PerspectiveTrendPoint } from '../lib/types';
+import { downsampleTrendPoints, DownsampledPoint } from '../lib/trendDownsampler';
 
 interface PerspectiveTrendGraphProps {
   trend: PerspectiveTrendPoint[];
@@ -102,19 +103,24 @@ export function PerspectiveTrendGraph({ trend, accounts }: PerspectiveTrendGraph
   const maxVal = metrics ? Math.max(metrics.maxVal, 100) : 100;
   const valRange = maxVal - minVal === 0 ? 1 : maxVal - minVal;
 
-  const getX = (idx: number) => {
-    if (filtered.length === 1) return padLeft + chartWidth / 2;
-    return padLeft + (idx / (filtered.length - 1)) * chartWidth;
-  };
-
   const getY = (val: number) => {
     return padTop + chartHeight - ((val - minVal) / valRange) * chartHeight;
   };
 
-  const pointsString = filtered.map((p, idx) => `${getX(idx)},${getY(p.total_value)}`).join(' ');
-  const areaPoints = `${getX(0)},${padTop + chartHeight} ${pointsString} ${getX(filtered.length - 1)},${padTop + chartHeight}`;
+  // Downsample so that no more than 1 dot is rendered per 10 pixels on the X axis,
+  // averaging values during those time windows.
+  const bucketedPoints = useMemo(() => {
+    return downsampleTrendPoints(filtered, chartWidth, padLeft, 10);
+  }, [filtered, chartWidth, padLeft]);
 
-  const hoveredPoint = hoveredIndex !== null ? filtered[hoveredIndex] : null;
+  const pointsString = bucketedPoints.map((p) => `${p.x},${getY(p.total_value)}`).join(' ');
+  const areaPoints =
+    bucketedPoints.length > 0
+      ? `${bucketedPoints[0].x},${padTop + chartHeight} ${pointsString} ${bucketedPoints[bucketedPoints.length - 1].x},${padTop + chartHeight}`
+      : '';
+
+  const hoveredPoint =
+    hoveredIndex !== null && hoveredIndex < bucketedPoints.length ? bucketedPoints[hoveredIndex] : null;
 
   return (
     <div className="perspective-trend-container">
@@ -242,22 +248,21 @@ export function PerspectiveTrendGraph({ trend, accounts }: PerspectiveTrendGraph
             strokeLinejoin="round"
           />
 
-          {/* Interactive Points */}
-          {filtered.map((p, idx) => {
-            const x = getX(idx);
+          {/* Interactive Points: strictly <= 1 dot per 10 pixels on the X axis */}
+          {bucketedPoints.map((p, idx) => {
             const y = getY(p.total_value);
             const isHovered = hoveredIndex === idx;
             return (
               <g
-                key={p.date + idx}
+                key={p.startDate + idx}
                 onMouseEnter={() => setHoveredIndex(idx)}
                 style={{ cursor: 'pointer' }}
               >
                 {/* Large transparent hover target */}
-                <circle cx={x} cy={y} r="14" fill="transparent" />
+                <circle cx={p.x} cy={y} r="14" fill="transparent" />
                 {/* Visible dot */}
                 <circle
-                  cx={x}
+                  cx={p.x}
                   cy={y}
                   r={isHovered ? 6 : 3.5}
                   fill={isHovered ? '#c4b5fd' : '#8b5cf6'}
@@ -269,11 +274,11 @@ export function PerspectiveTrendGraph({ trend, accounts }: PerspectiveTrendGraph
           })}
 
           {/* Hover Crosshair Line */}
-          {hoveredIndex !== null && (
+          {hoveredPoint && (
             <line
-              x1={getX(hoveredIndex)}
+              x1={hoveredPoint.x}
               y1={padTop}
-              x2={getX(hoveredIndex)}
+              x2={hoveredPoint.x}
               y2={padTop + chartHeight}
               stroke="#a78bfa"
               strokeDasharray="2 2"
@@ -294,17 +299,24 @@ export function PerspectiveTrendGraph({ trend, accounts }: PerspectiveTrendGraph
         </svg>
 
         {/* Hover Tooltip Box */}
-        {hoveredPoint && hoveredIndex !== null && (
+        {hoveredPoint && (
           <div
-            className="trend-tooltip card"
+            className={`trend-tooltip card ${getY(hoveredPoint.total_value) < 160 ? 'tooltip-below' : ''}`}
             style={{
-              left: `${Math.min(Math.max((getX(hoveredIndex) / width) * 100, 15), 85)}%`,
-              top: '12%',
+              left: `${Math.min(Math.max((hoveredPoint.x / width) * 100, 18), 82)}%`,
+              top: `${(getY(hoveredPoint.total_value) / height) * 100}%`,
             }}
           >
-            <div className="tooltip-date">{formatDateDisplay(hoveredPoint.date)}</div>
+            <div className="tooltip-date">
+              {hoveredPoint.startDate === hoveredPoint.endDate
+                ? formatDateDisplay(hoveredPoint.startDate)
+                : `${formatDateDisplay(hoveredPoint.startDate)} – ${formatDateDisplay(hoveredPoint.endDate)}`}
+              {hoveredPoint.count > 1 && (
+                <span className="tooltip-subtle-count"> ({hoveredPoint.count} days averaged)</span>
+              )}
+            </div>
             <div className="tooltip-total-row">
-              <span className="tooltip-label">Combined Total:</span>
+              <span className="tooltip-label">Average Valuation:</span>
               <span className="tooltip-value">{formatCurrency(hoveredPoint.total_value)}</span>
             </div>
             {hoveredPoint.account_values && Object.keys(hoveredPoint.account_values).length > 0 && (

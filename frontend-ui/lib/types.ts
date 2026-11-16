@@ -244,6 +244,15 @@ export interface PerspectiveViewResponse {
   average_return_yoy?: number | null;
   ruined_date?: string | null;
   days_until_ruined?: number | null;
+  daily_spend_30d?: number | null;
+  days_until_ruined_30d?: number | null;
+  ruined_date_30d?: string | null;
+  daily_spend_90d?: number | null;
+  days_until_ruined_90d?: number | null;
+  ruined_date_90d?: string | null;
+  daily_spend_365d?: number | null;
+  days_until_ruined_365d?: number | null;
+  ruined_date_365d?: string | null;
 }
 
 export interface PerspectiveAccess {

@@ -4359,5 +4359,47 @@ components:
           type: integer
           nullable: true
           example: 2840
+        daily_spend_30d:
+          type: number
+          format: double
+          nullable: true
+          example: 45.20
+        days_until_ruined_30d:
+          type: integer
+          nullable: true
+          example: 2765
+        ruined_date_30d:
+          type: string
+          format: date
+          nullable: true
+          example: "2034-06-12"
+        daily_spend_90d:
+          type: number
+          format: double
+          nullable: true
+          example: 42.10
+        days_until_ruined_90d:
+          type: integer
+          nullable: true
+          example: 2969
+        ruined_date_90d:
+          type: string
+          format: date
+          nullable: true
+          example: "2034-12-30"
+        daily_spend_365d:
+          type: number
+          format: double
+          nullable: true
+          example: 40.50
+        days_until_ruined_365d:
+          type: integer
+          nullable: true
+          example: 3086
+        ruined_date_365d:
+          type: string
+          format: date
+          nullable: true
+          example: "2035-04-26"
 
 

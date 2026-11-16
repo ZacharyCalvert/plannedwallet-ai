@@ -265,5 +265,5 @@ All HTTP requests require the `X-Client-ID` header. Protected endpoints require 
 - `GET /api/v1/perspectives/{perspectiveId}/access/{userId}`: View access grant for a specific user.
 - `POST /api/v1/perspectives/{perspectiveId}/access`: Grant or update user access level (`read`, `edit`, `admin`).
 - `DELETE /api/v1/perspectives/{perspectiveId}/access/{userId}`: Revoke access for a user.
-- `GET /api/v1/perspectives/{perspectiveId}/view`: Retrieve comprehensive aggregated viewing window (total portfolio value, historical trend line, average daily spend, year-over-year return rate, and ruined date runway forecast).
+- `GET /api/v1/perspectives/{perspectiveId}/view`: Retrieve comprehensive aggregated viewing window (total portfolio value, historical trend line, average daily spend overall and across 30d/90d/365d windows, year-over-year return rate, and ruined date runway forecast; checking/savings payments applied to credit cards within 35 days are automatically recognized as transfers and excluded from spend calculations).
 

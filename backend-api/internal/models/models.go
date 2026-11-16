@@ -557,5 +557,14 @@ type PerspectiveViewResponse struct {
 	AverageReturnYoY  *float64                `json:"average_return_yoy,omitempty"`
 	RuinedDate        *string                 `json:"ruined_date,omitempty"`
 	DaysUntilRuined   *int                    `json:"days_until_ruined,omitempty"`
+	DailySpend30d       *float64                `json:"daily_spend_30d,omitempty"`
+	DaysUntilRuined30d  *int                    `json:"days_until_ruined_30d,omitempty"`
+	RuinedDate30d       *string                 `json:"ruined_date_30d,omitempty"`
+	DailySpend90d       *float64                `json:"daily_spend_90d,omitempty"`
+	DaysUntilRuined90d  *int                    `json:"days_until_ruined_90d,omitempty"`
+	RuinedDate90d       *string                 `json:"ruined_date_90d,omitempty"`
+	DailySpend365d      *float64                `json:"daily_spend_365d,omitempty"`
+	DaysUntilRuined365d *int                    `json:"days_until_ruined_365d,omitempty"`
+	RuinedDate365d      *string                 `json:"ruined_date_365d,omitempty"`
 }
 

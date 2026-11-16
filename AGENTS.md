@@ -85,12 +85,16 @@ The backend classifies financial accounts under the `type` column in the `accoun
 
 ---
 
-## 4. Multi-User Access Control (`account_access`)
-All account endpoints enforce permissions via the `account_access` table:
-- **Owner / Admin (`accounts.admin_id == user_id` or `access_level == "admin"`)**: Full permissions to view, mutate records/assets/snapshots, and grant or revoke access.
-- **Editor (`access_level == "edit"`)**: Permitted to view and mutate account records, asset holdings, and snapshots (`POST`, `PUT`, `DELETE`). Denied from altering account access settings (`403 Forbidden`).
-- **Reader (`access_level == "read"`)**: Permitted read-only access (`GET` records, assets, snapshots, summaries). Any mutation attempt returns `403 Forbidden`.
-- **Unauthorized (no access entry)**: Returns `404 Not Found` (`ACCOUNT_NOT_FOUND`) to prevent enumeration or leaking the existence of private accounts.
+## 4. Multi-User Access Control (`account_access` & `perspective_access`)
+All account and perspective endpoints enforce permissions via the `account_access` and `perspective_access` tables:
+- **Owner / Admin (`accounts.admin_id == user_id` / `perspectives.user_id == user_id` or `access_level == "admin"`)**: Full permissions to view, mutate records/assets/snapshots/perspectives, and grant or revoke access.
+- **Editor (`access_level == "edit"`)**: Permitted to view and mutate account records, asset holdings, snapshots, and perspective settings (`POST`, `PUT`, `DELETE`). Denied from altering access grants (`403 Forbidden`).
+- **Reader (`access_level == "read"`)**: Permitted read-only access (`GET` records, assets, snapshots, summaries, perspectives). Any mutation attempt returns `403 Forbidden`.
+- **Unauthorized (no access entry)**: Returns `404 Not Found` (`ACCOUNT_NOT_FOUND` / `PERSPECTIVE_NOT_FOUND`) to prevent enumeration or leaking the existence of private user accounts and perspectives.
+
+> [!IMPORTANT]
+> **Front-End User Sharing Visibility**:
+> Do not activate user sharing in the UI until explicitly instructed to do so. All user-sharing controls (such as inviting, linking, granting, or revoking access for other users on accounts or perspectives) must remain hidden in the front-end until the user explicitly requests their activation.
 
 ---
 
@@ -129,5 +133,7 @@ All account endpoints enforce permissions via the `account_access` table:
 7. **No Trademarked or Registered Business Names**:
    - Do not add additional real business or brand names into source code, comments, test assertions, seed scripts, OpenAPI examples, or UI placeholders/memos.
    - Use generic descriptors instead (e.g., "Brokerage Account", "Trading Portfolio", "Retail Bank", "Payroll Deposit", "Coffee Shop", "Supermarket").
+8. **User Sharing UI Inactivation**:
+   - Do not activate user sharing in the UI until explicitly instructed to do so. Keep all user-sharing forms, buttons, and controls hidden in the front-end.
 
 

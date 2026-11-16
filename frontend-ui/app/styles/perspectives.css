@@ -244,6 +244,85 @@
   border-top: 1px solid #fed7aa;
 }
 
+.runway-windows-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1rem;
+}
+
+.runway-window-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 1.25rem;
+  background-color: #ffffff;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.window-label {
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.window-spend-amount {
+  font-size: 1.6rem;
+  font-weight: 800;
+  color: #b91c1c;
+}
+
+.window-unit {
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--muted);
+  margin-left: 0.35rem;
+}
+
+.window-runway-stat {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.875rem;
+  padding-top: 0.25rem;
+  border-top: 1px dashed var(--border);
+}
+
+.stat-label {
+  color: var(--muted);
+}
+
+.stat-val {
+  color: #1e293b;
+  font-weight: 600;
+}
+
+.transfer-filter-notice {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.85rem 1rem;
+  background-color: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  color: #166534;
+}
+
+.custom-pace-callout {
+  padding: 0.75rem 1rem;
+  background-color: #f8fafc;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 0.875rem;
+  color: #334155;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
 .runway-stat-row {
   display: flex;
   justify-content: space-between;
@@ -584,7 +663,7 @@
 .trend-chart-wrapper {
   position: relative;
   width: 100%;
-  overflow-x: auto;
+  overflow: visible;
 }
 
 .perspective-svg-chart,
@@ -619,7 +698,7 @@
 
 .trend-tooltip {
   position: absolute;
-  transform: translate(-50%, -100%);
+  transform: translate(-50%, calc(-100% - 14px));
   background-color: #ffffff;
   border: 1px solid var(--border);
   border-radius: 8px;
@@ -628,6 +707,30 @@
   z-index: 50;
   pointer-events: none;
   min-width: 220px;
+  transition: transform 0.1s ease, left 0.1s ease, top 0.1s ease;
+}
+
+.trend-tooltip.tooltip-below {
+  transform: translate(-50%, 14px);
+}
+
+.trend-tooltip::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border-width: 6px;
+  border-style: solid;
+  border-color: #ffffff transparent transparent transparent;
+  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.1));
+}
+
+.trend-tooltip.tooltip-below::after {
+  top: auto;
+  bottom: 100%;
+  border-color: transparent transparent #ffffff transparent;
+  filter: drop-shadow(0 -1px 1px rgba(0, 0, 0, 0.1));
 }
 
 .tooltip-date {
