@@ -11,7 +11,7 @@ func TestInitSQLEmbedded_Tables(t *testing.T) {
 	}
 
 	expectedTables := []string{
-		"users", "accounts", "account_access", "checking_records",
+		"users", "accounts", "account_access", "categories", "checking_records",
 		"assets", "asset_values", "asset_stores", "asset_store_records",
 		"account_assets", "account_snapshots", "captchas", "subscriptions",
 		"perspectives", "perspective_settings", "perspective_accounts", "perspective_access",
@@ -51,10 +51,33 @@ func TestInitSQLEmbedded_Constraints(t *testing.T) {
 		"uq_perspective_settings_perspective UNIQUE (perspective_id)",
 		"uq_perspective_accounts_perspective_account UNIQUE (perspective_id, account_id)",
 		"uq_perspective_access_perspective_user UNIQUE (perspective_id, user_id)",
+		"uq_categories_user_name UNIQUE NULLS NOT DISTINCT (user_id, name)",
+		"uq_categories_user_lower_name ON categories (user_id, LOWER(name)) NULLS NOT DISTINCT",
 	}
 	for _, c := range expectedConstraints {
 		if !strings.Contains(initSQL, c) {
 			t.Errorf("expected initSQL to contain constraint: %s", c)
+		}
+	}
+}
+
+func TestInitSQLEmbedded_Categories(t *testing.T) {
+	expectedSnippets := []string{
+		"CREATE TABLE IF NOT EXISTS categories",
+		"idx_categories_user_id",
+		"idx_checking_records_category_id",
+		"category_id UUID REFERENCES categories(id) ON DELETE SET NULL",
+		"'Housing'",
+		"'Transportation'",
+		"'Groceries'",
+		"'Utilities'",
+		"'Healthcare'",
+		"'Insurance'",
+		"'Debt'",
+	}
+	for _, snippet := range expectedSnippets {
+		if !strings.Contains(initSQL, snippet) {
+			t.Errorf("expected initSQL to contain %q", snippet)
 		}
 	}
 }

@@ -34,10 +34,21 @@ Enforces multi-user access control and sharing permissions.
 - **Constraint**: `CONSTRAINT uq_account_access_account_user UNIQUE (account_id, user_id)`
 - **Indexes**: `idx_account_access_user_id`, `idx_account_access_account_id`
 
-### 1.4 `checking_records`
+### 1.4 `categories`
+Stores transaction categories for `checking`, `savings`, and `credit card` records.
+- `id` (UUID, Primary Key)
+- `user_id` (UUID, Nullable, FK -> `users(id)` ON DELETE CASCADE) - `NULL` for global default categories (`Housing`, `Transportation`, `Groceries`, `Utilities`, `Healthcare`, `Insurance`, `Debt`)
+- `name` (VARCHAR(100), Not Null)
+- `created_at` (TIMESTAMPTZ, Not Null, Default NOW())
+- `updated_at` (TIMESTAMPTZ, Not Null, Default NOW())
+- **Constraints**: `UNIQUE NULLS NOT DISTINCT (user_id, name)`, `uq_categories_user_lower_name (user_id, LOWER(name)) NULLS NOT DISTINCT`
+- **Index**: `idx_categories_user_id`
+
+### 1.5 `checking_records`
 Stores transaction line items for `checking`, `savings`, and `credit card` accounts.
 - `id` (UUID, Primary Key)
 - `account_id` (UUID, Not Null, FK -> `accounts(id)` ON DELETE CASCADE)
+- `category_id` (UUID, Nullable, FK -> `categories(id)` ON DELETE SET NULL) - Optional transaction category; set to `NULL` if a user-owned category is deleted
 - `value` (DOUBLE PRECISION, Not Null) - Positive (credits/deposits) or negative (debits/expenses)
 - `date_sent` (DATE, Not Null)
 - `date_cleared` (DATE, Nullable)
@@ -45,7 +56,7 @@ Stores transaction line items for `checking`, `savings`, and `credit card` accou
 - `description` (VARCHAR(500), Not Null, Default '')
 - `created_at` (TIMESTAMPTZ, Not Null, Default NOW())
 - `updated_at` (TIMESTAMPTZ, Not Null, Default NOW())
-- **Index**: `idx_checking_records_account_datesent (account_id, date_sent DESC)`
+- **Indexes**: `idx_checking_records_account_datesent (account_id, date_sent DESC)`, `idx_checking_records_category_id (category_id)`
 
 ### 1.5 `assets`
 Stores asset definitions (e.g. Bitcoin, Silver, Stocks).
@@ -215,13 +226,18 @@ All HTTP requests require the `X-Client-ID` header. Protected endpoints require 
 - `GET /api/v1/accounts/{accountId}/access/{userId}`: View user access level.
 - `DELETE /api/v1/accounts/{accountId}/access/{userId}`: Revoke user access.
 
-### 3.5 Checking Records
-- `POST /api/v1/accounts/{accountId}/records`: Add transaction record.
+### 3.5 Checking Records & Categories
+- `POST /api/v1/accounts/{accountId}/records`: Add transaction record (with optional `category_id`).
 - `GET /api/v1/accounts/{accountId}/records`: List transaction records with cumulative running balances.
+- `GET /api/v1/accounts/{accountId}/records/categories`: Get expense totals grouped by category (for pie chart visualization).
 - `GET /api/v1/accounts/{accountId}/records/{recordId}`: Get single transaction record.
 - `PUT /api/v1/accounts/{accountId}/records/{recordId}`: Update transaction record.
 - `PATCH /api/v1/accounts/{accountId}/records/{recordId}`: Patch transaction record.
 - `DELETE /api/v1/accounts/{accountId}/records/{recordId}`: Delete transaction record.
+- `GET /api/v1/categories`: List accessible categories (global defaults, user-created, and categories used in accessible/shared accounts).
+- `POST /api/v1/categories`: Create a user-scoped category.
+- `GET /api/v1/categories/{categoryId}`: Get a single accessible category.
+- `DELETE /api/v1/categories/{categoryId}`: Delete a user-created category (updates associated records to `category_id = null`; default categories cannot be deleted).
 
 ### 3.6 Assets & Valuations
 - `POST /api/v1/assets`: Create asset definition.

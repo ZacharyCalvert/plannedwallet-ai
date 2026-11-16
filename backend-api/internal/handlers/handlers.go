@@ -407,6 +407,7 @@ func (h *Handler) RegisterRoutes(r *gin.Engine) {
 	h.registerAccountRoutes(protected)
 	h.registerStoreAndSnapshotRoutes(protected)
 	h.registerAssetRoutes(protected)
+	h.registerCategoryRoutes(protected)
 	h.registerPerspectiveRoutes(protected)
 }
 
@@ -430,6 +431,7 @@ func (h *Handler) registerAccountRoutes(p *gin.RouterGroup) {
 
 	p.POST("/accounts/:accountId/records", h.CreateCheckingRecord)
 	p.GET("/accounts/:accountId/records", h.ListCheckingRecords)
+	p.GET("/accounts/:accountId/records/categories", h.GetAccountCategorySummary)
 	p.GET("/accounts/:accountId/records/:recordId", h.GetCheckingRecord)
 	p.PUT("/accounts/:accountId/records/:recordId", h.UpdateCheckingRecord)
 	p.PATCH("/accounts/:accountId/records/:recordId", h.PatchCheckingRecord)
@@ -479,6 +481,13 @@ func (h *Handler) registerAssetRoutes(p *gin.RouterGroup) {
 	p.GET("/assets/:assetId/values/:valueId", h.GetAssetValue)
 	p.PUT("/assets/:assetId/values/:valueId", h.UpdateAssetValue)
 	p.DELETE("/assets/:assetId/values/:valueId", h.DeleteAssetValue)
+}
+
+func (h *Handler) registerCategoryRoutes(p *gin.RouterGroup) {
+	p.POST("/categories", h.CreateCategory)
+	p.GET("/categories", h.ListCategories)
+	p.GET("/categories/:categoryId", h.GetCategory)
+	p.DELETE("/categories/:categoryId", h.DeleteCategory)
 }
 
 func (h *Handler) registerPerspectiveRoutes(p *gin.RouterGroup) {

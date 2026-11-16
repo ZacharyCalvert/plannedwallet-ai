@@ -42,6 +42,12 @@ type Repository interface {
 	UpdateCheckingRecord(ctx context.Context, record *models.CheckingRecord) error
 	DeleteCheckingRecord(ctx context.Context, accountID, recordID string) error
 
+	// Category operations
+	CreateCategory(ctx context.Context, category *models.Category) error
+	GetCategoryByID(ctx context.Context, id string) (*models.Category, error)
+	ListCategoriesForUser(ctx context.Context, userID string) ([]*models.Category, error)
+	DeleteCategory(ctx context.Context, id string) error
+
 	// Asset operations
 	CreateAsset(ctx context.Context, asset *models.Asset) error
 	GetAssetByID(ctx context.Context, id string) (*models.Asset, error)

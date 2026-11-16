@@ -16,9 +16,10 @@ type MemoryRepository struct {
 	usersByUsername   map[string]*models.User             // username -> User
 	usersByEmail      map[string]*models.User             // email -> User
 	accounts          map[string]*models.Account          // id -> Account
-	accountAccess     map[string]*models.AccountAccess    // accountID:userID -> AccountAccess
-	checkingRecords   map[string]*models.CheckingRecord   // id -> CheckingRecord
-	assets            map[string]*models.Asset            // id -> Asset
+	accountAccess       map[string]*models.AccountAccess    // accountID:userID -> AccountAccess
+	checkingRecords     map[string]*models.CheckingRecord   // id -> CheckingRecord
+	categories          map[string]*models.Category         // id -> Category
+	assets              map[string]*models.Asset            // id -> Asset
 	assetValues       map[string]*models.AssetValue       // id -> AssetValue
 	accountAssets     map[string]*models.AccountAsset     // id -> AccountAsset
 	assetStores       map[string]*models.AssetStore       // id -> AssetStore
@@ -37,26 +38,54 @@ type memoryCaptcha struct {
 	createdAt time.Time
 }
 
+func seedDefaultCategories(cats map[string]*models.Category) {
+	defaults := []struct {
+		id   string
+		name string
+	}{
+		{"00000000-0000-4000-8000-000000000001", "Housing"},
+		{"00000000-0000-4000-8000-000000000002", "Transportation"},
+		{"00000000-0000-4000-8000-000000000003", "Groceries"},
+		{"00000000-0000-4000-8000-000000000004", "Utilities"},
+		{"00000000-0000-4000-8000-000000000005", "Healthcare"},
+		{"00000000-0000-4000-8000-000000000006", "Insurance"},
+		{"00000000-0000-4000-8000-000000000007", "Debt"},
+	}
+	now := time.Now().UTC()
+	for _, d := range defaults {
+		cats[d.id] = &models.Category{
+			ID:        d.id,
+			UserID:    nil,
+			Name:      d.name,
+			CreatedAt: now,
+			UpdatedAt: now,
+		}
+	}
+}
+
 func NewMemoryRepository() *MemoryRepository {
+	cats := make(map[string]*models.Category)
+	seedDefaultCategories(cats)
 	return &MemoryRepository{
-		users:             make(map[string]*models.User),
-		usersByUsername:   make(map[string]*models.User),
-		usersByEmail:      make(map[string]*models.User),
-		accounts:          make(map[string]*models.Account),
-		accountAccess:     make(map[string]*models.AccountAccess),
-		checkingRecords:   make(map[string]*models.CheckingRecord),
-		assets:            make(map[string]*models.Asset),
-		assetValues:       make(map[string]*models.AssetValue),
-		accountAssets:     make(map[string]*models.AccountAsset),
-		assetStores:       make(map[string]*models.AssetStore),
-		assetStoreRecords: make(map[string]*models.AssetStoreRecord),
-		accountSnapshots:  make(map[string]*models.AccountSnapshot),
-		captchas:          make(map[string]*memoryCaptcha),
-		subscriptions:     make(map[string]*models.Subscription),
-		perspectives:      make(map[string]*models.Perspective),
+		users:               make(map[string]*models.User),
+		usersByUsername:     make(map[string]*models.User),
+		usersByEmail:        make(map[string]*models.User),
+		accounts:            make(map[string]*models.Account),
+		accountAccess:       make(map[string]*models.AccountAccess),
+		checkingRecords:     make(map[string]*models.CheckingRecord),
+		categories:          cats,
+		assets:              make(map[string]*models.Asset),
+		assetValues:         make(map[string]*models.AssetValue),
+		accountAssets:       make(map[string]*models.AccountAsset),
+		assetStores:         make(map[string]*models.AssetStore),
+		assetStoreRecords:   make(map[string]*models.AssetStoreRecord),
+		accountSnapshots:    make(map[string]*models.AccountSnapshot),
+		captchas:            make(map[string]*memoryCaptcha),
+		subscriptions:       make(map[string]*models.Subscription),
+		perspectives:        make(map[string]*models.Perspective),
 		perspectiveSettings: make(map[string]*models.PerspectiveSettings),
 		perspectiveAccounts: make(map[string]*models.PerspectiveAccount),
-		perspectiveAccess: make(map[string]*models.PerspectiveAccess),
+		perspectiveAccess:   make(map[string]*models.PerspectiveAccess),
 	}
 }
 
@@ -1465,6 +1494,102 @@ func (m *MemoryRepository) RevokePerspectiveAccess(_ context.Context, perspectiv
 		return ErrNotFound
 	}
 	delete(m.perspectiveAccess, key)
+	return nil
+}
+
+func sameCategoryOwner(a, b *string) bool {
+	if a == nil && b == nil {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return *a == *b
+}
+
+func (m *MemoryRepository) CreateCategory(_ context.Context, category *models.Category) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	lowerName := strings.ToLower(category.Name)
+	for _, existing := range m.categories {
+		if sameCategoryOwner(existing.UserID, category.UserID) && strings.ToLower(existing.Name) == lowerName {
+			return ErrConflict
+		}
+	}
+	copied := *category
+	m.categories[category.ID] = &copied
+	return nil
+}
+
+func (m *MemoryRepository) GetCategoryByID(_ context.Context, id string) (*models.Category, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	c, ok := m.categories[id]
+	if !ok {
+		return nil, ErrNotFound
+	}
+	copied := *c
+	return &copied, nil
+}
+
+func (m *MemoryRepository) usedCategoryIDsForUser(userID string) map[string]bool {
+	used := make(map[string]bool)
+	for _, rec := range m.checkingRecords {
+		if rec.CategoryID == nil {
+			continue
+		}
+		acc, ok := m.accounts[rec.AccountID]
+		if !ok {
+			continue
+		}
+		_, hasAccess := m.accountAccess[acc.ID+":"+userID]
+		if acc.AdminID == userID || hasAccess {
+			used[*rec.CategoryID] = true
+		}
+	}
+	return used
+}
+
+func (m *MemoryRepository) ListCategoriesForUser(_ context.Context, userID string) ([]*models.Category, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	used := m.usedCategoryIDsForUser(userID)
+	result := make([]*models.Category, 0)
+	for _, c := range m.categories {
+		if c.UserID == nil || *c.UserID == userID || used[c.ID] {
+			copied := *c
+			result = append(result, &copied)
+		}
+	}
+	sort.Slice(result, func(i, j int) bool {
+		iUser := result[i].UserID != nil
+		jUser := result[j].UserID != nil
+		if iUser != jUser {
+			return !iUser
+		}
+		return strings.ToLower(result[i].Name) < strings.ToLower(result[j].Name)
+	})
+	return result, nil
+}
+
+func (m *MemoryRepository) DeleteCategory(_ context.Context, id string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if _, ok := m.categories[id]; !ok {
+		return ErrNotFound
+	}
+	delete(m.categories, id)
+	now := time.Now().UTC()
+	for _, rec := range m.checkingRecords {
+		if rec.CategoryID != nil && *rec.CategoryID == id {
+			rec.CategoryID = nil
+			rec.UpdatedAt = now
+		}
+	}
 	return nil
 }
 

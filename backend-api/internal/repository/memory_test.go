@@ -505,4 +505,75 @@ func TestMemoryRepo_DeleteAccountCascade(t *testing.T) {
 	}
 }
 
+func TestMemoryRepo_CategoryDefaultsAndUniqueness(t *testing.T) {
+	repo := repository.NewMemoryRepository()
+	ctx := context.Background()
+	now := time.Now().UTC()
+	u1, u2 := "user-1", "user-2"
+
+	cats, err := repo.ListCategoriesForUser(ctx, u1)
+	if err != nil {
+		t.Fatalf("ListCategoriesForUser failed: %v", err)
+	}
+	if len(cats) != 7 {
+		t.Fatalf("expected 7 seeded default categories, got %d", len(cats))
+	}
+
+	c1 := &models.Category{ID: "cat-1", UserID: &u1, Name: "Dining", CreatedAt: now, UpdatedAt: now}
+	if err := repo.CreateCategory(ctx, c1); err != nil {
+		t.Fatalf("CreateCategory failed: %v", err)
+	}
+	c1Dup := &models.Category{ID: "cat-1-dup", UserID: &u1, Name: "dining", CreatedAt: now, UpdatedAt: now}
+	if err := repo.CreateCategory(ctx, c1Dup); !errors.Is(err, repository.ErrConflict) {
+		t.Fatalf("expected ErrConflict on case-insensitive duplicate, got %v", err)
+	}
+	c2 := &models.Category{ID: "cat-2", UserID: &u2, Name: "Dining", CreatedAt: now, UpdatedAt: now}
+	if err := repo.CreateCategory(ctx, c2); err != nil {
+		t.Fatalf("expected same name for different user to succeed, got %v", err)
+	}
+	if _, err := repo.GetCategoryByID(ctx, "missing-id"); !errors.Is(err, repository.ErrNotFound) {
+		t.Fatalf("expected ErrNotFound for missing category, got %v", err)
+	}
+}
+
+func TestMemoryRepo_DeleteCategoryNullifiesRecordsAndSharedVisibility(t *testing.T) {
+	repo := repository.NewMemoryRepository()
+	ctx := context.Background()
+	now := time.Now().UTC()
+	owner, shared := "owner-1", "shared-1"
+
+	cat := &models.Category{ID: "cat-shared", UserID: &owner, Name: "Pet Care", CreatedAt: now, UpdatedAt: now}
+	_ = repo.CreateCategory(ctx, cat)
+	acc := &models.Account{ID: "acc-1", AdminID: owner, Name: "Shared Checking", Type: "checking", CreatedAt: now, UpdatedAt: now}
+	_ = repo.CreateAccount(ctx, acc)
+	_ = repo.GrantAccountAccess(ctx, &models.AccountAccess{
+		ID: "aa-1", AccountID: acc.ID, UserID: shared, AccessLevel: models.AccessLevelRead, CreatedAt: now, UpdatedAt: now,
+	})
+
+	catID := cat.ID
+	rec := &models.CheckingRecord{
+		ID: "rec-1", AccountID: acc.ID, CategoryID: &catID, Value: -55.0, DateSent: "2026-11-10", Entity: "Pet Clinic", CreatedAt: now, UpdatedAt: now,
+	}
+	_ = repo.CreateCheckingRecord(ctx, rec)
+
+	sharedCats, err := repo.ListCategoriesForUser(ctx, shared)
+	if err != nil {
+		t.Fatalf("ListCategoriesForUser failed: %v", err)
+	}
+	if len(sharedCats) != 8 {
+		t.Fatalf("expected shared user to see 8 categories, got %d", len(sharedCats))
+	}
+
+	if err := repo.DeleteCategory(ctx, cat.ID); err != nil {
+		t.Fatalf("DeleteCategory failed: %v", err)
+	}
+	if err := repo.DeleteCategory(ctx, cat.ID); !errors.Is(err, repository.ErrNotFound) {
+		t.Fatalf("expected ErrNotFound on second delete, got %v", err)
+	}
+	updated, err := repo.GetCheckingRecordByID(ctx, acc.ID, rec.ID)
+	if err != nil || updated.CategoryID != nil {
+		t.Fatalf("expected record CategoryID to be nil after category deletion, got %+v err=%v", updated, err)
+	}
+}
+
 

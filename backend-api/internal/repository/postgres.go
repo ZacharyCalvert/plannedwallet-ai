@@ -225,11 +225,12 @@ func (p *PostgresRepository) RevokeAccountAccess(ctx context.Context, accountID,
 }
 
 func (p *PostgresRepository) CreateCheckingRecord(ctx context.Context, record *models.CheckingRecord) error {
-	query := `INSERT INTO checking_records (id, account_id, value, date_sent, date_cleared, entity, description, created_at, updated_at)
-	          VALUES ($1, $2, $3, $4::date, $5::date, $6, $7, $8, $9)`
+	query := `INSERT INTO checking_records (id, account_id, category_id, value, date_sent, date_cleared, entity, description, created_at, updated_at)
+	          VALUES ($1, $2, $3, $4, $5::date, $6::date, $7, $8, $9, $10)`
 	_, err := p.db.ExecContext(ctx, query,
 		record.ID,
 		record.AccountID,
+		record.CategoryID,
 		record.Value,
 		record.DateSent,
 		record.DateCleared,
@@ -241,18 +242,16 @@ func (p *PostgresRepository) CreateCheckingRecord(ctx context.Context, record *m
 	return err
 }
 
-func (p *PostgresRepository) GetCheckingRecordByID(ctx context.Context, accountID, recordID string) (*models.CheckingRecord, error) {
-	query := `SELECT id, account_id, value, TO_CHAR(date_sent, 'YYYY-MM-DD'), TO_CHAR(date_cleared, 'YYYY-MM-DD'), entity, description, created_at, updated_at
-	          FROM checking_records
-	          WHERE id = $1 AND account_id = $2`
-	row := p.db.QueryRowContext(ctx, query, recordID, accountID)
+func scanCheckingRecord(scanner interface{ Scan(...interface{}) error }) (*models.CheckingRecord, error) {
 	var r models.CheckingRecord
-	var dateCleared sql.NullString
-	if err := row.Scan(&r.ID, &r.AccountID, &r.Value, &r.DateSent, &dateCleared, &r.Entity, &r.Description, &r.CreatedAt, &r.UpdatedAt); err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return nil, ErrNotFound
-		}
+	var categoryID, dateCleared sql.NullString
+	err := scanner.Scan(&r.ID, &r.AccountID, &categoryID, &r.Value, &r.DateSent, &dateCleared, &r.Entity, &r.Description, &r.CreatedAt, &r.UpdatedAt)
+	if err != nil {
 		return nil, err
+	}
+	if categoryID.Valid {
+		val := categoryID.String
+		r.CategoryID = &val
 	}
 	if dateCleared.Valid {
 		val := dateCleared.String
@@ -261,20 +260,33 @@ func (p *PostgresRepository) GetCheckingRecordByID(ctx context.Context, accountI
 	return &r, nil
 }
 
+func (p *PostgresRepository) GetCheckingRecordByID(ctx context.Context, accountID, recordID string) (*models.CheckingRecord, error) {
+	query := `SELECT id, account_id, category_id, value, TO_CHAR(date_sent, 'YYYY-MM-DD'), TO_CHAR(date_cleared, 'YYYY-MM-DD'), entity, description, created_at, updated_at
+	          FROM checking_records
+	          WHERE id = $1 AND account_id = $2`
+	r, err := scanCheckingRecord(p.db.QueryRowContext(ctx, query, recordID, accountID))
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrNotFound
+		}
+		return nil, err
+	}
+	return r, nil
+}
+
 func (p *PostgresRepository) ListCheckingRecords(ctx context.Context, accountID string, cleared *bool, startDate, endDate *string) ([]*models.CheckingRecord, error) {
 	var sb strings.Builder
-	sb.WriteString(`SELECT id, account_id, value, TO_CHAR(date_sent, 'YYYY-MM-DD'), TO_CHAR(date_cleared, 'YYYY-MM-DD'), entity, description, created_at, updated_at
+	sb.WriteString(`SELECT id, account_id, category_id, value, TO_CHAR(date_sent, 'YYYY-MM-DD'), TO_CHAR(date_cleared, 'YYYY-MM-DD'), entity, description, created_at, updated_at
 	                FROM checking_records
 	                WHERE account_id = $1`)
 
 	args := []interface{}{accountID}
 	paramIdx := 2
-
 	if cleared != nil {
 		if *cleared {
-			sb.WriteString(fmt.Sprintf(" AND date_cleared IS NOT NULL"))
+			sb.WriteString(" AND date_cleared IS NOT NULL")
 		} else {
-			sb.WriteString(fmt.Sprintf(" AND date_cleared IS NULL"))
+			sb.WriteString(" AND date_cleared IS NULL")
 		}
 	}
 	if startDate != nil && *startDate != "" {
@@ -287,7 +299,6 @@ func (p *PostgresRepository) ListCheckingRecords(ctx context.Context, accountID 
 		args = append(args, *endDate)
 		paramIdx++
 	}
-
 	sb.WriteString(" ORDER BY date_sent DESC, created_at DESC")
 
 	rows, err := p.db.QueryContext(ctx, sb.String(), args...)
@@ -298,25 +309,21 @@ func (p *PostgresRepository) ListCheckingRecords(ctx context.Context, accountID 
 
 	var records []*models.CheckingRecord
 	for rows.Next() {
-		var r models.CheckingRecord
-		var dateCleared sql.NullString
-		if err := rows.Scan(&r.ID, &r.AccountID, &r.Value, &r.DateSent, &dateCleared, &r.Entity, &r.Description, &r.CreatedAt, &r.UpdatedAt); err != nil {
+		r, err := scanCheckingRecord(rows)
+		if err != nil {
 			return nil, err
 		}
-		if dateCleared.Valid {
-			val := dateCleared.String
-			r.DateCleared = &val
-		}
-		records = append(records, &r)
+		records = append(records, r)
 	}
 	return records, rows.Err()
 }
 
 func (p *PostgresRepository) UpdateCheckingRecord(ctx context.Context, record *models.CheckingRecord) error {
 	query := `UPDATE checking_records
-	          SET value = $1, date_sent = $2::date, date_cleared = $3::date, entity = $4, description = $5, updated_at = $6
-	          WHERE id = $7 AND account_id = $8`
+	          SET category_id = $1, value = $2, date_sent = $3::date, date_cleared = $4::date, entity = $5, description = $6, updated_at = $7
+	          WHERE id = $8 AND account_id = $9`
 	res, err := p.db.ExecContext(ctx, query,
+		record.CategoryID,
 		record.Value,
 		record.DateSent,
 		record.DateCleared,
@@ -1457,6 +1464,92 @@ func (p *PostgresRepository) ListPerspectiveAccess(ctx context.Context, perspect
 func (p *PostgresRepository) RevokePerspectiveAccess(ctx context.Context, perspectiveID, userID string) error {
 	query := `DELETE FROM perspective_access WHERE perspective_id = $1 AND user_id = $2`
 	res, err := p.db.ExecContext(ctx, query, perspectiveID, userID)
+	if err != nil {
+		return err
+	}
+	cnt, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if cnt == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+func scanCategory(scanner interface{ Scan(...interface{}) error }) (*models.Category, error) {
+	var c models.Category
+	var userID sql.NullString
+	if err := scanner.Scan(&c.ID, &userID, &c.Name, &c.CreatedAt, &c.UpdatedAt); err != nil {
+		return nil, err
+	}
+	if userID.Valid {
+		uid := userID.String
+		c.UserID = &uid
+	}
+	return &c, nil
+}
+
+func (p *PostgresRepository) CreateCategory(ctx context.Context, category *models.Category) error {
+	query := `INSERT INTO categories (id, user_id, name, created_at, updated_at)
+	          VALUES ($1, $2, $3, $4, $5)`
+	_, err := p.db.ExecContext(ctx, query,
+		category.ID, category.UserID, category.Name, category.CreatedAt, category.UpdatedAt,
+	)
+	if err != nil {
+		if isUniqueViolation(err) {
+			return ErrConflict
+		}
+		return err
+	}
+	return nil
+}
+
+func (p *PostgresRepository) GetCategoryByID(ctx context.Context, id string) (*models.Category, error) {
+	query := `SELECT id, user_id, name, created_at, updated_at FROM categories WHERE id = $1`
+	c, err := scanCategory(p.db.QueryRowContext(ctx, query, id))
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrNotFound
+		}
+		return nil, err
+	}
+	return c, nil
+}
+
+func (p *PostgresRepository) ListCategoriesForUser(ctx context.Context, userID string) ([]*models.Category, error) {
+	query := `SELECT DISTINCT c.id, c.user_id, c.name, c.created_at, c.updated_at
+	          FROM categories c
+	          WHERE c.user_id IS NULL
+	             OR c.user_id = $1
+	             OR c.id IN (
+	                 SELECT cr.category_id
+	                 FROM checking_records cr
+	                 JOIN accounts a ON a.id = cr.account_id
+	                 LEFT JOIN account_access aa ON aa.account_id = a.id AND aa.user_id = $1
+	                 WHERE cr.category_id IS NOT NULL
+	                   AND (a.admin_id = $1 OR aa.user_id = $1)
+	             )
+	          ORDER BY (c.user_id IS NOT NULL) ASC, LOWER(c.name) ASC`
+	rows, err := p.db.QueryContext(ctx, query, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	result := make([]*models.Category, 0)
+	for rows.Next() {
+		c, err := scanCategory(rows)
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, c)
+	}
+	return result, rows.Err()
+}
+
+func (p *PostgresRepository) DeleteCategory(ctx context.Context, id string) error {
+	res, err := p.db.ExecContext(ctx, `DELETE FROM categories WHERE id = $1`, id)
 	if err != nil {
 		return err
 	}

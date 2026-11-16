@@ -157,25 +157,43 @@ func (c *Controller) verifyCheckingAccount(ctx context.Context, userID, accountI
 	return account, nil
 }
 
+func toCheckingRecordResponse(r *models.CheckingRecord) models.CheckingRecordResponse {
+	return models.CheckingRecordResponse{
+		ID:          r.ID,
+		AccountID:   r.AccountID,
+		CategoryID:  r.CategoryID,
+		Value:       r.Value,
+		DateSent:    r.DateSent,
+		DateCleared: r.DateCleared,
+		Entity:      r.Entity,
+		Description: r.Description,
+		CreatedAt:   r.CreatedAt,
+		UpdatedAt:   r.UpdatedAt,
+	}
+}
+
 // CreateCheckingRecord creates a checking transaction record under the specified account.
 func (c *Controller) CreateCheckingRecord(ctx context.Context, userID, accountID string, req models.CheckingRecordCreateRequest) (*models.CheckingRecordResponse, error) {
 	if _, err := c.verifyCheckingAccount(ctx, userID, accountID); err != nil {
 		return nil, err
 	}
-
 	if req.Value == nil {
 		return nil, NewAppError(http.StatusBadRequest, "INVALID_VALUE", "Transaction value is required.")
 	}
-
 	entity := strings.TrimSpace(req.Entity)
 	if entity == "" {
 		return nil, NewAppError(http.StatusBadRequest, "INVALID_ENTITY", "entity cannot be empty.")
+	}
+	catID, err := c.resolveCategoryIDForUser(ctx, userID, req.CategoryID)
+	if err != nil {
+		return nil, err
 	}
 
 	now := time.Now().UTC()
 	record := &models.CheckingRecord{
 		ID:          uuid.New().String(),
 		AccountID:   accountID,
+		CategoryID:  catID,
 		Value:       *req.Value,
 		DateSent:    req.DateSent,
 		DateCleared: req.DateCleared,
@@ -189,17 +207,8 @@ func (c *Controller) CreateCheckingRecord(ctx context.Context, userID, accountID
 		return nil, NewAppError(http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to create checking record.")
 	}
 
-	return &models.CheckingRecordResponse{
-		ID:          record.ID,
-		AccountID:   record.AccountID,
-		Value:       record.Value,
-		DateSent:    record.DateSent,
-		DateCleared: record.DateCleared,
-		Entity:      record.Entity,
-		Description: record.Description,
-		CreatedAt:   record.CreatedAt,
-		UpdatedAt:   record.UpdatedAt,
-	}, nil
+	res := toCheckingRecordResponse(record)
+	return &res, nil
 }
 
 // ListCheckingRecords retrieves checking records with optional filters.
@@ -215,17 +224,7 @@ func (c *Controller) ListCheckingRecords(ctx context.Context, userID, accountID 
 
 	res := make([]models.CheckingRecordResponse, 0, len(records))
 	for _, r := range records {
-		res = append(res, models.CheckingRecordResponse{
-			ID:          r.ID,
-			AccountID:   r.AccountID,
-			Value:       r.Value,
-			DateSent:    r.DateSent,
-			DateCleared: r.DateCleared,
-			Entity:      r.Entity,
-			Description: r.Description,
-			CreatedAt:   r.CreatedAt,
-			UpdatedAt:   r.UpdatedAt,
-		})
+		res = append(res, toCheckingRecordResponse(r))
 	}
 	return res, nil
 }
@@ -244,17 +243,8 @@ func (c *Controller) GetCheckingRecord(ctx context.Context, userID, accountID, r
 		return nil, NewAppError(http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to retrieve record.")
 	}
 
-	return &models.CheckingRecordResponse{
-		ID:          record.ID,
-		AccountID:   record.AccountID,
-		Value:       record.Value,
-		DateSent:    record.DateSent,
-		DateCleared: record.DateCleared,
-		Entity:      record.Entity,
-		Description: record.Description,
-		CreatedAt:   record.CreatedAt,
-		UpdatedAt:   record.UpdatedAt,
-	}, nil
+	res := toCheckingRecordResponse(record)
+	return &res, nil
 }
 
 // UpdateCheckingRecord updates all mutable fields of an existing checking record.
@@ -262,7 +252,6 @@ func (c *Controller) UpdateCheckingRecord(ctx context.Context, userID, accountID
 	if _, err := c.verifyCheckingAccount(ctx, userID, accountID); err != nil {
 		return nil, err
 	}
-
 	existing, err := c.repo.GetCheckingRecordByID(ctx, accountID, recordID)
 	if err != nil {
 		if errors.Is(err, repository.ErrNotFound) {
@@ -270,16 +259,19 @@ func (c *Controller) UpdateCheckingRecord(ctx context.Context, userID, accountID
 		}
 		return nil, NewAppError(http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to retrieve record.")
 	}
-
 	if req.Value == nil {
 		return nil, NewAppError(http.StatusBadRequest, "INVALID_VALUE", "Transaction value is required.")
 	}
-
 	entity := strings.TrimSpace(req.Entity)
 	if entity == "" {
 		return nil, NewAppError(http.StatusBadRequest, "INVALID_ENTITY", "entity cannot be empty.")
 	}
+	catID, err := c.resolveCategoryIDForUser(ctx, userID, req.CategoryID)
+	if err != nil {
+		return nil, err
+	}
 
+	existing.CategoryID = catID
 	existing.Value = *req.Value
 	existing.DateSent = req.DateSent
 	existing.DateCleared = req.DateCleared
@@ -291,17 +283,43 @@ func (c *Controller) UpdateCheckingRecord(ctx context.Context, userID, accountID
 		return nil, NewAppError(http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to update record.")
 	}
 
-	return &models.CheckingRecordResponse{
-		ID:          existing.ID,
-		AccountID:   existing.AccountID,
-		Value:       existing.Value,
-		DateSent:    existing.DateSent,
-		DateCleared: existing.DateCleared,
-		Entity:      existing.Entity,
-		Description: existing.Description,
-		CreatedAt:   existing.CreatedAt,
-		UpdatedAt:   existing.UpdatedAt,
-	}, nil
+	res := toCheckingRecordResponse(existing)
+	return &res, nil
+}
+
+func (c *Controller) applyCheckingRecordPatch(ctx context.Context, userID string, existing *models.CheckingRecord, req models.CheckingRecordPatchRequest) error {
+	if req.Value != nil {
+		existing.Value = *req.Value
+	}
+	if req.DateSent != nil {
+		existing.DateSent = *req.DateSent
+	}
+	if req.DateCleared != nil {
+		if *req.DateCleared != "" {
+			existing.DateCleared = req.DateCleared
+		} else {
+			existing.DateCleared = nil
+		}
+	}
+	if req.CategoryID != nil {
+		catID, err := c.resolveCategoryIDForUser(ctx, userID, req.CategoryID)
+		if err != nil {
+			return err
+		}
+		existing.CategoryID = catID
+	}
+	if req.Entity != nil {
+		entity := strings.TrimSpace(*req.Entity)
+		if entity == "" {
+			return NewAppError(http.StatusBadRequest, "INVALID_ENTITY", "entity cannot be empty.")
+		}
+		existing.Entity = entity
+	}
+	if req.Description != nil {
+		existing.Description = strings.TrimSpace(*req.Description)
+	}
+	existing.UpdatedAt = time.Now().UTC()
+	return nil
 }
 
 // PatchCheckingRecord partially updates an existing checking record.
@@ -318,46 +336,16 @@ func (c *Controller) PatchCheckingRecord(ctx context.Context, userID, accountID,
 		return nil, NewAppError(http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to retrieve record.")
 	}
 
-	if req.Value != nil {
-		existing.Value = *req.Value
+	if err := c.applyCheckingRecordPatch(ctx, userID, existing, req); err != nil {
+		return nil, err
 	}
-	if req.DateSent != nil {
-		existing.DateSent = *req.DateSent
-	}
-	if req.DateCleared != nil {
-		if *req.DateCleared != "" {
-			existing.DateCleared = req.DateCleared
-		} else {
-			existing.DateCleared = nil
-		}
-	}
-	if req.Entity != nil {
-		entity := strings.TrimSpace(*req.Entity)
-		if entity == "" {
-			return nil, NewAppError(http.StatusBadRequest, "INVALID_ENTITY", "entity cannot be empty.")
-		}
-		existing.Entity = entity
-	}
-	if req.Description != nil {
-		existing.Description = strings.TrimSpace(*req.Description)
-	}
-	existing.UpdatedAt = time.Now().UTC()
 
 	if err := c.repo.UpdateCheckingRecord(ctx, existing); err != nil {
 		return nil, NewAppError(http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to update record.")
 	}
 
-	return &models.CheckingRecordResponse{
-		ID:          existing.ID,
-		AccountID:   existing.AccountID,
-		Value:       existing.Value,
-		DateSent:    existing.DateSent,
-		DateCleared: existing.DateCleared,
-		Entity:      existing.Entity,
-		Description: existing.Description,
-		CreatedAt:   existing.CreatedAt,
-		UpdatedAt:   existing.UpdatedAt,
-	}, nil
+	res := toCheckingRecordResponse(existing)
+	return &res, nil
 }
 
 // DeleteCheckingRecord deletes a checking record.

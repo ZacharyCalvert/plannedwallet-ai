@@ -129,5 +129,11 @@ All account endpoints enforce permissions via the `account_access` table:
 7. **No Trademarked or Registered Business Names**:
    - Do not add additional real business or brand names into source code, comments, test assertions, seed scripts, OpenAPI examples, or UI placeholders/memos.
    - Use generic descriptors instead (e.g., "Brokerage Account", "Trading Portfolio", "Retail Bank", "Payroll Deposit", "Coffee Shop", "Supermarket").
+8. **Unit Test Coverage Across All Layers**:
+   - Every backend change must include corresponding unit tests in each affected Go package:
+     - `internal/database/postgres_test.go`: Validate any new tables, columns, indexes, constraints, and seed data added to `init.sql`.
+     - `internal/repository/memory_test.go`: Validate `MemoryRepository` CRUD, uniqueness/conflict semantics, cascading/nullification behavior, and multi-user visibility.
+     - `internal/controller/*_test.go`: Validate business logic, access control, error codes, and edge cases.
+     - `internal/handlers/*_test.go`: Validate HTTP routing, request binding, status codes, query parameter validation, and JSON response shapes.
 
 

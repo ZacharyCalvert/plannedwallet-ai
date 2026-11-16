@@ -32,9 +32,32 @@ CREATE TABLE IF NOT EXISTS account_access (
 CREATE INDEX IF NOT EXISTS idx_account_access_user_id ON account_access(user_id);
 CREATE INDEX IF NOT EXISTS idx_account_access_account_id ON account_access(account_id);
 
+CREATE TABLE IF NOT EXISTS categories (
+    id UUID PRIMARY KEY,
+    user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    name VARCHAR(100) NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT uq_categories_user_name UNIQUE NULLS NOT DISTINCT (user_id, name)
+);
+
+CREATE INDEX IF NOT EXISTS idx_categories_user_id ON categories(user_id);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_categories_user_lower_name ON categories (user_id, LOWER(name)) NULLS NOT DISTINCT;
+
+INSERT INTO categories (id, user_id, name) VALUES
+    ('00000000-0000-4000-8000-000000000001', NULL, 'Housing'),
+    ('00000000-0000-4000-8000-000000000002', NULL, 'Transportation'),
+    ('00000000-0000-4000-8000-000000000003', NULL, 'Groceries'),
+    ('00000000-0000-4000-8000-000000000004', NULL, 'Utilities'),
+    ('00000000-0000-4000-8000-000000000005', NULL, 'Healthcare'),
+    ('00000000-0000-4000-8000-000000000006', NULL, 'Insurance'),
+    ('00000000-0000-4000-8000-000000000007', NULL, 'Debt')
+ON CONFLICT DO NOTHING;
+
 CREATE TABLE IF NOT EXISTS checking_records (
     id UUID PRIMARY KEY,
     account_id UUID NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+    category_id UUID REFERENCES categories(id) ON DELETE SET NULL,
     value DOUBLE PRECISION NOT NULL,
     date_sent DATE NOT NULL,
     date_cleared DATE,
@@ -44,7 +67,9 @@ CREATE TABLE IF NOT EXISTS checking_records (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+ALTER TABLE checking_records ADD COLUMN IF NOT EXISTS category_id UUID REFERENCES categories(id) ON DELETE SET NULL;
 CREATE INDEX IF NOT EXISTS idx_checking_records_account_datesent ON checking_records(account_id, date_sent DESC);
+CREATE INDEX IF NOT EXISTS idx_checking_records_category_id ON checking_records(category_id);
 
 CREATE TABLE IF NOT EXISTS assets (
     id UUID PRIMARY KEY,

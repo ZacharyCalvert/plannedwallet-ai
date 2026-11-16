@@ -141,10 +141,50 @@ type AccountAccessGrantRequest struct {
 	AccessLevel AccessLevel `json:"access_level" binding:"required"`
 }
 
+// Category represents a transaction category (global if UserID is nil, or user-scoped).
+type Category struct {
+	ID        string    `json:"id"`
+	UserID    *string   `json:"user_id"`
+	Name      string    `json:"name"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+// CategoryCreateRequest represents payload to create a user-scoped category.
+type CategoryCreateRequest struct {
+	Name string `json:"name" binding:"required,min=1,max=100"`
+}
+
+// CategoryResponse represents a category returned by the API.
+type CategoryResponse struct {
+	ID        string    `json:"id"`
+	UserID    *string   `json:"user_id"`
+	Name      string    `json:"name"`
+	IsDefault bool      `json:"is_default"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+// CategoryExpenseSlice represents a single category's expense total for pie charts.
+type CategoryExpenseSlice struct {
+	CategoryID   *string `json:"category_id"`
+	CategoryName string  `json:"category_name"`
+	TotalAmount  float64 `json:"total_amount"`
+	RecordCount  int     `json:"record_count"`
+}
+
+// AccountCategorySummaryResponse represents an account's expense breakdown by category.
+type AccountCategorySummaryResponse struct {
+	AccountID     string                 `json:"account_id"`
+	TotalExpenses float64                `json:"total_expenses"`
+	Categories    []CategoryExpenseSlice `json:"categories"`
+}
+
 // CheckingRecord domain model
 type CheckingRecord struct {
 	ID          string    `json:"id"`
 	AccountID   string    `json:"account_id"`
+	CategoryID  *string   `json:"category_id"`
 	Value       float64   `json:"value"`
 	DateSent    string    `json:"date_sent"`
 	DateCleared *string   `json:"date_cleared"`
@@ -159,6 +199,7 @@ type CheckingRecordCreateRequest struct {
 	Value       *float64 `json:"value" binding:"required"`
 	DateSent    string   `json:"date_sent" binding:"required"`
 	DateCleared *string  `json:"date_cleared"`
+	CategoryID  *string  `json:"category_id"`
 	Entity      string   `json:"entity" binding:"required,min=1,max=255"`
 	Description string   `json:"description" binding:"max=500"`
 }
@@ -168,6 +209,7 @@ type CheckingRecordUpdateRequest struct {
 	Value       *float64 `json:"value" binding:"required"`
 	DateSent    string   `json:"date_sent" binding:"required"`
 	DateCleared *string  `json:"date_cleared"`
+	CategoryID  *string  `json:"category_id"`
 	Entity      string   `json:"entity" binding:"required,min=1,max=255"`
 	Description string   `json:"description" binding:"max=500"`
 }
@@ -177,6 +219,7 @@ type CheckingRecordPatchRequest struct {
 	Value       *float64 `json:"value,omitempty"`
 	DateSent    *string  `json:"date_sent,omitempty"`
 	DateCleared *string  `json:"date_cleared,omitempty"`
+	CategoryID  *string  `json:"category_id,omitempty"`
 	Entity      *string  `json:"entity,omitempty"`
 	Description *string  `json:"description,omitempty"`
 }
@@ -185,6 +228,7 @@ type CheckingRecordPatchRequest struct {
 type CheckingRecordResponse struct {
 	ID          string    `json:"id"`
 	AccountID   string    `json:"account_id"`
+	CategoryID  *string   `json:"category_id"`
 	Value       float64   `json:"value"`
 	DateSent    string    `json:"date_sent"`
 	DateCleared *string   `json:"date_cleared"`

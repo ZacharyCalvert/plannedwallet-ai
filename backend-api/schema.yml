@@ -560,6 +560,203 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
+  /api/v1/accounts/{accountId}/records/categories:
+    parameters:
+      - $ref: '#/components/parameters/XClientId'
+      - name: accountId
+        in: path
+        required: true
+        description: The unique identifier of the checking, savings, or credit card account.
+        schema:
+          type: string
+          format: uuid
+    get:
+      tags:
+        - Checking Records
+      summary: Get account expense breakdown by category
+      description: Aggregates negative (expense) transactions by category for pie chart visualization. Uncategorized expenses are grouped under "Uncategorized".
+      operationId: getAccountCategorySummary
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: cleared
+          in: query
+          required: false
+          description: Filter by cleared status (`true` for cleared, `false` for pending).
+          schema:
+            type: boolean
+        - name: start_date
+          in: query
+          required: false
+          description: Inclusive start date filter on `date_sent` (YYYY-MM-DD).
+          schema:
+            type: string
+            format: date
+        - name: end_date
+          in: query
+          required: false
+          description: Inclusive end date filter on `date_sent` (YYYY-MM-DD).
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          summary: Expense breakdown by category
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountCategorySummaryResponse'
+        '400':
+          summary: Invalid account type or query parameter
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          summary: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          summary: Account not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/categories:
+    parameters:
+      - $ref: '#/components/parameters/XClientId'
+    get:
+      tags:
+        - Categories
+      summary: List accessible categories
+      description: Returns global default categories, categories created by the authenticated user, and categories currently used by accounts the user has access to.
+      operationId: listCategories
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          summary: Accessible categories
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CategoryResponse'
+        '401':
+          summary: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    post:
+      tags:
+        - Categories
+      summary: Create a user-scoped category
+      description: Creates a new transaction category owned by the authenticated user.
+      operationId: createCategory
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CategoryCreateRequest'
+      responses:
+        '201':
+          summary: Category created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CategoryResponse'
+        '400':
+          summary: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          summary: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          summary: Category name conflict
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/categories/{categoryId}:
+    parameters:
+      - $ref: '#/components/parameters/XClientId'
+      - name: categoryId
+        in: path
+        required: true
+        description: The unique identifier of the category.
+        schema:
+          type: string
+          format: uuid
+    get:
+      tags:
+        - Categories
+      summary: Get a category by ID
+      operationId: getCategory
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          summary: Category details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CategoryResponse'
+        '401':
+          summary: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          summary: Category not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    delete:
+      tags:
+        - Categories
+      summary: Delete a user-created category
+      description: Deletes a user-owned category and sets `category_id` to null on any associated transaction records. Default categories cannot be deleted.
+      operationId: deleteCategory
+      security:
+        - BearerAuth: []
+      responses:
+        '204':
+          description: Category deleted
+        '401':
+          summary: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          summary: Forbidden or default category immutable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          summary: Category not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
   /api/v1/accounts/{accountId}/records/{recordId}:
     parameters:
       - $ref: '#/components/parameters/XClientId'
@@ -3461,6 +3658,12 @@ components:
           nullable: true
           description: The date the bank accepted or logged the transaction. Omit or pass null if pending.
           example: "2026-11-12"
+        category_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: Optional category UUID assigned to the transaction.
+          example: "00000000-0000-4000-8000-000000000003"
         entity:
           type: string
           minLength: 1
@@ -3496,6 +3699,12 @@ components:
           nullable: true
           description: The date the bank accepted or logged the transaction. Set to null if uncleared.
           example: "2026-11-12"
+        category_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: Optional category UUID assigned to the transaction.
+          example: "00000000-0000-4000-8000-000000000003"
         entity:
           type: string
           minLength: 1
@@ -3528,6 +3737,12 @@ components:
           nullable: true
           description: Set to mark the transaction as cleared by the bank, or null to revert to pending.
           example: "2026-11-12"
+        category_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: Updated category UUID, or empty string to clear.
+          example: "00000000-0000-4000-8000-000000000003"
         entity:
           type: string
           minLength: 1
@@ -3561,6 +3776,12 @@ components:
           format: uuid
           description: Identifier of the checking account this record belongs to.
           example: "7e954536-4ec8-490b-9304-4b52b217d84b"
+        category_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: Optional category UUID assigned to this transaction, or null if uncategorized.
+          example: "00000000-0000-4000-8000-000000000003"
         value:
           type: number
           format: double
@@ -4399,5 +4620,88 @@ components:
           type: integer
           nullable: true
           example: 2840
+
+    CategoryCreateRequest:
+      type: object
+      required:
+        - name
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+          description: Category name.
+          example: "Dining Out"
+
+    CategoryResponse:
+      type: object
+      required:
+        - id
+        - name
+        - is_default
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        user_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: Owner user ID, or null for global default categories.
+        name:
+          type: string
+          example: "Groceries"
+        is_default:
+          type: boolean
+          example: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    CategoryExpenseSlice:
+      type: object
+      required:
+        - category_name
+        - total_amount
+        - record_count
+      properties:
+        category_id:
+          type: string
+          format: uuid
+          nullable: true
+        category_name:
+          type: string
+          example: "Groceries"
+        total_amount:
+          type: number
+          format: double
+          example: 245.50
+        record_count:
+          type: integer
+          example: 4
+
+    AccountCategorySummaryResponse:
+      type: object
+      required:
+        - account_id
+        - total_expenses
+        - categories
+      properties:
+        account_id:
+          type: string
+          format: uuid
+        total_expenses:
+          type: number
+          format: double
+          example: 1245.50
+        categories:
+          type: array
+          items:
+            $ref: '#/components/schemas/CategoryExpenseSlice'
 
 
