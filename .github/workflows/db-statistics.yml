@@ -1,0 +1,159 @@
+name: Database Statistics
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Target environment to inspect'
+        required: true
+        default: 'stage'
+        type: choice
+        options:
+          - stage
+          - production
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  db-statistics:
+    name: Inspect Database Statistics (${{ inputs.environment }})
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    concurrency:
+      group: deployment-${{ inputs.environment }}
+      cancel-in-progress: false
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Validate target environment
+        env:
+          TARGET_ENV: ${{ inputs.environment }}
+        run: |
+          echo "Selected Target Environment: $TARGET_ENV"
+          if [ "$TARGET_ENV" != "stage" ] && [ "$TARGET_ENV" != "production" ]; then
+            echo "::error::Invalid target environment '$TARGET_ENV'. Must be stage or production."
+            exit 1
+          fi
+
+      - name: Azure Login via OIDC Federated Trust
+        uses: azure/login@v3
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Execute Read-Only Statistics Script inside VNet via Container App Job
+        env:
+          TARGET_ENV: ${{ inputs.environment }}
+          AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP || (inputs.environment == 'production' && 'rg-plannedwallet-prod' || 'rg-plannedwallet-stage') }}
+          MIGRATION_JOB_NAME: ${{ vars.MIGRATION_JOB_NAME || (inputs.environment == 'production' && 'job-pw-prod-migrations' || 'job-pw-stage-migrations') }}
+          CONTAINER_IMAGE: ${{ vars.MIGRATION_CONTAINER_IMAGE || 'postgres:16-alpine' }}
+          SQL_FILE_PATH: '.github/scripts/db-statistics.sql'
+        run: |
+          echo "Target Environment: $TARGET_ENV"
+          echo "Resource Group: $AZURE_RESOURCE_GROUP"
+          echo "Container App Job: $MIGRATION_JOB_NAME"
+          echo "Container Image: $CONTAINER_IMAGE"
+          echo "SQL File: $SQL_FILE_PATH"
+
+          # 1. Fetch current job template
+          echo "Fetching job template for '$MIGRATION_JOB_NAME'..."
+          az containerapp job show \
+            --name "$MIGRATION_JOB_NAME" \
+            --resource-group "$AZURE_RESOURCE_GROUP" \
+            --query "properties.template" \
+            -o json > /tmp/migration-template.json
+
+          # 2. Modify template to execute read-only statistics script via python helper
+          python3 .github/scripts/prepare-migration-job.py \
+            /tmp/migration-template.json \
+            "$SQL_FILE_PATH" \
+            "$CONTAINER_IMAGE"
+          CONTAINER_NAME=$(cat /tmp/container-name.txt 2>/dev/null || echo "migration-runner")
+          echo "Target Container Name: $CONTAINER_NAME"
+
+          # 3. Start Container App Job execution using the prepared template
+          echo "Starting Container App Job '$MIGRATION_JOB_NAME'..."
+          EXEC_NAME=$(az containerapp job start \
+            --name "$MIGRATION_JOB_NAME" \
+            --resource-group "$AZURE_RESOURCE_GROUP" \
+            --yaml /tmp/migration-template.json \
+            --query "name" -o tsv)
+
+          if [ -z "$EXEC_NAME" ]; then
+            echo "Error: Failed to initiate Container App Job execution."
+            exit 1
+          fi
+
+          echo "Container App Job execution started: $EXEC_NAME"
+          echo "Monitoring execution status..."
+
+          # 4. Poll execution status until completion
+          START_TIME=$(date +%s)
+          TIMEOUT_SECONDS=300 # 5 minutes max
+
+          while true; do
+            STATUS=$(az containerapp job execution show \
+              --name "$MIGRATION_JOB_NAME" \
+              --resource-group "$AZURE_RESOURCE_GROUP" \
+              --job-execution-name "$EXEC_NAME" \
+              --query "properties.status" -o tsv 2>/dev/null || echo "Unknown")
+
+            echo "Current execution status: $STATUS"
+
+            if [ "$STATUS" = "Succeeded" ]; then
+              echo "Database statistics query completed successfully inside the VNet."
+              echo ""
+              echo "============================================================"
+              echo "         PLANNED WALLET DATABASE STATISTICS ($TARGET_ENV)   "
+              echo "============================================================"
+              STAT_LOGS=$(az containerapp job logs show \
+                --name "$MIGRATION_JOB_NAME" \
+                --resource-group "$AZURE_RESOURCE_GROUP" \
+                --container "$CONTAINER_NAME" \
+                --execution "$EXEC_NAME" \
+                --tail 300 || true)
+              echo "$STAT_LOGS"
+              echo "============================================================"
+
+              # Output formatted statistics to GitHub Actions Step Summary
+              {
+                echo "## 📊 Database Statistics: \`$TARGET_ENV\`"
+                echo ""
+                echo "\`\`\`text"
+                echo "$STAT_LOGS"
+                echo "\`\`\`"
+              } >> "$GITHUB_STEP_SUMMARY"
+
+              break
+            elif [ "$STATUS" = "Failed" ]; then
+              echo "Error: Database statistics job execution failed in Azure Container Apps."
+              echo "--- Container Execution Logs ---"
+              az containerapp job logs show \
+                --name "$MIGRATION_JOB_NAME" \
+                --resource-group "$AZURE_RESOURCE_GROUP" \
+                --container "$CONTAINER_NAME" \
+                --execution "$EXEC_NAME" \
+                --tail 300 || true
+              echo "--- End Container Execution Logs ---"
+              az containerapp job execution show \
+                --name "$MIGRATION_JOB_NAME" \
+                --resource-group "$AZURE_RESOURCE_GROUP" \
+                --job-execution-name "$EXEC_NAME" \
+                --output json || true
+              exit 1
+            fi
+
+            CURRENT_TIME=$(date +%s)
+            ELAPSED=$((CURRENT_TIME - START_TIME))
+            if [ $ELAPSED -ge $TIMEOUT_SECONDS ]; then
+              echo "Error: Timed out after $TIMEOUT_SECONDS seconds waiting for statistics job to complete."
+              exit 1
+            fi
+
+            sleep 5
+          done
