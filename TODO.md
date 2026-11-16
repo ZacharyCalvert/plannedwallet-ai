@@ -24,7 +24,7 @@ Medium priority:
 - [x] Infrastructure + auto deploy to production
 - [x] Disaster recovery / backups / automation reload of data
 - [x] Data retention
-Add perspectives - graphical trending of net worth
+Add categories (expense categories)
 rollup data (monthly)
 Reconcile calculations - locked records for edits + snapshot of net worth?
 account settings: reconcile account on month, or daily
@@ -47,7 +47,7 @@ fun money / daily money based on income expectations (payroll)
 Payroll / payday features -> button to add?
 Cookie to ignore TOTP challenge ? 
 Snapshot extraction of gold / silver / stocks / gas
-Add categories (expense categories)
+Add perspectives - graphical trending of net worth
 
 Production ready:
 - legal disclaimer
