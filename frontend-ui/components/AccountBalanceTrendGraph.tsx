@@ -9,6 +9,7 @@ import {
   filterBalanceSeriesByRange,
   computeBalanceMetrics,
   selectHighlightPoints,
+  computeYAxisScale,
 } from '../lib/accountTrend';
 
 interface AccountBalanceTrendGraphProps {
@@ -43,6 +44,18 @@ function formatCurrency(val: number): string {
   return isNegative ? `-${formatted}` : formatted;
 }
 
+function formatYAxisCurrency(val: number): string {
+  const clean = val === 0 ? 0 : val;
+  const isNegative = clean < 0;
+  const formatted = new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(Math.abs(clean));
+  return isNegative ? `-${formatted}` : formatted;
+}
+
 function formatDateDisplay(isoDate: string): string {
   if (!isoDate) return '';
   const [y, m, d] = isoDate.split('-').map((n) => parseInt(n, 10));
@@ -66,18 +79,8 @@ function computeChartGeometry(points: BalanceTrendPoint[]) {
     if (pt.balance > maxVal) maxVal = pt.balance;
   }
 
-  let yMin = minVal;
-  let yMax = maxVal;
-  if (yMin === yMax) {
-    yMin = minVal === 0 ? -100 : minVal - Math.max(Math.abs(minVal) * 0.1, 100);
-    yMax = maxVal === 0 ? 100 : maxVal + Math.max(Math.abs(maxVal) * 0.1, 100);
-  } else {
-    const margin = (maxVal - minVal) * 0.12;
-    yMin = minVal - margin;
-    yMax = maxVal + margin;
-  }
-
-  const yRange = yMax - yMin;
+  const { yMin, yMax, ticks } = computeYAxisScale(minVal, maxVal);
+  const yRange = yMax - yMin || 1;
   const firstTime = new Date(points[0].date).getTime();
   const lastTime = new Date(points[points.length - 1].date).getTime();
   const timeSpan = lastTime - firstTime;
@@ -89,7 +92,7 @@ function computeChartGeometry(points: BalanceTrendPoint[]) {
         : timeSpan > 0
         ? PAD_LEFT + ((new Date(pt.date).getTime() - firstTime) / timeSpan) * PLOT_WIDTH
         : PAD_LEFT + (idx / (points.length - 1)) * PLOT_WIDTH;
-    const yNorm = (pt.balance - yMin) / (yRange || 1);
+    const yNorm = (pt.balance - yMin) / yRange;
     const y = PAD_TOP + PLOT_HEIGHT - yNorm * PLOT_HEIGHT;
     return { x, y, point: pt, index: idx };
   });
@@ -98,11 +101,14 @@ function computeChartGeometry(points: BalanceTrendPoint[]) {
     (acc, pt, i) => `${acc} ${i === 0 ? 'M' : 'L'} ${pt.x.toFixed(1)} ${pt.y.toFixed(1)}`,
     ''
   );
-  const baselineY = PAD_TOP + PLOT_HEIGHT;
-  const areaPath = `${linePath} L ${plotted[plotted.length - 1].x.toFixed(1)} ${baselineY} L ${plotted[0].x.toFixed(1)} ${baselineY} Z`;
-  const gridLines = [0, 0.333, 0.666, 1].map((ratio) => ({
-    y: PAD_TOP + PLOT_HEIGHT - ratio * PLOT_HEIGHT,
-    val: yMin + ratio * yRange,
+  const clampedZeroNorm = Math.min(1, Math.max(0, (0 - yMin) / yRange));
+  const zeroY = PAD_TOP + PLOT_HEIGHT - clampedZeroNorm * PLOT_HEIGHT;
+  const areaPath = `${linePath} L ${plotted[plotted.length - 1].x.toFixed(1)} ${zeroY.toFixed(1)} L ${plotted[0].x.toFixed(1)} ${zeroY.toFixed(1)} Z`;
+  const crossesZero = yMin < 0 && yMax > 0;
+  const gridLines = ticks.map((val) => ({
+    y: PAD_TOP + PLOT_HEIGHT - ((val - yMin) / yRange) * PLOT_HEIGHT,
+    val,
+    isZeroCross: crossesZero && val === 0,
   }));
 
   return { points: plotted, linePath, areaPath, gridLines };
@@ -145,7 +151,7 @@ export function AccountBalanceTrendGraph({ records, accountType }: AccountBalanc
   const highlightPoints = useMemo(() => {
     if (!chartData) return [];
     const minGapSvgUnits = Math.max(10, 10 * (SVG_WIDTH / Math.max(svgRenderedWidth, 1)));
-    return selectHighlightPoints(chartData.points, minGapSvgUnits);
+    return selectHighlightPoints(chartData.points, minGapSvgUnits, (pt) => pt.point.balance);
   }, [chartData, svgRenderedWidth]);
 
   const accentColor = getAccentColor(accountType);
@@ -264,12 +270,20 @@ export function AccountBalanceTrendGraph({ records, accountType }: AccountBalanc
                   y1={gl.y}
                   x2={SVG_WIDTH - PAD_RIGHT}
                   y2={gl.y}
-                  stroke="#e2e8f0"
-                  strokeWidth="1"
-                  strokeDasharray="4 4"
+                  stroke={gl.isZeroCross ? '#94a3b8' : '#e2e8f0'}
+                  strokeWidth={gl.isZeroCross ? '1.5' : '1'}
+                  strokeDasharray={gl.isZeroCross ? undefined : '4 4'}
                 />
-                <text x={PAD_LEFT - 10} y={gl.y + 4} textAnchor="end" fontSize="11" fill="#64748b" fontFamily="inherit">
-                  {formatCurrency(gl.val)}
+                <text
+                  x={PAD_LEFT - 10}
+                  y={gl.y + 4}
+                  textAnchor="end"
+                  fontSize="11"
+                  fontWeight={gl.isZeroCross ? '600' : undefined}
+                  fill={gl.isZeroCross ? '#334155' : '#64748b'}
+                  fontFamily="inherit"
+                >
+                  {formatYAxisCurrency(gl.val)}
                 </text>
               </g>
             ))}

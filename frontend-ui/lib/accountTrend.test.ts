@@ -6,6 +6,7 @@ import {
   filterBalanceSeriesByRange,
   computeBalanceMetrics,
   selectHighlightPoints,
+  computeYAxisScale,
 } from './accountTrend.ts';
 
 function makeRecord(id: string, dateSent: string, value: number): AccountRecord {
@@ -119,5 +120,49 @@ describe('Account Balance Trend Helpers', () => {
       assert.ok(keptUneven[i].x - keptUneven[i - 1].x >= 10);
     }
     assert.strictEqual(keptUneven[keptUneven.length - 1].x, 32);
+
+    // Pinned min and max values always keep their bubbles even between 10px spacing ticks
+    const withExtrema = [
+      { x: 0, val: 100 },
+      { x: 4, val: 900 },  // max (within 10px of x=0)
+      { x: 10, val: 200 },
+      { x: 16, val: 50 },  // min (within 10px of x=10 and x=20)
+      { x: 20, val: 300 },
+      { x: 30, val: 400 },
+    ];
+    const keptExtrema = selectHighlightPoints(withExtrema, 10, (p) => p.val);
+    assert.ok(keptExtrema.some((p) => p.val === 900), 'Expected max bubble to be shown');
+    assert.ok(keptExtrema.some((p) => p.val === 50), 'Expected min bubble to be shown');
+  });
+
+  it('rounds Y-axis ticks to whole dollar increments and clamps positive/negative bounds to zero', () => {
+    // Always positive ($100 to $47,000) -> lowest Y marker stops at $0
+    const posScale = computeYAxisScale(100, 47000);
+    assert.strictEqual(posScale.yMin, 0);
+    assert.ok(posScale.yMax >= 47000);
+    assert.ok(posScale.ticks.every((t) => Number.isInteger(t) && t >= 0));
+
+    // User case ($3,025.74 to $70,000) -> whole dollar steps, never negative
+    const largePos = computeYAxisScale(3025.74, 70000);
+    assert.strictEqual(largePos.yMin, 0);
+    assert.ok(largePos.ticks.every((t) => Number.isInteger(t) && t >= 0));
+
+    // Always negative credit card ($0 down to -$5,432.00) -> highest marker stops at $0
+    const negScale = computeYAxisScale(-5432, 0);
+    assert.strictEqual(negScale.yMax, 0);
+    assert.ok(negScale.yMin <= -5432);
+    assert.ok(negScale.ticks.every((t) => Number.isInteger(t) && t <= 0));
+
+    // Always negative (-$10,191.80 to -$542.32) -> whole dollar steps, stops at $0
+    const deepNeg = computeYAxisScale(-10191.8, -542.32);
+    assert.strictEqual(deepNeg.yMax, 0);
+    assert.ok(deepNeg.yMin <= -10191.8);
+    assert.ok(deepNeg.ticks.every((t) => Number.isInteger(t) && t <= 0));
+
+    // Crossing positive and negative -> always includes $0 line
+    const mixed = computeYAxisScale(-1234.56, 2345.67);
+    assert.ok(mixed.ticks.includes(0));
+    assert.ok(mixed.yMin < 0 && mixed.yMax > 0);
+    assert.ok(mixed.ticks.every((t) => Number.isInteger(t)));
   });
 });

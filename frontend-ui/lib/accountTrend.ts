@@ -18,6 +18,13 @@ export interface BalanceMetrics {
   maxVal: number;
 }
 
+export interface YAxisScale {
+  yMin: number;
+  yMax: number;
+  step: number;
+  ticks: number[];
+}
+
 function compareRecordsChronologically(a: AccountRecord, b: AccountRecord): number {
   if (a.date_sent !== b.date_sent) {
     return a.date_sent.localeCompare(b.date_sent);
@@ -141,26 +148,109 @@ export function computeBalanceMetrics(points: BalanceTrendPoint[]): BalanceMetri
   return { first, latest, change, pctChange, minVal, maxVal };
 }
 
-export function selectHighlightPoints<T extends { x: number }>(
-  points: T[],
-  minGapPx = 10
-): T[] {
-  if (points.length <= 1 || minGapPx <= 0) return points;
-  const kept: T[] = [points[0]];
+function getMinMaxIndices<T>(points: T[], getValue: (pt: T) => number): number[] {
+  let minIdx = 0;
+  let maxIdx = 0;
+  let minVal = getValue(points[0]);
+  let maxVal = minVal;
 
   for (let i = 1; i < points.length; i++) {
-    const pt = points[i];
-    const prev = kept[kept.length - 1];
-    if (pt.x - prev.x >= minGapPx) {
-      kept.push(pt);
+    const val = getValue(points[i]);
+    if (val < minVal) {
+      minVal = val;
+      minIdx = i;
     }
+    if (val > maxVal) {
+      maxVal = val;
+      maxIdx = i;
+    }
+  }
+  return minIdx === maxIdx ? [minIdx] : [minIdx, maxIdx];
+}
+
+function isFarEnoughFromAll<T extends { x: number }>(
+  points: T[],
+  candidateIdx: number,
+  keptIndices: number[],
+  minGapPx: number
+): boolean {
+  const cx = points[candidateIdx].x;
+  for (const idx of keptIndices) {
+    if (Math.abs(cx - points[idx].x) < minGapPx) {
+      return false;
+    }
+  }
+  return true;
+}
+
+export function selectHighlightPoints<T extends { x: number }>(
+  points: T[],
+  minGapPx = 10,
+  getValue?: (pt: T) => number
+): T[] {
+  if (points.length <= 1 || minGapPx <= 0) return points;
+
+  const keptIndices: number[] = getValue ? getMinMaxIndices(points, getValue) : [];
+  const tryAdd = (idx: number) => {
+    if (!keptIndices.includes(idx) && isFarEnoughFromAll(points, idx, keptIndices, minGapPx)) {
+      keptIndices.push(idx);
+    }
+  };
+
+  tryAdd(0);
+  tryAdd(points.length - 1);
+  for (let i = 1; i < points.length - 1; i++) {
+    tryAdd(i);
   }
 
-  const last = points[points.length - 1];
-  if (kept[kept.length - 1] !== last && kept.length >= 2) {
-    if (last.x - kept[kept.length - 2].x >= minGapPx) {
-      kept[kept.length - 1] = last;
+  keptIndices.sort((a, b) => a - b);
+  return keptIndices.map((idx) => points[idx]);
+}
+
+function pickNiceDollarStep(span: number, targetIntervals = 5): number {
+  const safeSpan = span > 0 ? span : 100;
+  const rawStep = safeSpan / targetIntervals;
+  const exp = Math.floor(Math.log10(rawStep));
+  const mag = Math.pow(10, exp);
+  const norm = rawStep / mag;
+  const candidates = exp >= 1 ? [1, 2, 2.5, 5, 10] : [1, 2, 5, 10];
+  let chosen = 10;
+  for (const c of candidates) {
+    if (c >= norm) {
+      chosen = c;
+      break;
     }
   }
-  return kept;
+  return Math.max(1, Math.round(chosen * mag));
+}
+
+export function computeYAxisScale(minVal: number, maxVal: number): YAxisScale {
+  let lo = minVal;
+  let hi = maxVal;
+  if (lo === hi) {
+    const pad = Math.max(Math.abs(lo) * 0.1, 50);
+    lo = lo >= 0 ? Math.max(0, lo - pad) : lo - pad;
+    hi = hi <= 0 ? Math.min(0, hi + pad) : hi + pad;
+    if (lo === hi) hi = lo + 100;
+  }
+
+  const step = pickNiceDollarStep(hi - lo);
+  let minIdx = Math.floor(lo / step);
+  let maxIdx = Math.ceil(hi / step);
+
+  if (minVal >= 0) minIdx = Math.max(0, minIdx);
+  if (maxVal <= 0) maxIdx = Math.min(0, maxIdx);
+  if (minIdx === maxIdx) maxIdx = minIdx + 1;
+
+  const ticks: number[] = [];
+  for (let i = minIdx; i <= maxIdx; i++) {
+    const val = i * step;
+    ticks.push(val === 0 ? 0 : val);
+  }
+  return {
+    yMin: minIdx * step || 0,
+    yMax: maxIdx * step || 0,
+    step,
+    ticks,
+  };
 }
