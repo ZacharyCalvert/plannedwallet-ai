@@ -1,14 +1,16 @@
 'use client';
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import {
   parseAndValidateCsv,
   ParsedCsvResult,
   ParsedCsvRow,
   MAX_BULK_UPLOAD_RECORDS,
   MIN_RECORD_YEAR,
+  detectRowCollisions,
 } from '../lib/csvParser';
-import { createAccountRecord } from '../lib/api';
+import { createAccountRecord, fetchAccountRecords } from '../lib/api';
+import { AccountRecord } from '../lib/types';
 
 interface CsvUploadModalProps {
   isOpen: boolean;
@@ -17,10 +19,26 @@ interface CsvUploadModalProps {
   accountId: string;
   accountName: string;
   accountType: string;
+  existingRecords?: AccountRecord[];
   onSuccess: () => void;
 }
 
 type ModalStage = 'select' | 'review' | 'importing' | 'complete';
+
+async function uploadRecordRow(
+  token: string,
+  accountId: string,
+  row: ParsedCsvRow,
+  effectiveAmount: number
+): Promise<void> {
+  await createAccountRecord(token, accountId, {
+    value: effectiveAmount,
+    date_sent: row.dateSent,
+    date_cleared: row.dateCleared,
+    entity: row.recipient,
+    description: row.description || undefined,
+  });
+}
 
 export default function CsvUploadModal({
   isOpen,
@@ -29,6 +47,7 @@ export default function CsvUploadModal({
   accountId,
   accountName,
   accountType,
+  existingRecords,
   onSuccess,
 }: CsvUploadModalProps) {
   const [stage, setStage] = useState<ModalStage>('select');
@@ -38,6 +57,7 @@ export default function CsvUploadModal({
   const [signsInverted, setSignsInverted] = useState<boolean>(false);
   const [parseError, setParseError] = useState<string | null>(null);
   const [dragActive, setDragActive] = useState<boolean>(false);
+  const [accountRecords, setAccountRecords] = useState<AccountRecord[]>(existingRecords || []);
 
   // Import progress
   const [progress, setProgress] = useState<{ current: number; total: number }>({ current: 0, total: 0 });
@@ -45,6 +65,25 @@ export default function CsvUploadModal({
   const [failedRows, setFailedRows] = useState<{ row: number; reason: string }[]>([]);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (existingRecords) {
+      setAccountRecords(existingRecords);
+    }
+  }, [existingRecords]);
+
+  useEffect(() => {
+    if (isOpen && token && accountId) {
+      fetchAccountRecords(token, accountId)
+        .then((recs) => setAccountRecords(recs))
+        .catch(() => {});
+    }
+  }, [isOpen, token, accountId]);
+
+  const collisionRowNumbers = useMemo(() => {
+    if (!parsedResult) return new Set<number>();
+    return detectRowCollisions(parsedResult.rows, accountRecords, signsInverted);
+  }, [parsedResult, accountRecords, signsInverted]);
 
   if (!isOpen) return null;
 
@@ -81,10 +120,10 @@ export default function CsvUploadModal({
 
       setParsedResult(res);
 
-      // Select all valid rows by default
+      const collisions = detectRowCollisions(res.rows, accountRecords, signsInverted);
       const initialSelected: Record<number, boolean> = {};
       res.rows.forEach((r) => {
-        if (r.isValid) {
+        if (r.isValid && !collisions.has(r.rowNumber)) {
           initialSelected[r.rowNumber] = true;
         }
       });
@@ -131,21 +170,31 @@ export default function CsvUploadModal({
 
   const toggleSelectAll = () => {
     if (!parsedResult) return;
-    const allSelected = parsedResult.rows
-      .filter((r) => r.isValid)
-      .every((r) => selectedRows[r.rowNumber]);
+    const selectable = parsedResult.rows.filter(
+      (r) => r.isValid && !collisionRowNumbers.has(r.rowNumber)
+    );
+    const allSelected = selectable.length > 0 && selectable.every((r) => selectedRows[r.rowNumber]);
 
-    const updated: Record<number, boolean> = {};
-    parsedResult.rows.forEach((r) => {
-      if (r.isValid) {
-        updated[r.rowNumber] = !allSelected;
-      }
+    const updated: Record<number, boolean> = { ...selectedRows };
+    selectable.forEach((r) => {
+      updated[r.rowNumber] = !allSelected;
     });
     setSelectedRows(updated);
   };
 
   const handleToggleSigns = () => {
-    setSignsInverted((prev) => !prev);
+    const nextInverted = !signsInverted;
+    setSignsInverted(nextInverted);
+    if (parsedResult) {
+      const nextCollisions = detectRowCollisions(parsedResult.rows, accountRecords, nextInverted);
+      const updated: Record<number, boolean> = {};
+      parsedResult.rows.forEach((r) => {
+        if (r.isValid && !nextCollisions.has(r.rowNumber)) {
+          updated[r.rowNumber] = selectedRows[r.rowNumber] ?? true;
+        }
+      });
+      setSelectedRows(updated);
+    }
   };
 
   const getEffectiveAmount = (row: ParsedCsvRow): number => {
@@ -162,7 +211,7 @@ export default function CsvUploadModal({
     if (!parsedResult) return;
 
     const rowsToImport = parsedResult.rows.filter(
-      (r) => r.isValid && selectedRows[r.rowNumber]
+      (r) => r.isValid && !collisionRowNumbers.has(r.rowNumber) && selectedRows[r.rowNumber]
     );
 
     if (rowsToImport.length === 0 || rowsToImport.length > MAX_BULK_UPLOAD_RECORDS) return;
@@ -179,13 +228,7 @@ export default function CsvUploadModal({
       setProgress({ current: i + 1, total: rowsToImport.length });
 
       try {
-        await createAccountRecord(token, accountId, {
-          value: getEffectiveAmount(row),
-          date_sent: row.dateSent,
-          date_cleared: row.dateCleared,
-          entity: row.recipient,
-          description: row.description || undefined,
-        });
+        await uploadRecordRow(token, accountId, row, getEffectiveAmount(row));
         successCount++;
       } catch (err: unknown) {
         failCount++;
@@ -199,11 +242,16 @@ export default function CsvUploadModal({
     setImportSummary({ success: successCount, failed: failCount });
     setFailedRows(fails);
     setStage('complete');
+    fetchAccountRecords(token, accountId)
+      .then((recs) => setAccountRecords(recs))
+      .catch(() => {});
     onSuccess();
   };
 
   const selectedCount = parsedResult
-    ? parsedResult.rows.filter((r) => r.isValid && selectedRows[r.rowNumber]).length
+    ? parsedResult.rows.filter(
+        (r) => r.isValid && !collisionRowNumbers.has(r.rowNumber) && selectedRows[r.rowNumber]
+      ).length
     : 0;
 
   return (
@@ -304,6 +352,14 @@ export default function CsvUploadModal({
                 <span className="stat-pill valid">
                   Valid: <strong>{parsedResult.validCount}</strong>
                 </span>
+                {collisionRowNumbers.size > 0 && (
+                  <span
+                    className="stat-pill collision"
+                    title={`${collisionRowNumbers.size} duplicate record(s) detected and excluded`}
+                  >
+                    Duplicates Excluded: <strong>{collisionRowNumbers.size}</strong>
+                  </span>
+                )}
                 {parsedResult.invalidCount > 0 && (
                   <span className="stat-pill invalid" title={`${parsedResult.invalidCount} invalid record(s) sorted to top`}>
                     Invalid (at top): <strong>{parsedResult.invalidCount}</strong>
@@ -344,6 +400,12 @@ export default function CsvUploadModal({
               </div>
             )}
 
+            {collisionRowNumbers.size > 0 && (
+              <div className="notice-banner banner-collision mb-2">
+                &#9888; <strong>{collisionRowNumbers.size} duplicate record{collisionRowNumbers.size === 1 ? '' : 's'}</strong> detected in this account and excluded from import.
+              </div>
+            )}
+
             {signsInverted && (
               <div className="notice-banner mb-2">
                 Amounts are currently inverted: Positive values are now expenses (-) and negative values are income (+).
@@ -367,7 +429,9 @@ export default function CsvUploadModal({
                 </thead>
                 <tbody>
                   {parsedResult.rows.map((row) => {
-                    const isSelected = !!selectedRows[row.rowNumber];
+                    const isCollision = collisionRowNumbers.has(row.rowNumber);
+                    const isSelectable = row.isValid && !isCollision;
+                    const isSelected = isSelectable && !!selectedRows[row.rowNumber];
                     const effectiveAmount = getEffectiveAmount(row);
                     const hasDateSentError = row.errors.some((e) =>
                       e.toLowerCase().includes('date sent')
@@ -388,13 +452,13 @@ export default function CsvUploadModal({
                     return (
                       <tr
                         key={row.rowNumber}
-                        className={`${!row.isValid ? 'row-invalid' : ''} ${isSelected ? 'row-selected' : ''}`}
+                        className={`${!row.isValid ? 'row-invalid' : ''} ${isCollision ? 'row-collision' : ''} ${isSelected ? 'row-selected' : ''}`}
                       >
                         <td>
                           <input
                             type="checkbox"
                             checked={isSelected}
-                            disabled={!row.isValid}
+                            disabled={!isSelectable}
                             onChange={() => toggleRowSelection(row.rowNumber)}
                           />
                         </td>
@@ -428,7 +492,14 @@ export default function CsvUploadModal({
                           {formatCurrency(effectiveAmount)}
                         </td>
                         <td>
-                          {row.isValid ? (
+                          {isCollision ? (
+                            <span
+                              className="badge-status-collision"
+                              title="Exact date, vendor, and amount match found in this account"
+                            >
+                              &#9888; Duplicate Excluded
+                            </span>
+                          ) : row.isValid ? (
                             <span className="badge-status-valid">&#10003; Valid</span>
                           ) : (
                             <div className="invalid-errors-container">

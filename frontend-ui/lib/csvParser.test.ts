@@ -1,6 +1,14 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert';
-import { parseAndValidateCsv, parseDate, parseAmount, matchHeaders } from './csvParser.ts';
+import {
+  parseAndValidateCsv,
+  parseDate,
+  parseAmount,
+  matchHeaders,
+  buildCollisionKey,
+  detectRowCollisions,
+  type CollisionRecord,
+} from './csvParser.ts';
 
 describe('CSV Parser Unit Tests', () => {
   it('correctly processes demonstration file yielding 2 successes and 2 record issues', () => {
@@ -195,5 +203,93 @@ describe('CSV Parser Unit Tests', () => {
     assert.strictEqual(res.rows.find((r) => r.rowNumber === 3)?.amount, 105.1);
     assert.strictEqual(res.rows.find((r) => r.rowNumber === 4)?.amount, -15.25);
     assert.strictEqual(res.rows.find((r) => r.rowNumber === 5)?.amount, -3399.17);
+  });
+
+  it('detects collisions in the same account and excludes identical records', () => {
+    const csvContent = `Date Sent,Recipient,Amount
+2024-05-01,Corner Grocery,-25.50
+2024-05-02,Supermarket,-100.00
+2024-05-03,Utility Provider,-75.20
+`;
+    const parsed = parseAndValidateCsv(csvContent);
+    assert.strictEqual(parsed.validCount, 3);
+
+    // Case 1: Empty existing records -> 0 collisions
+    const noCollisions = detectRowCollisions(parsed.rows, []);
+    assert.strictEqual(noCollisions.size, 0);
+
+    // Case 2: Exactly identical records existing in account (simulating 2nd upload of same file)
+    const existingRecords: CollisionRecord[] = [
+      { date_sent: '2024-05-01', entity: 'Corner Grocery', value: -25.5 },
+      { date_sent: '2024-05-02', entity: 'Supermarket', value: -100.0 },
+      { date_sent: '2024-05-03', entity: 'Utility Provider', value: -75.2 },
+    ];
+    const fullCollisions = detectRowCollisions(parsed.rows, existingRecords);
+    assert.strictEqual(fullCollisions.size, 3);
+    assert.ok(fullCollisions.has(2));
+    assert.ok(fullCollisions.has(3));
+    assert.ok(fullCollisions.has(4));
+
+    // Case 3: Partial collision (only 1 record already exists in account)
+    const partialRecords: CollisionRecord[] = [
+      { date_sent: '2024-05-02', entity: 'supermarket', value: -100.0 },
+    ];
+    const partialCollisions = detectRowCollisions(parsed.rows, partialRecords);
+    assert.strictEqual(partialCollisions.size, 1);
+    assert.strictEqual(partialCollisions.has(3), true);
+    assert.strictEqual(partialCollisions.has(2), false);
+    assert.strictEqual(partialCollisions.has(4), false);
+  });
+
+  it('handles multi-instance frequency pool matching without over-excluding', () => {
+    // 3 identical transactions in the CSV
+    const csvContent = `Date Sent,Recipient,Amount
+2024-06-15,Coffee Roasters,-5.50
+2024-06-15,Coffee Roasters,-5.50
+2024-06-15,Coffee Roasters,-5.50
+`;
+    const parsed = parseAndValidateCsv(csvContent);
+    assert.strictEqual(parsed.validCount, 3);
+
+    // Account only has 1 instance recorded previously
+    const existing: CollisionRecord[] = [
+      { date_sent: '2024-06-15', entity: 'Coffee Roasters', value: -5.5 },
+    ];
+
+    const collisions = detectRowCollisions(parsed.rows, existing);
+    // Only the first matching occurrence in the CSV should be excluded
+    assert.strictEqual(collisions.size, 1);
+    assert.ok(collisions.has(2));
+    assert.strictEqual(collisions.has(3), false);
+    assert.strictEqual(collisions.has(4), false);
+  });
+
+  it('correctly detects collisions when amounts are inverted', () => {
+    const csvContent = `Date Sent,Recipient,Amount
+2024-07-01,Supermarket,50.00
+`;
+    const parsed = parseAndValidateCsv(csvContent);
+    assert.strictEqual(parsed.validCount, 1);
+
+    // Existing record in account has value: -50.00
+    const existing: CollisionRecord[] = [
+      { date_sent: '2024-07-01', entity: 'Supermarket', value: -50.0 },
+    ];
+
+    // Without inversion: CSV is 50.00, account has -50.00 -> not a collision
+    const standardCollisions = detectRowCollisions(parsed.rows, existing, false);
+    assert.strictEqual(standardCollisions.size, 0);
+
+    // With inversion: effective CSV amount is -50.00 -> collision detected
+    const invertedCollisions = detectRowCollisions(parsed.rows, existing, true);
+    assert.strictEqual(invertedCollisions.size, 1);
+    assert.ok(invertedCollisions.has(2));
+  });
+
+  it('normalizes vendor casing, extra spaces, and ISO timestamp formats in collision keys', () => {
+    const keyA = buildCollisionKey('2024-08-10', '  Supermarket   Pharmacy  ', -42.5);
+    const keyB = buildCollisionKey('2024-08-10T00:00:00Z', 'supermarket pharmacy', -42.5);
+    assert.strictEqual(keyA, keyB);
+    assert.strictEqual(keyA, '2024-08-10|supermarket pharmacy|-4250');
   });
 });

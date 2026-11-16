@@ -590,6 +590,7 @@ export function AccountDetail({ account, token, onAccountDeleted }: AccountDetai
         accountId={account.id}
         accountName={account.name}
         accountType={account.type}
+        existingRecords={records}
         onSuccess={() => {
           loadRecords();
         }}

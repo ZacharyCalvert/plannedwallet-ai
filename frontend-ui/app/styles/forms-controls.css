@@ -226,11 +226,12 @@
   inset: 0;
   background-color: rgba(15, 23, 42, 0.5);
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
   z-index: 1000;
-  padding: 1rem;
+  padding: 1.5rem 1rem;
   backdrop-filter: blur(2px);
+  overflow-y: auto;
 }
 
 .modal-content {
@@ -241,6 +242,7 @@
   max-width: 480px;
   box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
   border: 1px solid var(--border);
+  margin: auto;
 }
 
 .modal-header {

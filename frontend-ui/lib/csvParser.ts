@@ -514,3 +514,61 @@ export function parseAndValidateCsv(text: string): ParsedCsvResult {
     emptyCount,
   };
 }
+
+export interface CollisionRecord {
+  date_sent: string;
+  entity: string;
+  value: number;
+}
+
+/**
+ * Generates a normalized collision key for a financial record based on date, vendor, and amount.
+ */
+export function buildCollisionKey(date: string, vendor: string, amount: number): string {
+  const normDate = (date || '').split('T')[0].trim();
+  const normVendor = (vendor || '').trim().replace(/\s+/g, ' ').toLowerCase();
+  const rawCents = Math.round((Number(amount) || 0) * 100);
+  const normCents = rawCents === 0 ? 0 : rawCents;
+  return `${normDate}|${normVendor}|${normCents}`;
+}
+
+/**
+ * Builds a frequency pool of existing account records to track available duplicate matches.
+ */
+export function buildCollisionPool(records: CollisionRecord[]): Map<string, number> {
+  const pool = new Map<string, number>();
+  if (!records?.length) return pool;
+
+  for (const rec of records) {
+    const key = buildCollisionKey(rec.date_sent, rec.entity, rec.value);
+    pool.set(key, (pool.get(key) || 0) + 1);
+  }
+  return pool;
+}
+
+/**
+ * Compares parsed CSV rows against existing account records to detect collisions.
+ * Uses a multi-set pool so only matching count of records are excluded as duplicates.
+ */
+export function detectRowCollisions(
+  rows: ParsedCsvRow[],
+  existingRecords: CollisionRecord[],
+  signsInverted: boolean = false
+): Set<number> {
+  const collisions = new Set<number>();
+  if (!rows?.length || !existingRecords?.length) return collisions;
+
+  const pool = buildCollisionPool(existingRecords);
+  for (const row of rows) {
+    if (!row.isValid) continue;
+    const effectiveAmount = signsInverted ? -row.amount : row.amount;
+    const key = buildCollisionKey(row.dateSent, row.recipient, effectiveAmount);
+    const count = pool.get(key) || 0;
+    if (count > 0) {
+      collisions.add(row.rowNumber);
+      pool.set(key, count - 1);
+    }
+  }
+  return collisions;
+}
+
