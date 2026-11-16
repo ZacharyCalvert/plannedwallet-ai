@@ -28,8 +28,7 @@ Medium priority:
 - [x] Add routing for deep linking to asset and asset tab
 - [x] Add categories (expense categories)
 Reconcile calculations - locked records for edits + snapshot of net worth?
-rollup data (monthly)
-account settings: reconcile account on month, or daily
+- [x] rollup data (monthly)
 Bill reminders
 Review labels on credit card such that outgoing (negative) implies spend and positive implies you paid off CC
 Add Money-in / Money-out features (trending) for asset and snapshot accounts to track growth/change
