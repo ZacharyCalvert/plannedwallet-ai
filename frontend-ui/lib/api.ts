@@ -1,6 +1,7 @@
 import {
   Account,
   AccountAsset,
+  AccountCategorySummary,
   AccountRecord,
   AccountSnapshot,
   AddAccountAssetRequest,
@@ -12,6 +13,7 @@ import {
   AssetStoreTrendPoint,
   AssetValue,
   CaptchaResponse,
+  Category,
   CreateAssetRequest,
   CreateAssetStoreRequest,
   CreateAssetValueRequest,
@@ -216,7 +218,7 @@ export async function patchAccountRecord(
   token: string,
   accountId: string,
   recordId: string,
-  data: { date_cleared?: string | null }
+  data: { date_cleared?: string | null; category_id?: string | null }
 ): Promise<AccountRecord> {
   const res = await tracedFetch(
     `/api/v1/accounts/${encodeURIComponent(accountId)}/records/${encodeURIComponent(recordId)}`,
@@ -232,6 +234,69 @@ export async function patchAccountRecord(
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
     throw new Error(err.message || 'Failed to update record');
+  }
+  return res.json();
+}
+
+export async function fetchCategories(token: string): Promise<Category[]> {
+  const res = await tracedFetch('/api/v1/categories', {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || 'Failed to load categories');
+  }
+  return res.json();
+}
+
+export async function createCategory(token: string, name: string): Promise<Category> {
+  const res = await tracedFetch('/api/v1/categories', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ name }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || 'Failed to create category');
+  }
+  return res.json();
+}
+
+export async function deleteCategory(token: string, categoryId: string): Promise<void> {
+  const res = await tracedFetch(
+    `/api/v1/categories/${encodeURIComponent(categoryId)}`,
+    {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${token}` },
+    }
+  );
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || 'Failed to delete category');
+  }
+}
+
+export async function fetchAccountCategorySummary(
+  token: string,
+  accountId: string,
+  params?: { cleared?: boolean; start_date?: string; end_date?: string }
+): Promise<AccountCategorySummary> {
+  const query = new URLSearchParams();
+  if (params?.cleared !== undefined) query.set('cleared', String(params.cleared));
+  if (params?.start_date) query.set('start_date', params.start_date);
+  if (params?.end_date) query.set('end_date', params.end_date);
+  const qs = query.toString() ? `?${query.toString()}` : '';
+
+  const res = await tracedFetch(
+    `/api/v1/accounts/${encodeURIComponent(accountId)}/records/categories${qs}`,
+    { headers: { Authorization: `Bearer ${token}` } }
+  );
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || 'Failed to load category summary');
   }
   return res.json();
 }

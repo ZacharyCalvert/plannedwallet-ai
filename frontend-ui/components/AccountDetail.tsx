@@ -1,17 +1,21 @@
 'use client';
 
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { Account, AccountRecord } from '../lib/types';
+import { Account, AccountRecord, Category } from '../lib/types';
 import { DateInput } from './DateInput';
 import CsvUploadModal from './CsvUploadModal';
 import { DeleteAccountModal } from './DeleteAccountModal';
 import { CopyLinkButton } from './CopyLinkButton';
 import { AccountBalanceTrendGraph } from './AccountBalanceTrendGraph';
+import { AccountCategoryPieChart } from './AccountCategoryPieChart';
+import { AccountCategoriesTab } from './AccountCategoriesTab';
+import { findLastCategoryForRecipient } from '../lib/accountCategories';
 import {
   fetchAccountRecords,
   createAccountRecord,
   updateAccountRecord,
   patchAccountRecord,
+  fetchCategories,
 } from '../lib/api';
 
 interface AccountDetailProps {
@@ -22,10 +26,11 @@ interface AccountDetailProps {
   onAccountDeleted?: (deletedId: string) => void;
 }
 
-type AccountTab = 'records' | 'trend';
+type AccountTab = 'records' | 'trend' | 'expenses' | 'categories';
 
 function resolveAccountTab(tab?: string): AccountTab {
-  return tab === 'trend' ? 'trend' : 'records';
+  if (tab === 'trend' || tab === 'expenses' || tab === 'categories') return tab;
+  return 'records';
 }
 
 function getTodayDateString(): string {
@@ -127,6 +132,7 @@ export function AccountDetail({
   onAccountDeleted,
 }: AccountDetailProps) {
   const [records, setRecords] = useState<AccountRecord[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [activeTab, setActiveTab] = useState<AccountTab>(() => resolveAccountTab(urlTab));
@@ -174,11 +180,13 @@ export function AccountDetail({
     }
   }, [focusCounter]);
 
-  // Record entry/edit fields: amount, sent, cleared, Recipient, description
+  // Record entry/edit fields: amount, sent, cleared, Recipient, category, description
   const [amount, setAmount] = useState('');
   const [dateSent, setDateSent] = useState(getTodayDateString());
   const [dateCleared, setDateCleared] = useState('');
   const [recipient, setRecipient] = useState('');
+  const [categoryId, setCategoryId] = useState('');
+  const [categoryManuallySelected, setCategoryManuallySelected] = useState(false);
   const [description, setDescription] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState('');
@@ -190,8 +198,19 @@ export function AccountDetail({
     setDateSent(getTodayDateString());
     setDateCleared('');
     setRecipient('');
+    setCategoryId('');
+    setCategoryManuallySelected(false);
     setDescription('');
     setFormError('');
+  };
+
+  const loadCategories = async () => {
+    try {
+      const list = await fetchCategories(token);
+      setCategories(list);
+    } catch {
+      // Categories failure handled gracefully
+    }
   };
 
   const loadRecords = async () => {
@@ -209,9 +228,18 @@ export function AccountDetail({
 
   useEffect(() => {
     loadRecords();
+    loadCategories();
     resetForm();
     setFocusCounter((c) => c + 1);
   }, [account.id, token]);
+
+  const categoryNameById = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const c of categories) {
+      map.set(c.id, c.name);
+    }
+    return map;
+  }, [categories]);
 
   // Expected balance assumes all records apply to the total value of the account
   const expectedBalance = records.reduce((sum, r) => sum + r.value, 0);
@@ -250,9 +278,23 @@ export function AccountDetail({
     setDateSent(rec.date_sent);
     setDateCleared(rec.date_cleared || '');
     setRecipient(rec.entity);
+    setCategoryId(rec.category_id || '');
+    setCategoryManuallySelected(true);
     setDescription(rec.description || '');
     setFormError('');
     setFocusCounter((c) => c + 1);
+  };
+
+  const handleRecipientChange = (nextRecipient: string) => {
+    setRecipient(nextRecipient);
+    if (!selectedRecordId && !categoryManuallySelected) {
+      const lastCatId = findLastCategoryForRecipient(records, nextRecipient);
+      if (lastCatId && categoryNameById.has(lastCatId)) {
+        setCategoryId(lastCatId);
+      } else {
+        setCategoryId('');
+      }
+    }
   };
 
   const handleCancelEdit = () => {
@@ -287,6 +329,7 @@ export function AccountDetail({
         value: parsedAmount,
         date_sent: dateSent.trim(),
         date_cleared: dateCleared.trim() ? dateCleared.trim() : null,
+        category_id: categoryId ? categoryId : null,
         entity: recipient.trim(),
         description: description.trim() || undefined,
       };
@@ -427,10 +470,58 @@ export function AccountDetail({
           </svg>
           Trend
         </button>
+
+        <button
+          type="button"
+          className={`snapshot-tab-button ${activeTab === 'expenses' ? 'active' : ''}`}
+          onClick={() => selectTab('expenses')}
+        >
+          <svg
+            width="18"
+            height="18"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="M21.21 15.89A10 10 0 1 1 8 2.83" />
+            <path d="M22 12A10 10 0 0 0 12 2v10z" />
+          </svg>
+          Expense Pie
+        </button>
+
+        <button
+          type="button"
+          className={`snapshot-tab-button ${activeTab === 'categories' ? 'active' : ''}`}
+          onClick={() => selectTab('categories')}
+        >
+          Categories
+          <span className="tab-count-pill">{categories.length}</span>
+        </button>
       </div>
 
       {activeTab === 'trend' ? (
         <AccountBalanceTrendGraph records={records} accountType={account.type} />
+      ) : activeTab === 'expenses' ? (
+        <AccountCategoryPieChart records={records} categories={categories} />
+      ) : activeTab === 'categories' ? (
+        <AccountCategoriesTab
+          token={token}
+          records={records}
+          categories={categories}
+          onCategoryCreated={(cat) => setCategories((prev) => [...prev, cat])}
+          onCategoryDeleted={(deletedId, transitionId) => {
+            setCategories((prev) => prev.filter((c) => c.id !== deletedId));
+            setRecords((prev) =>
+              prev.map((r) => (r.category_id === deletedId ? { ...r, category_id: transitionId } : r))
+            );
+            if (categoryId === deletedId) {
+              setCategoryId(transitionId || '');
+            }
+          }}
+        />
       ) : (
         <>
           {/* New / Edit Checking Record Form Row at the top */}
@@ -505,11 +596,49 @@ export function AccountDetail({
                 required
                 placeholder="e.g. Grocery Store, Employer"
                 value={recipient}
-                onChange={(e) => setRecipient(e.target.value)}
+                onChange={(e) => handleRecipientChange(e.target.value)}
               />
             </div>
+          </div>
 
-            {/* 5. Description */}
+          {/* Second Row: Category and Description */}
+          <div className="new-record-inputs-secondary">
+            {/* 5. Category */}
+            <div className="field-group field-category">
+              <label htmlFor="record-category">Category</label>
+              <select
+                id="record-category"
+                value={categoryId}
+                onChange={(e) => {
+                  setCategoryId(e.target.value);
+                  setCategoryManuallySelected(true);
+                }}
+              >
+                <option value="">Uncategorized</option>
+                <optgroup label="Default Categories">
+                  {categories
+                    .filter((c) => c.is_default)
+                    .map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}
+                      </option>
+                    ))}
+                </optgroup>
+                {categories.some((c) => !c.is_default) && (
+                  <optgroup label="Custom Categories">
+                    {categories
+                      .filter((c) => !c.is_default)
+                      .map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.name}
+                        </option>
+                      ))}
+                  </optgroup>
+                )}
+              </select>
+            </div>
+
+            {/* 6. Description */}
             <div className="field-group field-description">
               <label htmlFor="record-description">Description</label>
               <input
@@ -582,6 +711,7 @@ export function AccountDetail({
                   <th className="th-sent">Sent</th>
                   <th className="th-cleared">Cleared</th>
                   <th className="th-recipient">Recipient</th>
+                  <th className="th-category">Category</th>
                   <th className="th-description">Description</th>
                   <th className="th-action">Status</th>
                 </tr>
@@ -589,7 +719,7 @@ export function AccountDetail({
               <tbody>
                 {sortedRecords.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="records-empty">
+                    <td colSpan={8} className="records-empty">
                       No records found for this account. Use the row above to add income or spending.
                     </td>
                   </tr>
@@ -642,6 +772,13 @@ export function AccountDetail({
                           )}
                         </td>
                         <td className="td-recipient">{rec.entity}</td>
+                        <td className="td-category">
+                          {rec.category_id && categoryNameById.has(rec.category_id) ? (
+                            <span className="category-pill">{categoryNameById.get(rec.category_id)}</span>
+                          ) : (
+                            <span className="text-muted">Uncategorized</span>
+                          )}
+                        </td>
                         <td className="td-description">{rec.description || '—'}</td>
                         <td className="td-action">
                           {!rec.date_cleared ? (
@@ -680,8 +817,10 @@ export function AccountDetail({
         accountName={account.name}
         accountType={account.type}
         existingRecords={records}
+        existingCategories={categories}
         onSuccess={() => {
           loadRecords();
+          loadCategories();
         }}
       />
 

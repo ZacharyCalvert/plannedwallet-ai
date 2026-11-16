@@ -292,4 +292,21 @@ describe('CSV Parser Unit Tests', () => {
     assert.strictEqual(keyA, keyB);
     assert.strictEqual(keyA, '2024-08-10|supermarket pharmacy|-4250');
   });
+
+  it('parses optional Category column and enforces 100-char limit', () => {
+    const longCat = 'A'.repeat(101);
+    const csvContent = `Date Sent,Recipient,Category,Amount
+2026-11-10,Corner Grocery,Groceries,-54.20
+2026-11-11,Local Bakery,${longCat},-12.00
+`;
+    const parsed = parseAndValidateCsv(csvContent);
+    assert.strictEqual(parsed.success, true);
+    assert.strictEqual(parsed.validCount, 1);
+    assert.strictEqual(parsed.invalidCount, 1);
+
+    const validRow = parsed.rows.find((r) => r.isValid);
+    assert.strictEqual(validRow?.category, 'Groceries');
+    const invalidRow = parsed.rows.find((r) => !r.isValid);
+    assert.ok(invalidRow?.errors.some((e) => e.includes('Category cannot exceed 100')));
+  });
 });

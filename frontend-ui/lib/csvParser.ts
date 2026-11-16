@@ -3,6 +3,7 @@ export interface ColumnMapping {
   dateClearedIndex: number;
   recipientIndex: number;
   descriptionIndex: number;
+  categoryIndex: number;
   amountIndex: number;
 }
 
@@ -12,6 +13,7 @@ export interface ParsedCsvRow {
   dateCleared: string | null;
   recipient: string;
   description: string;
+  category: string;
   amount: number;
   isValid: boolean;
   errors: string[];
@@ -63,6 +65,7 @@ const DATE_CLEARED_ALIASES = [
 ];
 const RECIPIENT_ALIASES = ['recipient', 'entity', 'payee', 'merchant', 'vendor', 'to', 'name'];
 const DESCRIPTION_ALIASES = ['description', 'notes', 'details', 'memo', 'comment', 'narrative'];
+const CATEGORY_ALIASES = ['category', 'categories', 'expense category', 'transaction category', 'category name'];
 const AMOUNT_ALIASES = ['amount', 'value', 'total', 'sum', 'cost', 'charge'];
 
 /**
@@ -167,7 +170,14 @@ export function matchHeaders(headers: string[]): {
   const dateClearedIndex = findIndex(DATE_CLEARED_ALIASES, [dateSentIndex]);
   const recipientIndex = findIndex(RECIPIENT_ALIASES, [dateSentIndex, dateClearedIndex]);
   const descriptionIndex = findIndex(DESCRIPTION_ALIASES, [dateSentIndex, dateClearedIndex, recipientIndex]);
-  const amountIndex = findIndex(AMOUNT_ALIASES, [dateSentIndex, dateClearedIndex, recipientIndex, descriptionIndex]);
+  const categoryIndex = findIndex(CATEGORY_ALIASES, [dateSentIndex, dateClearedIndex, recipientIndex, descriptionIndex]);
+  const amountIndex = findIndex(AMOUNT_ALIASES, [
+    dateSentIndex,
+    dateClearedIndex,
+    recipientIndex,
+    descriptionIndex,
+    categoryIndex,
+  ]);
 
   const missingRequired: string[] = [];
   if (dateSentIndex === -1) missingRequired.push('Date Sent (supported: Date Sent, Date, Sent, Spent On, Transaction Date)');
@@ -180,6 +190,7 @@ export function matchHeaders(headers: string[]): {
       dateClearedIndex,
       recipientIndex,
       descriptionIndex,
+      categoryIndex,
       amountIndex,
     },
     missingRequired,
@@ -388,10 +399,13 @@ export function parseAndValidateCsv(text: string): ParsedCsvResult {
     const rawDescription = (
       mapping.descriptionIndex !== -1 ? rawFields[mapping.descriptionIndex] || '' : ''
     ).trim();
+    const rawCategory = (
+      mapping.categoryIndex !== -1 ? rawFields[mapping.categoryIndex] || '' : ''
+    ).trim();
 
     // Skip/discard any record which has none of the required AND none of the optional fields
     const hasAnyContent = Boolean(
-      rawDateSent || rawRecipient || rawAmount || rawDateCleared || rawDescription
+      rawDateSent || rawRecipient || rawAmount || rawDateCleared || rawDescription || rawCategory
     );
 
     if (!hasAnyContent) {
@@ -442,6 +456,12 @@ export function parseAndValidateCsv(text: string): ParsedCsvResult {
       errors.push(`Description cannot exceed 500 characters (length: ${rawDescription.length})`);
     }
 
+    // 4b. Category (Optional: max 100 characters)
+    const category = rawCategory;
+    if (rawCategory.length > 100) {
+      errors.push(`Category cannot exceed 100 characters (length: ${rawCategory.length})`);
+    }
+
     // 5. Amount (Required: finite numeric value)
     const amountRes = parseAmount(rawAmount);
     if (amountRes.value === null) {
@@ -461,6 +481,7 @@ export function parseAndValidateCsv(text: string): ParsedCsvResult {
       dateCleared: dateClearedStr || (cleanDateCleared ? rawDateCleared : null),
       recipient: rawRecipient,
       description,
+      category,
       amount: amountRes.value ?? 0,
       isValid,
       errors,

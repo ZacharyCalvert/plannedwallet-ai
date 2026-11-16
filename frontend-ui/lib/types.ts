@@ -27,9 +27,32 @@ export interface Account {
   updated_at: string;
 }
 
+export interface Category {
+  id: string;
+  user_id?: string | null;
+  name: string;
+  is_default: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CategoryExpenseSlice {
+  category_id?: string | null;
+  category_name: string;
+  total_amount: number;
+  record_count: number;
+}
+
+export interface AccountCategorySummary {
+  account_id: string;
+  total_expenses: number;
+  categories: CategoryExpenseSlice[];
+}
+
 export interface AccountRecord {
   id: string;
   account_id: string;
+  category_id?: string | null;
   value: number;
   date_sent: string;
   date_cleared: string | null;
@@ -43,6 +66,7 @@ export interface CreateRecordRequest {
   value: number;
   date_sent: string;
   date_cleared?: string | null;
+  category_id?: string | null;
   entity: string;
   description?: string;
 }

@@ -9,8 +9,17 @@ import {
   MIN_RECORD_YEAR,
   detectRowCollisions,
 } from '../lib/csvParser';
-import { createAccountRecord, fetchAccountRecords } from '../lib/api';
-import { AccountRecord } from '../lib/types';
+import {
+  createAccountRecord,
+  fetchAccountRecords,
+  fetchCategories,
+  createCategory,
+} from '../lib/api';
+import {
+  resolveAndCreateMissingCategories,
+  normalizeCategoryKey,
+} from '../lib/accountCategories';
+import { AccountRecord, Category } from '../lib/types';
 
 interface CsvUploadModalProps {
   isOpen: boolean;
@@ -20,6 +29,7 @@ interface CsvUploadModalProps {
   accountName: string;
   accountType: string;
   existingRecords?: AccountRecord[];
+  existingCategories?: Category[];
   onSuccess: () => void;
 }
 
@@ -29,12 +39,14 @@ async function uploadRecordRow(
   token: string,
   accountId: string,
   row: ParsedCsvRow,
-  effectiveAmount: number
+  effectiveAmount: number,
+  categoryId: string | null
 ): Promise<void> {
   await createAccountRecord(token, accountId, {
     value: effectiveAmount,
     date_sent: row.dateSent,
     date_cleared: row.dateCleared,
+    category_id: categoryId,
     entity: row.recipient,
     description: row.description || undefined,
   });
@@ -48,6 +60,7 @@ export default function CsvUploadModal({
   accountName,
   accountType,
   existingRecords,
+  existingCategories,
   onSuccess,
 }: CsvUploadModalProps) {
   const [stage, setStage] = useState<ModalStage>('select');
@@ -58,6 +71,7 @@ export default function CsvUploadModal({
   const [parseError, setParseError] = useState<string | null>(null);
   const [dragActive, setDragActive] = useState<boolean>(false);
   const [accountRecords, setAccountRecords] = useState<AccountRecord[]>(existingRecords || []);
+  const [categories, setCategories] = useState<Category[]>(existingCategories || []);
 
   // Import progress
   const [progress, setProgress] = useState<{ current: number; total: number }>({ current: 0, total: 0 });
@@ -73,9 +87,18 @@ export default function CsvUploadModal({
   }, [existingRecords]);
 
   useEffect(() => {
+    if (existingCategories) {
+      setCategories(existingCategories);
+    }
+  }, [existingCategories]);
+
+  useEffect(() => {
     if (isOpen && token && accountId) {
       fetchAccountRecords(token, accountId)
         .then((recs) => setAccountRecords(recs))
+        .catch(() => {});
+      fetchCategories(token)
+        .then((cats) => setCategories(cats))
         .catch(() => {});
     }
   }, [isOpen, token, accountId]);
@@ -223,12 +246,39 @@ export default function CsvUploadModal({
     let failCount = 0;
     const fails: { row: number; reason: string }[] = [];
 
+    let categoryIdMap = new Map<string, string>();
+    try {
+      const latestCats = await fetchCategories(token).catch(() => categories);
+      const rawNames = rowsToImport.map((r) => r.category).filter((c) => Boolean(c.trim()));
+      const resolved = await resolveAndCreateMissingCategories(
+        rawNames,
+        latestCats,
+        (name) => createCategory(token, name)
+      );
+      categoryIdMap = resolved.idByLowerName;
+      if (resolved.created.length > 0) {
+        setCategories([...latestCats, ...resolved.created]);
+      }
+    } catch (err: unknown) {
+      failCount = rowsToImport.length;
+      fails.push({
+        row: 0,
+        reason: err instanceof Error ? err.message : 'Failed to create categories from CSV',
+      });
+      setImportSummary({ success: 0, failed: failCount });
+      setFailedRows(fails);
+      setStage('complete');
+      return;
+    }
+
     for (let i = 0; i < rowsToImport.length; i++) {
       const row = rowsToImport[i];
       setProgress({ current: i + 1, total: rowsToImport.length });
+      const catKey = normalizeCategoryKey(row.category);
+      const categoryId = catKey ? (categoryIdMap.get(catKey) ?? null) : null;
 
       try {
-        await uploadRecordRow(token, accountId, row, getEffectiveAmount(row));
+        await uploadRecordRow(token, accountId, row, getEffectiveAmount(row), categoryId);
         successCount++;
       } catch (err: unknown) {
         failCount++;
@@ -323,6 +373,9 @@ export default function CsvUploadModal({
                 </li>
                 <li>
                   <strong>Description</strong> (optional: <em>Description, Notes, Details</em>)
+                </li>
+                <li>
+                  <strong>Category</strong> (optional: <em>Category, Categories, Expense Category, Transaction Category</em> — new non-standard categories are created automatically)
                 </li>
               </ul>
               <p className="text-muted text-xs mt-2">
@@ -422,6 +475,7 @@ export default function CsvUploadModal({
                     <th>Date Sent</th>
                     <th>Date Cleared</th>
                     <th>Recipient</th>
+                    <th>Category</th>
                     <th>Description</th>
                     <th style={{ textAlign: 'right' }}>Amount</th>
                     <th>Status</th>
@@ -441,6 +495,9 @@ export default function CsvUploadModal({
                     );
                     const hasRecipientError = row.errors.some((e) =>
                       e.toLowerCase().includes('recipient')
+                    );
+                    const hasCategoryError = row.errors.some((e) =>
+                      e.toLowerCase().includes('category')
                     );
                     const hasDescriptionError = row.errors.some((e) =>
                       e.toLowerCase().includes('description')
@@ -477,6 +534,13 @@ export default function CsvUploadModal({
                           className={`font-semibold ${hasRecipientError ? 'cell-invalid' : ''}`}
                         >
                           {row.recipient || <em className="text-danger">Missing</em>}
+                        </td>
+                        <td className={hasCategoryError ? 'cell-invalid' : ''}>
+                          {row.category ? (
+                            <span className="category-pill">{row.category}</span>
+                          ) : (
+                            <span className="text-muted">Uncategorized</span>
+                          )}
                         </td>
                         <td className={`text-muted ${hasDescriptionError ? 'cell-invalid' : ''}`}>
                           {row.description || '—'}
