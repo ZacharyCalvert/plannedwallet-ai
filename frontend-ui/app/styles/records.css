@@ -241,6 +241,11 @@
 }
 
 /* Highlights for Amount */
+.th-amount,
+.td-amount {
+  white-space: nowrap;
+}
+
 .amount-badge {
   display: inline-block;
   padding: 0.25rem 0.6rem;
@@ -248,6 +253,8 @@
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   font-size: 0.9rem;
+  white-space: nowrap;
+  word-break: keep-all;
 }
 
 .amount-positive {
