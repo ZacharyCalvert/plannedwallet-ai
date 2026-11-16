@@ -141,6 +141,20 @@ export async function createCheckingAccount(
   return createAccount(token, name, 'checking', description);
 }
 
+export async function deleteAccount(
+  token: string,
+  accountId: string
+): Promise<void> {
+  const res = await tracedFetch(`/api/v1/accounts/${encodeURIComponent(accountId)}`, {
+    method: 'DELETE',
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || 'Failed to delete account');
+  }
+}
+
 export async function fetchAccountRecords(
   token: string,
   accountId: string

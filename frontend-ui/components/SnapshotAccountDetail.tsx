@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo, useRef } from 'react';
 import { Account, AccountSnapshot } from '../lib/types';
 import { DateInput, displayDateToIso } from './DateInput';
 import { SnapshotTrendGraph } from './SnapshotTrendGraph';
+import { DeleteAccountModal } from './DeleteAccountModal';
 import {
   fetchAccountSnapshots,
   createAccountSnapshot,
@@ -14,6 +15,7 @@ import {
 interface SnapshotAccountDetailProps {
   account: Account;
   token: string;
+  onAccountDeleted?: (deletedId: string) => void;
 }
 
 function getTodayDateString(): string {
@@ -54,12 +56,13 @@ function getAmountColorClass(amtStr: string): string {
   return num > 0 ? 'amount-text-positive' : 'amount-text-negative';
 }
 
-export function SnapshotAccountDetail({ account, token }: SnapshotAccountDetailProps) {
+export function SnapshotAccountDetail({ account, token, onAccountDeleted }: SnapshotAccountDetailProps) {
   const [snapshots, setSnapshots] = useState<AccountSnapshot[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [formError, setFormError] = useState('');
   const [activeTab, setActiveTab] = useState<'snapshots' | 'graph'>('snapshots');
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
 
   // Add / Edit Form State
   const [selectedSnapshotId, setSelectedSnapshotId] = useState<string | null>(null);
@@ -247,6 +250,15 @@ export function SnapshotAccountDetail({ account, token }: SnapshotAccountDetailP
             <span className="badge-account-type badge-snapshot">
               {account.type}
             </span>
+            <button
+              type="button"
+              className="btn-danger-outline btn-sm ml-2"
+              onClick={() => setDeleteModalOpen(true)}
+              title="Delete this account"
+              aria-label="Delete this account"
+            >
+              Delete Account
+            </button>
           </div>
           <p className="account-desc-text">{account.description}</p>
           <p className="account-id-label">Account ID: {account.id}</p>
@@ -543,6 +555,17 @@ export function SnapshotAccountDetail({ account, token }: SnapshotAccountDetailP
           <SnapshotTrendGraph snapshots={snapshots} />
         </div>
       )}
+
+      <DeleteAccountModal
+        isOpen={deleteModalOpen}
+        onClose={() => setDeleteModalOpen(false)}
+        token={token}
+        account={account}
+        onSuccess={(deletedId) => {
+          setDeleteModalOpen(false);
+          onAccountDeleted?.(deletedId);
+        }}
+      />
     </div>
   );
 }

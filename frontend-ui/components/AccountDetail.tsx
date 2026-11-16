@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo, useRef } from 'react';
 import { Account, AccountRecord } from '../lib/types';
 import { DateInput } from './DateInput';
 import CsvUploadModal from './CsvUploadModal';
+import { DeleteAccountModal } from './DeleteAccountModal';
 import {
   fetchAccountRecords,
   createAccountRecord,
@@ -14,6 +15,7 @@ import {
 interface AccountDetailProps {
   account: Account;
   token: string;
+  onAccountDeleted?: (deletedId: string) => void;
 }
 
 function getTodayDateString(): string {
@@ -107,10 +109,11 @@ function compareRecordsForDisplay(a: AccountRecord, b: AccountRecord): number {
   return a.id.localeCompare(b.id);
 }
 
-export function AccountDetail({ account, token }: AccountDetailProps) {
+export function AccountDetail({ account, token, onAccountDeleted }: AccountDetailProps) {
   const [records, setRecords] = useState<AccountRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
 
   // Selected record for edit mode (null means New Record mode)
   const [selectedRecordId, setSelectedRecordId] = useState<string | null>(null);
@@ -300,6 +303,15 @@ export function AccountDetail({ account, token }: AccountDetailProps) {
             <span className={`badge-account-type badge-${(account.type || '').toLowerCase().replace(/\s+/g, '-')}`}>
               {account.type}
             </span>
+            <button
+              type="button"
+              className="btn-danger-outline btn-sm ml-2"
+              onClick={() => setDeleteModalOpen(true)}
+              title="Delete this account"
+              aria-label="Delete this account"
+            >
+              Delete Account
+            </button>
           </div>
           <p className="account-desc-text">{account.description}</p>
           <p className="account-id-label">Account ID: {account.id}</p>
@@ -580,6 +592,17 @@ export function AccountDetail({ account, token }: AccountDetailProps) {
         accountType={account.type}
         onSuccess={() => {
           loadRecords();
+        }}
+      />
+
+      <DeleteAccountModal
+        isOpen={deleteModalOpen}
+        onClose={() => setDeleteModalOpen(false)}
+        token={token}
+        account={account}
+        onSuccess={(deletedId) => {
+          setDeleteModalOpen(false);
+          onAccountDeleted?.(deletedId);
         }}
       />
     </div>

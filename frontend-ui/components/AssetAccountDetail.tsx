@@ -34,10 +34,12 @@ import {
   updateAssetValue,
   deleteAssetValue,
 } from '../lib/api';
+import { DeleteAccountModal } from './DeleteAccountModal';
 
 interface AssetAccountDetailProps {
   account: Account;
   token: string;
+  onAccountDeleted?: (deletedId: string) => void;
 }
 
 type AssetTab = 'classes' | 'values' | 'storage' | 'records' | 'trend';
@@ -83,7 +85,7 @@ function parseAmount(amtStr: string): number {
   return parseFloat(clean);
 }
 
-export function AssetAccountDetail({ account, token }: AssetAccountDetailProps) {
+export function AssetAccountDetail({ account, token, onAccountDeleted }: AssetAccountDetailProps) {
   const [stores, setStores] = useState<AssetStore[]>([]);
   const [summary, setSummary] = useState<AssetAccountSummary | null>(null);
   const [trendPoints, setTrendPoints] = useState<AssetAccountTrendPoint[]>([]);
@@ -91,6 +93,7 @@ export function AssetAccountDetail({ account, token }: AssetAccountDetailProps) 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
 
   // 5 Tabs: classes, values, storage, records, trend
   const [activeTab, setActiveTab] = useState<AssetTab>('classes');
@@ -713,6 +716,29 @@ export function AssetAccountDetail({ account, token }: AssetAccountDetailProps) 
 
   return (
     <div className="asset-account-detail">
+      {/* Top Header */}
+      <div className="account-detail-header mb-4">
+        <div className="account-detail-info">
+          <div className="account-title-row">
+            <h2>{account.name}</h2>
+            <span className="badge-account-type badge-asset">
+              {account.type}
+            </span>
+            <button
+              type="button"
+              className="btn-danger-outline btn-sm ml-2"
+              onClick={() => setDeleteModalOpen(true)}
+              title="Delete this account"
+              aria-label="Delete this account"
+            >
+              Delete Account
+            </button>
+          </div>
+          <p className="account-desc-text">{account.description}</p>
+          <p className="account-id-label">Account ID: {account.id}</p>
+        </div>
+      </div>
+
       {/* Top Portfolio Summary Header */}
       <div className="asset-summary-grid">
         <div className="asset-summary-card">
@@ -1618,6 +1644,17 @@ export function AssetAccountDetail({ account, token }: AssetAccountDetailProps) 
           </div>
         </div>
       )}
+
+      <DeleteAccountModal
+        isOpen={deleteModalOpen}
+        onClose={() => setDeleteModalOpen(false)}
+        token={token}
+        account={account}
+        onSuccess={(deletedId) => {
+          setDeleteModalOpen(false);
+          onAccountDeleted?.(deletedId);
+        }}
+      />
     </div>
   );
 }

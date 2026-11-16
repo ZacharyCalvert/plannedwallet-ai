@@ -40,6 +40,14 @@ export function Dashboard({ session }: DashboardProps) {
     setIsCreating(false);
   };
 
+  const handleAccountDeleted = (deletedId: string) => {
+    setAccounts((prev) => {
+      const remaining = prev.filter((a) => a.id !== deletedId);
+      setSelected(remaining.length > 0 ? remaining[0] : null);
+      return remaining;
+    });
+  };
+
   return (
     <div className="dashboard-layout">
       <AccountsPane
@@ -60,11 +68,23 @@ export function Dashboard({ session }: DashboardProps) {
           />
         ) : selected ? (
           selected.type === 'snapshot' ? (
-            <SnapshotAccountDetail account={selected} token={session.token} />
+            <SnapshotAccountDetail
+              account={selected}
+              token={session.token}
+              onAccountDeleted={handleAccountDeleted}
+            />
           ) : selected.type === 'asset' || selected.type === 'assets' ? (
-            <AssetAccountDetail account={selected} token={session.token} />
+            <AssetAccountDetail
+              account={selected}
+              token={session.token}
+              onAccountDeleted={handleAccountDeleted}
+            />
           ) : (
-            <AccountDetail account={selected} token={session.token} />
+            <AccountDetail
+              account={selected}
+              token={session.token}
+              onAccountDeleted={handleAccountDeleted}
+            />
           )
         ) : (
           <div className="card empty-prompt">
