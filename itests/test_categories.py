@@ -87,7 +87,9 @@ def test_shared_account_category_visibility_and_expense_summary(api_context: API
         headers=owner_headers,
     ).json()
 
-    cats = api_context.get("/api/v1/categories", headers=owner_headers).json()
+    cats_res = api_context.get("/api/v1/categories", headers=owner_headers)
+    assert cats_res.status == 200, f"List categories failed: {cats_res.text()}"
+    cats = cats_res.json()
     groceries = next(c for c in cats if c["name"] == "Groceries")
 
     # Add categorized expenses, uncategorized expense, and income (ignored in expense pie chart)

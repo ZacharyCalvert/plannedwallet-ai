@@ -1518,7 +1518,7 @@ func (p *PostgresRepository) GetCategoryByID(ctx context.Context, id string) (*m
 }
 
 func (p *PostgresRepository) ListCategoriesForUser(ctx context.Context, userID string) ([]*models.Category, error) {
-	query := `SELECT DISTINCT c.id, c.user_id, c.name, c.created_at, c.updated_at
+	query := `SELECT c.id, c.user_id, c.name, c.created_at, c.updated_at
 	          FROM categories c
 	          WHERE c.user_id IS NULL
 	             OR c.user_id = $1
