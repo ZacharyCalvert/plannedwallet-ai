@@ -54,10 +54,24 @@ INSERT INTO categories (id, user_id, name) VALUES
     ('00000000-0000-4000-8000-000000000007', NULL, 'Debt')
 ON CONFLICT DO NOTHING;
 
+CREATE TABLE IF NOT EXISTS reconcile_reports (
+    id UUID PRIMARY KEY,
+    account_id UUID NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+    name VARCHAR(100) NOT NULL DEFAULT '',
+    report_date DATE NOT NULL,
+    starting_balance DOUBLE PRECISION NOT NULL,
+    ending_balance DOUBLE PRECISION NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_reconcile_reports_account_date ON reconcile_reports(account_id, report_date DESC);
+
 CREATE TABLE IF NOT EXISTS checking_records (
     id UUID PRIMARY KEY,
     account_id UUID NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
     category_id UUID REFERENCES categories(id) ON DELETE SET NULL,
+    reconcile_report_id UUID REFERENCES reconcile_reports(id) ON DELETE SET NULL,
     value DOUBLE PRECISION NOT NULL,
     date_sent DATE NOT NULL,
     date_cleared DATE,
@@ -68,8 +82,10 @@ CREATE TABLE IF NOT EXISTS checking_records (
 );
 
 ALTER TABLE checking_records ADD COLUMN IF NOT EXISTS category_id UUID REFERENCES categories(id) ON DELETE SET NULL;
+ALTER TABLE checking_records ADD COLUMN IF NOT EXISTS reconcile_report_id UUID REFERENCES reconcile_reports(id) ON DELETE SET NULL;
 CREATE INDEX IF NOT EXISTS idx_checking_records_account_datesent ON checking_records(account_id, date_sent DESC);
 CREATE INDEX IF NOT EXISTS idx_checking_records_category_id ON checking_records(category_id);
+CREATE INDEX IF NOT EXISTS idx_checking_records_reconcile_report_id ON checking_records(reconcile_report_id);
 
 CREATE TABLE IF NOT EXISTS assets (
     id UUID PRIMARY KEY,

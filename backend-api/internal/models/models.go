@@ -182,16 +182,17 @@ type AccountCategorySummaryResponse struct {
 
 // CheckingRecord domain model
 type CheckingRecord struct {
-	ID          string    `json:"id"`
-	AccountID   string    `json:"account_id"`
-	CategoryID  *string   `json:"category_id"`
-	Value       float64   `json:"value"`
-	DateSent    string    `json:"date_sent"`
-	DateCleared *string   `json:"date_cleared"`
-	Entity      string    `json:"entity"`
-	Description string    `json:"description"`
-	CreatedAt   time.Time `json:"created_at"`
-	UpdatedAt   time.Time `json:"updated_at"`
+	ID                string    `json:"id"`
+	AccountID         string    `json:"account_id"`
+	CategoryID        *string   `json:"category_id"`
+	ReconcileReportID *string   `json:"reconcile_report_id"`
+	Value             float64   `json:"value"`
+	DateSent          string    `json:"date_sent"`
+	DateCleared       *string   `json:"date_cleared"`
+	Entity            string    `json:"entity"`
+	Description       string    `json:"description"`
+	CreatedAt         time.Time `json:"created_at"`
+	UpdatedAt         time.Time `json:"updated_at"`
 }
 
 // CheckingRecordCreateRequest represents payload to create a checking record.
@@ -226,16 +227,53 @@ type CheckingRecordPatchRequest struct {
 
 // CheckingRecordResponse represents the checking record returned by the API.
 type CheckingRecordResponse struct {
-	ID          string    `json:"id"`
-	AccountID   string    `json:"account_id"`
-	CategoryID  *string   `json:"category_id"`
-	Value       float64   `json:"value"`
-	DateSent    string    `json:"date_sent"`
-	DateCleared *string   `json:"date_cleared"`
-	Entity      string    `json:"entity"`
-	Description string    `json:"description"`
-	CreatedAt   time.Time `json:"created_at"`
-	UpdatedAt   time.Time `json:"updated_at"`
+	ID                string    `json:"id"`
+	AccountID         string    `json:"account_id"`
+	CategoryID        *string   `json:"category_id"`
+	ReconcileReportID *string   `json:"reconcile_report_id"`
+	Value             float64   `json:"value"`
+	DateSent          string    `json:"date_sent"`
+	DateCleared       *string   `json:"date_cleared"`
+	Entity            string    `json:"entity"`
+	Description       string    `json:"description"`
+	CreatedAt         time.Time `json:"created_at"`
+	UpdatedAt         time.Time `json:"updated_at"`
+}
+
+// ReconcileReport domain model representing a completed account reconciliation.
+type ReconcileReport struct {
+	ID              string    `json:"id"`
+	AccountID       string    `json:"account_id"`
+	Name            string    `json:"name"`
+	ReportDate      string    `json:"report_date"`
+	StartingBalance float64   `json:"starting_balance"`
+	EndingBalance   float64   `json:"ending_balance"`
+	CreatedAt       time.Time `json:"created_at"`
+	UpdatedAt       time.Time `json:"updated_at"`
+}
+
+// ReconcileReportCreateRequest represents payload to create a reconcile report.
+type ReconcileReportCreateRequest struct {
+	Name            string   `json:"name" binding:"max=100"`
+	ReportDate      string   `json:"report_date" binding:"required"`
+	StartingBalance *float64 `json:"starting_balance" binding:"required"`
+	EndingBalance   *float64 `json:"ending_balance" binding:"required"`
+	RecordIDs       []string `json:"record_ids" binding:"required"`
+}
+
+// ReconcileReportResponse represents a reconcile report returned by the API.
+type ReconcileReportResponse struct {
+	ID              string                   `json:"id"`
+	AccountID       string                   `json:"account_id"`
+	Name            string                   `json:"name"`
+	ReportDate      string                   `json:"report_date"`
+	StartingBalance float64                  `json:"starting_balance"`
+	EndingBalance   float64                  `json:"ending_balance"`
+	RecordCount     int                      `json:"record_count"`
+	RecordIDs       []string                 `json:"record_ids"`
+	Records         []CheckingRecordResponse `json:"records"`
+	CreatedAt       time.Time                `json:"created_at"`
+	UpdatedAt       time.Time                `json:"updated_at"`
 }
 
 // Asset represents a tracked financial asset definition (e.g. btc, eth, silver, gold, tx-gas).

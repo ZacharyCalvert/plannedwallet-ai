@@ -159,16 +159,17 @@ func (c *Controller) verifyCheckingAccount(ctx context.Context, userID, accountI
 
 func toCheckingRecordResponse(r *models.CheckingRecord) models.CheckingRecordResponse {
 	return models.CheckingRecordResponse{
-		ID:          r.ID,
-		AccountID:   r.AccountID,
-		CategoryID:  r.CategoryID,
-		Value:       r.Value,
-		DateSent:    r.DateSent,
-		DateCleared: r.DateCleared,
-		Entity:      r.Entity,
-		Description: r.Description,
-		CreatedAt:   r.CreatedAt,
-		UpdatedAt:   r.UpdatedAt,
+		ID:                r.ID,
+		AccountID:         r.AccountID,
+		CategoryID:        r.CategoryID,
+		ReconcileReportID: r.ReconcileReportID,
+		Value:             r.Value,
+		DateSent:          r.DateSent,
+		DateCleared:       r.DateCleared,
+		Entity:            r.Entity,
+		Description:       r.Description,
+		CreatedAt:         r.CreatedAt,
+		UpdatedAt:         r.UpdatedAt,
 	}
 }
 
@@ -266,6 +267,9 @@ func (c *Controller) UpdateCheckingRecord(ctx context.Context, userID, accountID
 	if entity == "" {
 		return nil, NewAppError(http.StatusBadRequest, "INVALID_ENTITY", "entity cannot be empty.")
 	}
+	if err := ensureReconciledUpdateAllowed(existing, *req.Value, req.DateSent, req.DateCleared, entity); err != nil {
+		return nil, err
+	}
 	catID, err := c.resolveCategoryIDForUser(ctx, userID, req.CategoryID)
 	if err != nil {
 		return nil, err
@@ -288,6 +292,9 @@ func (c *Controller) UpdateCheckingRecord(ctx context.Context, userID, accountID
 }
 
 func (c *Controller) applyCheckingRecordPatch(ctx context.Context, userID string, existing *models.CheckingRecord, req models.CheckingRecordPatchRequest) error {
+	if err := ensureReconciledPatchAllowed(existing, req); err != nil {
+		return err
+	}
 	if req.Value != nil {
 		existing.Value = *req.Value
 	}
@@ -352,6 +359,17 @@ func (c *Controller) PatchCheckingRecord(ctx context.Context, userID, accountID,
 func (c *Controller) DeleteCheckingRecord(ctx context.Context, userID, accountID, recordID string) error {
 	if _, err := c.verifyCheckingAccount(ctx, userID, accountID); err != nil {
 		return err
+	}
+
+	existing, err := c.repo.GetCheckingRecordByID(ctx, accountID, recordID)
+	if err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			return ErrRecordNotFound
+		}
+		return NewAppError(http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to retrieve record.")
+	}
+	if existing.ReconcileReportID != nil {
+		return ErrRecordReconciled
 	}
 
 	if err := c.repo.DeleteCheckingRecord(ctx, accountID, recordID); err != nil {

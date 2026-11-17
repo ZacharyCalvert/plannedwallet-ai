@@ -18,6 +18,7 @@ type MemoryRepository struct {
 	accounts          map[string]*models.Account          // id -> Account
 	accountAccess       map[string]*models.AccountAccess    // accountID:userID -> AccountAccess
 	checkingRecords     map[string]*models.CheckingRecord   // id -> CheckingRecord
+	reconcileReports    map[string]*models.ReconcileReport  // id -> ReconcileReport
 	categories          map[string]*models.Category         // id -> Category
 	assets              map[string]*models.Asset            // id -> Asset
 	assetValues       map[string]*models.AssetValue       // id -> AssetValue
@@ -73,6 +74,7 @@ func NewMemoryRepository() *MemoryRepository {
 		accounts:            make(map[string]*models.Account),
 		accountAccess:       make(map[string]*models.AccountAccess),
 		checkingRecords:     make(map[string]*models.CheckingRecord),
+		reconcileReports:    make(map[string]*models.ReconcileReport),
 		categories:          cats,
 		assets:              make(map[string]*models.Asset),
 		assetValues:         make(map[string]*models.AssetValue),

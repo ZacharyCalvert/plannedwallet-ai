@@ -625,6 +625,179 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
+  /api/v1/accounts/{accountId}/reconcile-reports:
+    parameters:
+      - $ref: '#/components/parameters/XClientId'
+      - name: accountId
+        in: path
+        required: true
+        description: The unique identifier of the checking, savings, or credit card account.
+        schema:
+          type: string
+          format: uuid
+    post:
+      tags:
+        - Reconciliation
+      summary: Create a reconcile report
+      description: Creates a reconcile report linking transactions whose sum plus starting_balance equals ending_balance. Sets date_cleared to report_date for any attached record missing a cleared date.
+      operationId: createReconcileReport
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReconcileReportCreateRequest'
+      responses:
+        '201':
+          summary: Reconcile report created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReconcileReportResponse'
+        '400':
+          summary: Invalid payload, account type, or balance mismatch
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          summary: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          summary: Insufficient permissions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          summary: Account or record not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          summary: Record already reconciled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    get:
+      tags:
+        - Reconciliation
+      summary: List reconcile reports for an account
+      operationId: listReconcileReports
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          summary: List of reconcile reports
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ReconcileReportResponse'
+        '400':
+          summary: Invalid account type
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          summary: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          summary: Account not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/accounts/{accountId}/reconcile-reports/{reportId}:
+    parameters:
+      - $ref: '#/components/parameters/XClientId'
+      - name: accountId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: reportId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    get:
+      tags:
+        - Reconciliation
+      summary: Get a single reconcile report
+      operationId: getReconcileReport
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          summary: Reconcile report details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReconcileReportResponse'
+        '401':
+          summary: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          summary: Reconcile report or account not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    delete:
+      tags:
+        - Reconciliation
+      summary: Delete a reconcile report
+      description: Deletes the reconcile report and unlinks any attached transaction records (`reconcile_report_id = null`) without deleting the records themselves.
+      operationId: deleteReconcileReport
+      security:
+        - BearerAuth: []
+      responses:
+        '204':
+          description: Reconcile report deleted
+        '400':
+          summary: Invalid account type
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          summary: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          summary: Insufficient permissions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          summary: Reconcile report or account not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
   /api/v1/categories:
     parameters:
       - $ref: '#/components/parameters/XClientId'
@@ -3782,6 +3955,12 @@ components:
           nullable: true
           description: Optional category UUID assigned to this transaction, or null if uncategorized.
           example: "00000000-0000-4000-8000-000000000003"
+        reconcile_report_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: Reconcile report UUID if this transaction has been reconciled, or null otherwise.
+          example: null
         value:
           type: number
           format: double
@@ -4703,5 +4882,93 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/CategoryExpenseSlice'
+
+    ReconcileReportCreateRequest:
+      type: object
+      required:
+        - report_date
+        - starting_balance
+        - ending_balance
+        - record_ids
+      properties:
+        name:
+          type: string
+          maxLength: 100
+          description: Optional label for the reconcile report (e.g., Jan2026, Year-End).
+          example: "Jan2026"
+        report_date:
+          type: string
+          format: date
+          description: Reconcile report date (YYYY-MM-DD). Used as default cleared date for uncleared attached records.
+          example: "2026-01-31"
+        starting_balance:
+          type: number
+          format: double
+          example: 0.00
+        ending_balance:
+          type: number
+          format: double
+          example: -245.50
+        record_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+          description: Unique checking record UUIDs included in this reconcile report.
+
+    ReconcileReportResponse:
+      type: object
+      required:
+        - id
+        - account_id
+        - name
+        - report_date
+        - starting_balance
+        - ending_balance
+        - record_count
+        - record_ids
+        - records
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        account_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          example: "Jan2026"
+        report_date:
+          type: string
+          format: date
+          example: "2026-01-31"
+        starting_balance:
+          type: number
+          format: double
+          example: 0.00
+        ending_balance:
+          type: number
+          format: double
+          example: -245.50
+        record_count:
+          type: integer
+          example: 4
+        record_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+        records:
+          type: array
+          items:
+            $ref: '#/components/schemas/CheckingRecordResponse'
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
 
 
