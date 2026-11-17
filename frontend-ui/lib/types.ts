@@ -53,6 +53,7 @@ export interface AccountRecord {
   id: string;
   account_id: string;
   category_id?: string | null;
+  reconcile_report_id?: string | null;
   value: number;
   date_sent: string;
   date_cleared: string | null;
@@ -60,6 +61,28 @@ export interface AccountRecord {
   description?: string;
   created_at: string;
   updated_at: string;
+}
+
+export interface ReconcileReport {
+  id: string;
+  account_id: string;
+  name: string;
+  report_date: string;
+  starting_balance: number;
+  ending_balance: number;
+  record_count: number;
+  record_ids: string[];
+  records: AccountRecord[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreateReconcileReportRequest {
+  name?: string;
+  report_date: string;
+  starting_balance: number;
+  ending_balance: number;
+  record_ids: string[];
 }
 
 export interface CreateRecordRequest {

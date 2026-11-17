@@ -1,6 +1,14 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
+import {
+  isoToDisplayDate,
+  displayDateToIso,
+  applyDateAutoSlash,
+  computeSlashKeyAction,
+} from '../lib/dateInput';
+
+export { isoToDisplayDate, displayDateToIso };
 
 interface DateInputProps {
   id: string;
@@ -10,56 +18,6 @@ interface DateInputProps {
   nextFieldId?: string;
   disabled?: boolean;
   defaultToday?: boolean;
-}
-
-export function isoToDisplayDate(isoStr: string): string {
-  if (!isoStr) return '';
-  const clean = isoStr.trim();
-  if (/^\d{4}-\d{2}-\d{2}$/.test(clean)) {
-    const [y, m, d] = clean.split('-');
-    return `${m}/${d}/${y}`;
-  }
-  return clean;
-}
-
-export function displayDateToIso(displayStr: string): string {
-  const clean = displayStr.trim();
-  if (!clean) return '';
-
-  if (/^\d{4}-\d{2}-\d{2}$/.test(clean)) {
-    return clean;
-  }
-
-  const parts = clean.split('/');
-  if (parts.length === 3) {
-    let [m, d, y] = parts;
-    m = m.padStart(2, '0');
-    d = d.padStart(2, '0');
-    if (y.length === 2) {
-      y = `20${y}`;
-    }
-    const numM = parseInt(m, 10);
-    const numD = parseInt(d, 10);
-    if (
-      y.length === 4 &&
-      numM >= 1 &&
-      numM <= 12 &&
-      numD >= 1 &&
-      numD <= 31
-    ) {
-      return `${y}-${m}-${d}`;
-    }
-  }
-
-  // Handle 8 digits MMDDYYYY e.g. 10152026
-  if (/^\d{8}$/.test(clean)) {
-    const m = clean.slice(0, 2);
-    const d = clean.slice(2, 4);
-    const y = clean.slice(4, 8);
-    return `${y}-${m}-${d}`;
-  }
-
-  return clean;
 }
 
 export function DateInput({
@@ -79,101 +37,52 @@ export function DateInput({
     setDisplayValue(isoToDisplayDate(value));
   }, [value]);
 
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === '/') {
-      const input = e.currentTarget;
-      const val = input.value;
-      const start = input.selectionStart ?? val.length;
-      const end = input.selectionEnd ?? val.length;
-
-      const textBefore = val.slice(0, start);
-      const textAfter = val.slice(end);
-
-      const parts = textBefore.split('/');
-      const currentPartIndex = parts.length - 1;
-      const currentPart = parts[currentPartIndex];
-
-      if (currentPartIndex === 0) {
-        // Month segment: assume 01 if "1", pad single digits
-        e.preventDefault();
-        let m = currentPart.trim();
-        if (!m || m === '0' || m === '00') {
-          m = '01';
-        } else {
-          m = m.padStart(2, '0');
-        }
-        const num = parseInt(m, 10);
-        if (num > 12) m = '12';
-        if (num < 1) m = '01';
-
-        const newVal = `${m}/${textAfter.replace(/^\//, '')}`;
-        setDisplayValue(newVal);
-        const iso = displayDateToIso(newVal);
-        if (/^\d{4}-\d{2}-\d{2}$/.test(iso)) {
-          onChange(iso);
-        }
-        setTimeout(() => {
-          const nextPos = m.length + 1;
-          input.setSelectionRange(nextPos, nextPos);
-        }, 0);
-      } else if (currentPartIndex === 1) {
-        // Day segment: pad single digits (e.g. 1 -> 01, 5 -> 05)
-        e.preventDefault();
-        let d = currentPart.trim();
-        if (!d || d === '0' || d === '00') {
-          d = '01';
-        } else {
-          d = d.padStart(2, '0');
-        }
-        const num = parseInt(d, 10);
-        if (num > 31) d = '31';
-        if (num < 1) d = '01';
-
-        const monthPart = parts[0];
-        const newVal = `${monthPart}/${d}/${textAfter.replace(/^\//, '')}`;
-        setDisplayValue(newVal);
-        const iso = displayDateToIso(newVal);
-        if (/^\d{4}-\d{2}-\d{2}$/.test(iso)) {
-          onChange(iso);
-        }
-        setTimeout(() => {
-          const nextPos = monthPart.length + 1 + d.length + 1;
-          input.setSelectionRange(nextPos, nextPos);
-        }, 0);
-      } else if (currentPartIndex >= 2) {
-        // Year segment: pressing '/' moves to nextFieldId
-        e.preventDefault();
-        if (nextFieldId) {
-          const nextEl = document.getElementById(nextFieldId);
-          if (nextEl) {
-            nextEl.focus();
-            if ('select' in nextEl && typeof nextEl.select === 'function') {
-              nextEl.select();
-            }
-          }
-        }
+  const focusNextField = () => {
+    if (!nextFieldId) return;
+    const nextEl = document.getElementById(nextFieldId);
+    if (nextEl) {
+      nextEl.focus();
+      if ('select' in nextEl && typeof nextEl.select === 'function') {
+        nextEl.select();
       }
     }
   };
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    let val = e.target.value.replace(/[^\d/]/g, '');
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key !== '/') return;
+    const input = e.currentTarget;
+    const val = input.value;
+    const start = input.selectionStart ?? val.length;
+    const end = input.selectionEnd ?? val.length;
+    const result = computeSlashKeyAction(val, start, end);
 
-    // Auto-advance with slash if user entered 2 digits without slash
-    if (/^\d{2}$/.test(val) && !displayValue.endsWith('/') && val.length > displayValue.length) {
-      val = `${val}/`;
-    } else if (/^\d{2}\/\d{2}$/.test(val) && !displayValue.endsWith('/') && val.length > displayValue.length) {
-      val = `${val}/`;
+    e.preventDefault();
+    if (result.action === 'ignore') return;
+    if (result.action === 'focusNext') {
+      focusNextField();
+      return;
     }
 
-    if (val.length <= 10) {
-      setDisplayValue(val);
-      const iso = displayDateToIso(val);
-      if (/^\d{4}-\d{2}-\d{2}$/.test(iso)) {
-        onChange(iso);
-      } else if (!val.trim()) {
-        onChange('');
-      }
+    setDisplayValue(result.value);
+    const iso = displayDateToIso(result.value);
+    if (/^\d{4}-\d{2}-\d{2}$/.test(iso)) {
+      onChange(iso);
+    }
+    setTimeout(() => {
+      input.setSelectionRange(result.cursorPos, result.cursorPos);
+    }, 0);
+  };
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = applyDateAutoSlash(e.target.value, displayValue);
+    if (val.length > 10) return;
+
+    setDisplayValue(val);
+    const iso = displayDateToIso(val);
+    if (/^\d{4}-\d{2}-\d{2}$/.test(iso)) {
+      onChange(iso);
+    } else if (!val.trim()) {
+      onChange('');
     }
   };
 
