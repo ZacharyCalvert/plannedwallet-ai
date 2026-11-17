@@ -131,4 +131,12 @@ type Repository interface {
 	GetPerspectiveAccess(ctx context.Context, perspectiveID, userID string) (*models.PerspectiveAccess, error)
 	ListPerspectiveAccess(ctx context.Context, perspectiveID string) ([]*models.PerspectiveAccess, error)
 	RevokePerspectiveAccess(ctx context.Context, perspectiveID, userID string) error
+
+	// Bill operations
+	CreateBill(ctx context.Context, bill *models.Bill) error
+	GetBillByID(ctx context.Context, userID, billID string) (*models.Bill, error)
+	ListBillsByUserID(ctx context.Context, userID string) ([]*models.Bill, error)
+	UpdateBill(ctx context.Context, bill *models.Bill) error
+	DeleteBill(ctx context.Context, userID, billID string) error
+	ApplyBillToAccount(ctx context.Context, bill *models.Bill, record *models.CheckingRecord) error
 }

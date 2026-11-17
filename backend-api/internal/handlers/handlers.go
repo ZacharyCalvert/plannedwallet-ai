@@ -411,6 +411,7 @@ func (h *Handler) RegisterRoutes(r *gin.Engine) {
 	h.registerAssetRoutes(protected)
 	h.registerCategoryRoutes(protected)
 	h.registerPerspectiveRoutes(protected)
+	h.registerBillRoutes(protected)
 }
 
 func (h *Handler) registerPublicRoutes(api *gin.RouterGroup) {
@@ -518,4 +519,14 @@ func (h *Handler) registerPerspectiveRoutes(p *gin.RouterGroup) {
 	p.DELETE("/perspectives/:perspectiveId/access/:userId", h.RevokePerspectiveAccess)
 
 	p.GET("/perspectives/:perspectiveId/view", h.GetPerspectiveView)
+}
+
+func (h *Handler) registerBillRoutes(p *gin.RouterGroup) {
+	p.POST("/bills", h.CreateBill)
+	p.GET("/bills", h.ListBills)
+	p.GET("/bills/reminders", h.ListBillReminders)
+	p.GET("/bills/:billId", h.GetBill)
+	p.PUT("/bills/:billId", h.UpdateBill)
+	p.DELETE("/bills/:billId", h.DeleteBill)
+	p.POST("/bills/:billId/apply", h.ApplyBillToAccount)
 }
