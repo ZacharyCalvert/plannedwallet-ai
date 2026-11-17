@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { Account, AccountRecord, Category } from '../lib/types';
-import { DateInput } from './DateInput';
+import { DateInput, isoToDisplayDate } from './DateInput';
 import CsvUploadModal from './CsvUploadModal';
 import { DeleteAccountModal } from './DeleteAccountModal';
 import { CopyLinkButton } from './CopyLinkButton';
@@ -17,6 +17,7 @@ import {
   createAccountRecord,
   updateAccountRecord,
   patchAccountRecord,
+  deleteAccountRecord,
   fetchCategories,
 } from '../lib/api';
 
@@ -185,6 +186,9 @@ export function AccountDetail({
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState('');
   const [csvModalOpen, setCsvModalOpen] = useState(false);
+  const [deleteTxModalOpen, setDeleteTxModalOpen] = useState(false);
+  const [deletingTx, setDeletingTx] = useState(false);
+  const [deleteTxError, setDeleteTxError] = useState('');
 
   const resetForm = () => {
     setSelectedRecordId(null);
@@ -196,6 +200,8 @@ export function AccountDetail({
     setCategoryManuallySelected(false);
     setDescription('');
     setFormError('');
+    setDeleteTxModalOpen(false);
+    setDeleteTxError('');
   };
 
   const loadCategories = async () => {
@@ -301,6 +307,28 @@ export function AccountDetail({
   const handleCancelEdit = () => {
     resetForm();
     setFocusCounter((c) => c + 1);
+  };
+
+  const handleOpenRemoveTxModal = () => {
+    if (!selectedRecordId || isEditingReconciled) return;
+    setDeleteTxError('');
+    setDeleteTxModalOpen(true);
+  };
+
+  const handleConfirmRemoveTransaction = async () => {
+    if (!selectedRecordId || isEditingReconciled) return;
+    setDeleteTxError('');
+    setDeletingTx(true);
+    try {
+      await deleteAccountRecord(token, account.id, selectedRecordId);
+      setRecords((prev) => prev.filter((r) => r.id !== selectedRecordId));
+      resetForm();
+      setFocusCounter((c) => c + 1);
+    } catch (err: unknown) {
+      setDeleteTxError(err instanceof Error ? err.message : 'Failed to remove transaction');
+    } finally {
+      setDeletingTx(false);
+    }
   };
 
   const selectedRecord = useMemo(
@@ -721,7 +749,7 @@ export function AccountDetail({
             </div>
           </div>
 
-          {/* Action buttons: Apply Change + Cancel when editing, Add Record when new */}
+          {/* Action buttons: Apply Change + Remove Transaction (if unreconciled) + Cancel when editing, Add Record when new */}
           <div className="new-record-actions">
             <button
               type="submit"
@@ -737,6 +765,17 @@ export function AccountDetail({
                 ? 'Apply Change'
                 : 'Add Record'}
             </button>
+            {selectedRecordId && !isEditingReconciled && (
+              <button
+                type="button"
+                className="btn-danger-outline btn-remove-transaction"
+                onClick={handleOpenRemoveTxModal}
+                onMouseDown={(e) => e.preventDefault()}
+                disabled={submitting || deletingTx}
+              >
+                Remove Transaction
+              </button>
+            )}
             {selectedRecordId && (
               <button
                 type="button"
@@ -909,6 +948,70 @@ export function AccountDetail({
           onAccountDeleted?.(deletedId);
         }}
       />
+
+      {deleteTxModalOpen && selectedRecord && !isEditingReconciled && (
+        <div
+          className="modal-backdrop"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="delete-transaction-modal-title"
+        >
+          <div className="modal-content modal-danger">
+            <div className="modal-header">
+              <h3 id="delete-transaction-modal-title">Remove Transaction</h3>
+              <button
+                type="button"
+                className="btn-close"
+                onClick={() => setDeleteTxModalOpen(false)}
+                disabled={deletingTx}
+                aria-label="Close"
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="modal-body">
+              <div className="warning-banner">
+                <span className="warning-icon" aria-hidden="true">⚠️</span>
+                <div>
+                  <strong>Warning: This action cannot be undone!</strong>
+                </div>
+              </div>
+
+              <p className="mt-3">
+                Are you sure you want to permanently remove the transaction for{' '}
+                <strong>{selectedRecord.entity}</strong> ({formatCurrency(selectedRecord.value)}) sent on{' '}
+                <strong>{isoToDisplayDate(selectedRecord.date_sent)}</strong>?
+              </p>
+
+              <p className="text-muted font-sm mt-2">
+                Removing this record will recalculate your account balance immediately.
+              </p>
+
+              {deleteTxError && <p className="text-danger font-sm mt-3">{deleteTxError}</p>}
+            </div>
+
+            <div className="modal-actions mt-4">
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={() => setDeleteTxModalOpen(false)}
+                disabled={deletingTx}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn-danger"
+                onClick={handleConfirmRemoveTransaction}
+                disabled={deletingTx}
+              >
+                {deletingTx ? 'Removing...' : 'Yes, Remove Transaction'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

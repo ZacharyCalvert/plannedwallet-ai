@@ -269,6 +269,24 @@ export async function patchAccountRecord(
   return res.json();
 }
 
+export async function deleteAccountRecord(
+  token: string,
+  accountId: string,
+  recordId: string
+): Promise<void> {
+  const res = await tracedFetch(
+    `/api/v1/accounts/${encodeURIComponent(accountId)}/records/${encodeURIComponent(recordId)}`,
+    {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${token}` },
+    }
+  );
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || 'Failed to delete record');
+  }
+}
+
 export async function fetchReconcileReports(
   token: string,
   accountId: string
