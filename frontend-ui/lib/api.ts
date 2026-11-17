@@ -17,9 +17,11 @@ import {
   CreateAssetRequest,
   CreateAssetStoreRequest,
   CreateAssetValueRequest,
+  CreateReconcileReportRequest,
   CreateRecordRequest,
   CreateSnapshotRequest,
   CreateStoreRecordRequest,
+  ReconcileReport,
   UpdateAccountAssetRequest,
   UpdateAssetStoreRequest,
   UpdateSnapshotRequest,
@@ -218,7 +220,7 @@ export async function patchAccountRecord(
   token: string,
   accountId: string,
   recordId: string,
-  data: { date_cleared?: string | null; category_id?: string | null }
+  data: { value?: number; date_cleared?: string | null; category_id?: string | null; description?: string }
 ): Promise<AccountRecord> {
   const res = await tracedFetch(
     `/api/v1/accounts/${encodeURIComponent(accountId)}/records/${encodeURIComponent(recordId)}`,
@@ -236,6 +238,62 @@ export async function patchAccountRecord(
     throw new Error(err.message || 'Failed to update record');
   }
   return res.json();
+}
+
+export async function fetchReconcileReports(
+  token: string,
+  accountId: string
+): Promise<ReconcileReport[]> {
+  const res = await tracedFetch(
+    `/api/v1/accounts/${encodeURIComponent(accountId)}/reconcile-reports`,
+    { headers: { Authorization: `Bearer ${token}` } }
+  );
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || 'Failed to load reconcile reports');
+  }
+  return res.json();
+}
+
+export async function createReconcileReport(
+  token: string,
+  accountId: string,
+  data: CreateReconcileReportRequest
+): Promise<ReconcileReport> {
+  const res = await tracedFetch(
+    `/api/v1/accounts/${encodeURIComponent(accountId)}/reconcile-reports`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(data),
+    }
+  );
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || 'Failed to create reconcile report');
+  }
+  return res.json();
+}
+
+export async function deleteReconcileReport(
+  token: string,
+  accountId: string,
+  reportId: string
+): Promise<void> {
+  const res = await tracedFetch(
+    `/api/v1/accounts/${encodeURIComponent(accountId)}/reconcile-reports/${encodeURIComponent(reportId)}`,
+    {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${token}` },
+    }
+  );
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || 'Failed to delete reconcile report');
+  }
 }
 
 export async function fetchCategories(token: string): Promise<Category[]> {

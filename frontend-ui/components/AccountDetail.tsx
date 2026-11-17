@@ -9,6 +9,7 @@ import { CopyLinkButton } from './CopyLinkButton';
 import { AccountBalanceTrendGraph } from './AccountBalanceTrendGraph';
 import { AccountCategoryPieChart } from './AccountCategoryPieChart';
 import { AccountCategoriesTab } from './AccountCategoriesTab';
+import { AccountReconcileTab } from './AccountReconcileTab';
 import { findLastCategoryForRecipient } from '../lib/accountCategories';
 import {
   fetchAccountRecords,
@@ -26,10 +27,10 @@ interface AccountDetailProps {
   onAccountDeleted?: (deletedId: string) => void;
 }
 
-type AccountTab = 'records' | 'trend' | 'expenses' | 'categories';
+type AccountTab = 'records' | 'trend' | 'expenses' | 'categories' | 'reconcile';
 
 function resolveAccountTab(tab?: string): AccountTab {
-  if (tab === 'trend' || tab === 'expenses' || tab === 'categories') return tab;
+  if (tab === 'trend' || tab === 'expenses' || tab === 'categories' || tab === 'reconcile') return tab;
   return 'records';
 }
 
@@ -302,9 +303,33 @@ export function AccountDetail({
     setFocusCounter((c) => c + 1);
   };
 
+  const selectedRecord = useMemo(
+    () => (selectedRecordId ? records.find((r) => r.id === selectedRecordId) ?? null : null),
+    [records, selectedRecordId]
+  );
+  const isEditingReconciled = Boolean(selectedRecord?.reconcile_report_id);
+
   const handleFormSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setFormError('');
+
+    if (selectedRecordId && isEditingReconciled) {
+      setSubmitting(true);
+      try {
+        const updated = await patchAccountRecord(token, account.id, selectedRecordId, {
+          category_id: categoryId ? categoryId : null,
+          description: description.trim(),
+        });
+        setRecords((prev) => prev.map((r) => (r.id === selectedRecordId ? updated : r)));
+        resetForm();
+        setFocusCounter((c) => c + 1);
+      } catch (err: unknown) {
+        setFormError(err instanceof Error ? err.message : 'Failed to update reconciled record');
+      } finally {
+        setSubmitting(false);
+      }
+      return;
+    }
 
     const parsedAmount = parseAmount(amount);
     if (isNaN(parsedAmount) || parsedAmount === 0) {
@@ -500,6 +525,14 @@ export function AccountDetail({
           Categories
           <span className="tab-count-pill">{categories.length}</span>
         </button>
+
+        <button
+          type="button"
+          className={`snapshot-tab-button ${activeTab === 'reconcile' ? 'active' : ''}`}
+          onClick={() => selectTab('reconcile')}
+        >
+          Reconcile
+        </button>
       </div>
 
       {activeTab === 'trend' ? (
@@ -522,6 +555,27 @@ export function AccountDetail({
             }
           }}
         />
+      ) : activeTab === 'reconcile' ? (
+        <AccountReconcileTab
+          accountId={account.id}
+          token={token}
+          records={records}
+          categories={categories}
+          onRecordUpdated={(updated) =>
+            setRecords((prev) => prev.map((r) => (r.id === updated.id ? updated : r)))
+          }
+          onReportCreated={(report) => {
+            const byId = new Map(report.records.map((r) => [r.id, r]));
+            setRecords((prev) => prev.map((r) => byId.get(r.id) ?? r));
+          }}
+          onReportDeleted={(reportId) => {
+            setRecords((prev) =>
+              prev.map((r) =>
+                r.reconcile_report_id === reportId ? { ...r, reconcile_report_id: null } : r
+              )
+            );
+          }}
+        />
       ) : (
         <>
           {/* New / Edit Checking Record Form Row at the top */}
@@ -529,13 +583,20 @@ export function AccountDetail({
         <div className="section-title-row">
           <h3>{selectedRecordId ? 'Edit Record' : 'New Record'}</h3>
           <span className="section-subtitle">
-            {selectedRecordId
+            {isEditingReconciled
+              ? 'This record is reconciled: only Category and Description can be updated'
+              : selectedRecordId
               ? 'Update record details or set cleared date'
               : 'Add income (+) or spending (-) to this account'}
           </span>
         </div>
 
         {formError && <div className="alert-error mb-3">{formError}</div>}
+        {isEditingReconciled && (
+          <div className="notice-banner mb-3">
+            <strong>Reconciled Record:</strong> Amount, Sent Date, Cleared Date, and Recipient are locked. Description and Category may still be edited.
+          </div>
+        )}
 
         <form onSubmit={handleFormSubmit} className="new-record-form">
           <div className="new-record-inputs">
@@ -550,6 +611,7 @@ export function AccountDetail({
                   type="text"
                   inputMode="decimal"
                   required
+                  disabled={isEditingReconciled}
                   placeholder="0.00"
                   value={amount}
                   onChange={(e) => {
@@ -570,6 +632,7 @@ export function AccountDetail({
                 id="record-sent"
                 required
                 defaultToday
+                disabled={isEditingReconciled}
                 value={dateSent}
                 onChange={setDateSent}
                 nextFieldId="record-cleared"
@@ -581,6 +644,7 @@ export function AccountDetail({
               <label htmlFor="record-cleared">Cleared</label>
               <DateInput
                 id="record-cleared"
+                disabled={isEditingReconciled}
                 value={dateCleared}
                 onChange={setDateCleared}
                 nextFieldId="record-recipient"
@@ -594,6 +658,7 @@ export function AccountDetail({
                 id="record-recipient"
                 type="text"
                 required
+                disabled={isEditingReconciled}
                 placeholder="e.g. Grocery Store, Employer"
                 value={recipient}
                 onChange={(e) => handleRecipientChange(e.target.value)}
@@ -781,7 +846,9 @@ export function AccountDetail({
                         </td>
                         <td className="td-description">{rec.description || '—'}</td>
                         <td className="td-action">
-                          {!rec.date_cleared ? (
+                          {rec.reconcile_report_id ? (
+                            <span className="badge-reconciled">Reconciled</span>
+                          ) : !rec.date_cleared ? (
                             <button
                               type="button"
                               className="btn-clear-record"
