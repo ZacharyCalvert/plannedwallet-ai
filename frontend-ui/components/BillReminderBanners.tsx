@@ -68,7 +68,7 @@ export function BillReminderBanners({
             className={`bill-reminder-banner ${isOverdue ? 'bill-reminder-overdue' : 'bill-reminder-upcoming'}`}
             role="status"
           >
-            <div className="bill-reminder-info">
+            <div className="bill-reminder-content">
               <span className={`bill-reminder-pill ${isOverdue ? 'overdue' : 'upcoming'}`}>
                 {getDueBadgeText(days)}
               </span>

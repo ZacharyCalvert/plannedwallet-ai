@@ -630,7 +630,7 @@ export function BillsPane({
               </select>
             </div>
 
-            <div className="field-group" style={{ gridColumn: 'span 2' }}>
+            <div className="field-group bill-form-span-2">
               <label htmlFor="bill-description">Description</label>
               <input
                 id="bill-description"
