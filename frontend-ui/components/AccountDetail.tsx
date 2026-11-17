@@ -138,6 +138,8 @@ export function AccountDetail({
   const [error, setError] = useState('');
   const [activeTab, setActiveTab] = useState<AccountTab>(() => resolveAccountTab(urlTab));
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const normalizedType = (account.type || '').toLowerCase();
+  const isCreditCard = normalizedType === 'credit card' || normalizedType === 'credit_card';
 
   useEffect(() => {
     const resolved = resolveAccountTab(urlTab);
@@ -333,7 +335,11 @@ export function AccountDetail({
 
     const parsedAmount = parseAmount(amount);
     if (isNaN(parsedAmount) || parsedAmount === 0) {
-      setFormError('Please enter a valid non-zero amount (positive for income, negative for spending, e.g. 1,250.00 or -45.50).');
+      setFormError(
+        isCreditCard
+          ? 'Please enter a valid non-zero amount (positive for payment, negative for purchase, e.g. 1,250.00 or -45.50).'
+          : 'Please enter a valid non-zero amount (positive for income, negative for spending, e.g. 1,250.00 or -45.50).'
+      );
       setFocusCounter((c) => c + 1);
       return;
     }
@@ -587,6 +593,8 @@ export function AccountDetail({
               ? 'This record is reconciled: only Category and Description can be updated'
               : selectedRecordId
               ? 'Update record details or set cleared date'
+              : isCreditCard
+              ? 'Add payment (+) or purchase (-) to this account'
               : 'Add income (+) or spending (-) to this account'}
           </span>
         </div>
@@ -785,7 +793,10 @@ export function AccountDetail({
                 {sortedRecords.length === 0 ? (
                   <tr>
                     <td colSpan={8} className="records-empty">
-                      No records found for this account. Use the row above to add income or spending.
+                      No records found for this account.{' '}
+                      {isCreditCard
+                        ? 'Use the row above to add a payment or purchase.'
+                        : 'Use the row above to add income or spending.'}
                     </td>
                   </tr>
                 ) : (
