@@ -1,0 +1,224 @@
+name: Pull Request Gate
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  dependency-age-gate:
+    name: Dependency Cooldown Gate (5-Day Quarantine)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository with base history
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Run dependency policy script unit tests
+        run: python3 .github/scripts/test_check_dependency_age.py -v
+
+      - name: Enforce 5-day minimum publish age on NPM, Go, and Docker updates
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          if [ -n "$BASE_SHA" ]; then
+            python3 .github/scripts/check_dependency_age.py --base-ref "$BASE_SHA" --min-age-days 5
+          else
+            python3 .github/scripts/check_dependency_age.py --min-age-days 5
+          fi
+
+  backend-pr-check:
+    name: Backend Unit Tests & Artifacts
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version: '1.23'
+          cache-dependency-path: backend-api/go.sum
+
+      - name: Run backend unit tests
+        working-directory: backend-api
+        run: go test -v -count=1 ./...
+
+      - name: Build backend Go binary
+        working-directory: backend-api
+        run: go build -o server .
+
+      - name: Syntax-check Python integration test suites
+        run: python3 -m py_compile itests/*.py
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Build backend Docker image (no push)
+        uses: docker/build-push-action@v7
+        with:
+          context: ./backend-api
+          file: ./backend-api/Dockerfile
+          load: true
+          push: false
+          tags: plannedwallet-backend:pr-test
+          cache-from: type=gha
+          cache-to: type=gha,mode=min
+
+  frontend-pr-check:
+    name: Frontend Unit Tests & Artifacts
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: frontend-ui/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: frontend-ui
+        run: npm ci
+
+      - name: TypeScript check (lint)
+        working-directory: frontend-ui
+        run: npm run lint
+
+      - name: Run frontend unit tests
+        working-directory: frontend-ui
+        run: npm test
+
+      - name: Build Next.js static export
+        working-directory: frontend-ui
+        run: npm run build
+
+      - name: Verify static export artifacts
+        run: |
+          test -f frontend-ui/out/index.html
+          test -f frontend-ui/out/404.html
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Build frontend Docker image (no push)
+        uses: docker/build-push-action@v7
+        with:
+          context: ./frontend-ui
+          file: ./frontend-ui/Dockerfile
+          load: true
+          push: false
+          tags: plannedwallet-frontend:pr-test
+          cache-from: type=gha
+          cache-to: type=gha,mode=min
+
+  gateway-pr-check:
+    name: Gateway Artifact Build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Build Nginx gateway Docker image (no push)
+        uses: docker/build-push-action@v7
+        with:
+          context: ./nginx-gateway
+          file: ./nginx-gateway/Dockerfile
+          load: true
+          push: false
+          tags: plannedwallet-gateway:pr-test
+          cache-from: type=gha
+          cache-to: type=gha,mode=min
+
+  integration-tests:
+    name: Integration Tests (Local Gateway)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+          cache-dependency-path: itests/requirements.txt
+
+      - name: Start fresh local stack via make refresh
+        run: make refresh
+
+      - name: Wait for local gateway, backend API, and frontend UI
+        run: |
+          for i in $(seq 1 60); do
+            if curl -s -f -H "X-Client-ID: github-action" http://localhost:8181/api/health >/dev/null 2>&1 \
+              && curl -s -f http://localhost:8181 | grep -q "Planned Wallet"; then
+              echo "Local gateway stack is ready at http://localhost:8181"
+              exit 0
+            fi
+            echo "Waiting for gateway stack ($i/60)..."
+            sleep 2
+          done
+          echo "Local gateway failed to become ready within timeout"
+          docker compose ps
+          docker compose logs
+          exit 1
+
+      - name: Run integration tests against local gateway
+        run: make -C itests test TARGET_SERVER=http://localhost:8181
+
+      - name: Dump Docker Compose logs on failure
+        if: failure()
+        run: docker compose logs || true
+
+      - name: Stop and clean local stack
+        if: always()
+        run: make clean || docker compose down --remove-orphans || true
+
+  pr-gate:
+    name: Pull Request Gate Check
+    needs:
+      - dependency-age-gate
+      - backend-pr-check
+      - frontend-pr-check
+      - gateway-pr-check
+      - integration-tests
+    if: always()
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Verify all PR gate jobs succeeded
+        env:
+          DEP_RESULT: ${{ needs.dependency-age-gate.result }}
+          BACK_RESULT: ${{ needs.backend-pr-check.result }}
+          FRONT_RESULT: ${{ needs.frontend-pr-check.result }}
+          GW_RESULT: ${{ needs.gateway-pr-check.result }}
+          INT_RESULT: ${{ needs.integration-tests.result }}
+        run: |
+          echo "dependency-age-gate: $DEP_RESULT"
+          echo "backend-pr-check:    $BACK_RESULT"
+          echo "frontend-pr-check:   $FRONT_RESULT"
+          echo "gateway-pr-check:    $GW_RESULT"
+          echo "integration-tests:   $INT_RESULT"
+          if [ "$DEP_RESULT" != "success" ] || [ "$BACK_RESULT" != "success" ] || [ "$FRONT_RESULT" != "success" ] || [ "$GW_RESULT" != "success" ] || [ "$INT_RESULT" != "success" ]; then
+            echo "Pull Request Gate Check failed because one or more required jobs did not succeed."
+            exit 1
+          fi
+          echo "All PR gate checks succeeded."

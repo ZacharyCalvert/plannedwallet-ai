@@ -208,6 +208,8 @@ CI/CD and operational workflows are defined in [`.github/workflows/`](.github/wo
 
 ```mermaid
 flowchart LR
+    PR["Pull Request (inc. Dependabot)"] --> PRGate["pr-checks.yml<br/>5-Day Dependency Quarantine + Unit Tests + Docker/Static Builds + Gateway itests (No Deploy)"]
+
     PushMain["Push to main"] --> BackendWF["backend-api.yml<br/>Go unit tests + Docker Postgres + Pytest itests + GHCR + Deploy"]
     PushMain --> FrontendWF["frontend-ui.yml<br/>Node tests + Next.js static export + Container smoke check + Deploy"]
     PushMain --> SqlWF["apply-sql.yml<br/>VNet Container App Job applies init.sql to stage"]
@@ -221,6 +223,7 @@ flowchart LR
 
 | Workflow | Link | Triggers | Purpose |
 | :--- | :--- | :--- | :--- |
+| **Pull Request Gate** | [`.github/workflows/pr-checks.yml`](.github/workflows/pr-checks.yml) | `pull_request`, `workflow_dispatch` | Gating workflow (no deployment) that runs all Go & Node unit tests, builds backend/frontend/gateway artifacts & Docker images, runs `make refresh` + `itests` against the local gateway (`:8181`), and fails on any adopted/updated NPM, Go, or Docker dependency published fewer than 5 days ago. |
 | **Backend API CI/CD** | [`.github/workflows/backend-api.yml`](.github/workflows/backend-api.yml) | Push to `main` (`backend-api/**`, `itests/**`) or `workflow_dispatch` (`stage`, `production`/`prod`) | Runs Go unit tests, builds `backend-api` image, launches fresh PostgreSQL 16 + API containers, executes `make -C itests test`, pushes image to GHCR, and deploys via Azure OIDC (`deploy-backend`). |
 | **Frontend UI CI/CD** | [`.github/workflows/frontend-ui.yml`](.github/workflows/frontend-ui.yml) | Push to `main` (`frontend-ui/**`) or `workflow_dispatch` (`stage`, `production`/`prod`) | Runs `npm test`, builds static export (`frontend-ui/out`), verifies `index.html` / `404.html`, smoke-tests Docker container, pushes image to GHCR, and deploys static site (`deploy-static`). |
 | **Apply Database Migrations** | [`.github/workflows/apply-sql.yml`](.github/workflows/apply-sql.yml) | Push to `main` (`backend-api/internal/database/init.sql`) or `workflow_dispatch` (`stage`, `production`) | Uses Azure OIDC and `.github/scripts/prepare-migration-job.py` to execute idempotent DDL migrations (`init.sql`) inside an Azure VNet Container App Job with concurrency locking. |
