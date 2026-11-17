@@ -239,3 +239,63 @@ export interface UpdateAccountAssetRequest {
 export interface FeaturesResponse {
   features: string[];
 }
+
+export type BillFrequency = 'weekly' | 'monthly' | 'yearly';
+export type BillScheduleType = 'weekday' | 'day_of_period' | 'nth_weekday' | 'month_day';
+export type BillScheduleScope = 'week' | 'month' | 'year';
+export type BillDueStatus = 'overdue' | 'upcoming' | 'scheduled' | 'unscheduled';
+
+export interface BillSchedule {
+  type: BillScheduleType;
+  scope: BillScheduleScope;
+  nth?: number | null;
+  weekday?: string;
+  day?: number | null;
+  month?: number | null;
+}
+
+export interface Bill {
+  id: string;
+  user_id: string;
+  account_id: string | null;
+  category_id: string | null;
+  amount: number;
+  last_date_paid: string | null;
+  frequency: BillFrequency;
+  interval: number;
+  schedule: BillSchedule | null;
+  name: string;
+  recipient: string;
+  description: string;
+  reminder: boolean;
+  next_due_date: string | null;
+  due_status: BillDueStatus;
+  days_until_due: number | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface BillCreateRequest {
+  account_id?: string | null;
+  category_id?: string | null;
+  amount: number;
+  last_date_paid?: string | null;
+  frequency: BillFrequency;
+  interval?: number;
+  schedule?: BillSchedule | null;
+  name?: string;
+  recipient: string;
+  description?: string;
+  reminder?: boolean;
+}
+
+export interface BillApplyRequest {
+  account_id?: string | null;
+  date?: string | null;
+  date_cleared?: string | null;
+}
+
+export interface BillApplyResponse {
+  bill: Bill;
+  record: AccountRecord;
+}

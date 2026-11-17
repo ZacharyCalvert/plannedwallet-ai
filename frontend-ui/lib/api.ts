@@ -12,6 +12,10 @@ import {
   AssetStoreRecord,
   AssetStoreTrendPoint,
   AssetValue,
+  Bill,
+  BillApplyRequest,
+  BillApplyResponse,
+  BillCreateRequest,
   CaptchaResponse,
   Category,
   CreateAssetRequest,
@@ -929,4 +933,80 @@ export async function fetchAssetStoreTrend(
   }
   const data = await res.json();
   return Array.isArray(data) ? data : [];
+}
+
+// ---------- Recurring Bills API ----------
+
+export async function fetchBills(token: string): Promise<Bill[]> {
+  const res = await tracedFetch('/api/v1/bills', {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) {
+    throw new Error('Failed to load bills');
+  }
+  const data = await res.json();
+  return Array.isArray(data) ? data : [];
+}
+
+export async function createBill(token: string, data: BillCreateRequest): Promise<Bill> {
+  const res = await tracedFetch('/api/v1/bills', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || 'Failed to create bill');
+  }
+  return res.json();
+}
+
+export async function updateBill(token: string, billId: string, data: BillCreateRequest): Promise<Bill> {
+  const res = await tracedFetch(`/api/v1/bills/${encodeURIComponent(billId)}`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || 'Failed to update bill');
+  }
+  return res.json();
+}
+
+export async function deleteBill(token: string, billId: string): Promise<void> {
+  const res = await tracedFetch(`/api/v1/bills/${encodeURIComponent(billId)}`, {
+    method: 'DELETE',
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || 'Failed to delete bill');
+  }
+}
+
+export async function applyBillToAccount(
+  token: string,
+  billId: string,
+  data: BillApplyRequest = {}
+): Promise<BillApplyResponse> {
+  const res = await tracedFetch(`/api/v1/bills/${encodeURIComponent(billId)}/apply`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || 'Failed to apply bill to account');
+  }
+  return res.json();
 }

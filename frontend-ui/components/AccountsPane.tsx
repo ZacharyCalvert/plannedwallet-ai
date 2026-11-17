@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Account } from '../lib/types';
 
 interface AccountsPaneProps {
@@ -8,6 +8,11 @@ interface AccountsPaneProps {
   selectedId: string | null;
   onSelectAccount: (account: Account) => void;
   onNewAccountClick: () => void;
+  showBills?: boolean;
+  billsSelected?: boolean;
+  billsCount?: number;
+  onSelectBills?: () => void;
+  onAddBillsClick?: () => void;
 }
 
 export function AccountsPane({
@@ -15,8 +20,92 @@ export function AccountsPane({
   selectedId,
   onSelectAccount,
   onNewAccountClick,
+  showBills = false,
+  billsSelected = false,
+  billsCount = 0,
+  onSelectBills,
+  onAddBillsClick,
 }: AccountsPaneProps) {
   const [collapsed, setCollapsed] = useState(false);
+  const [addMenuOpen, setAddMenuOpen] = useState(false);
+  const expandedMenuRef = useRef<HTMLDivElement>(null);
+  const railMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (showBills) {
+      setAddMenuOpen(false);
+    }
+  }, [showBills]);
+
+  useEffect(() => {
+    if (!addMenuOpen) return;
+    const handlePointerDown = (e: MouseEvent) => {
+      const target = e.target as Node;
+      const inExpanded = expandedMenuRef.current?.contains(target);
+      const inRail = railMenuRef.current?.contains(target);
+      if (!inExpanded && !inRail) {
+        setAddMenuOpen(false);
+      }
+    };
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setAddMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handlePointerDown);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [addMenuOpen]);
+
+  const handlePlusClick = () => {
+    if (!showBills && onAddBillsClick) {
+      setAddMenuOpen((prev) => !prev);
+      return;
+    }
+    setAddMenuOpen(false);
+    onNewAccountClick();
+  };
+
+  const handleChooseAccount = () => {
+    setAddMenuOpen(false);
+    onNewAccountClick();
+  };
+
+  const handleChooseBills = () => {
+    setAddMenuOpen(false);
+    onAddBillsClick?.();
+  };
+
+  const plusTitle = !showBills && onAddBillsClick ? 'Add Account or Bills' : 'Create New Account';
+
+  const renderAddPopup = (rail = false) =>
+    addMenuOpen && !showBills && onAddBillsClick ? (
+      <div
+        className={`add-choice-popup ${rail ? 'add-choice-popup-rail' : ''}`}
+        role="menu"
+        aria-label="Add item"
+      >
+        <button
+          type="button"
+          className="add-choice-item"
+          role="menuitem"
+          onClick={handleChooseAccount}
+        >
+          Account
+        </button>
+        <button
+          type="button"
+          className="add-choice-item"
+          role="menuitem"
+          onClick={handleChooseBills}
+        >
+          Bills
+        </button>
+      </div>
+    ) : null;
 
   return (
     <aside className={`accounts-pane ${collapsed ? 'accounts-pane-collapsed' : ''}`}>
@@ -55,30 +144,40 @@ export function AccountsPane({
             </svg>
           </button>
           {!collapsed && (
-            <button
-              type="button"
-              className="btn-plus"
-              onClick={onNewAccountClick}
-              title="Create New Account"
-              aria-label="Create New Account"
-            >
-              +
-            </button>
+            <div className="plus-menu-anchor" ref={expandedMenuRef}>
+              <button
+                type="button"
+                className="btn-plus"
+                onClick={handlePlusClick}
+                title={plusTitle}
+                aria-label={plusTitle}
+                aria-haspopup={!showBills && onAddBillsClick ? 'menu' : undefined}
+                aria-expanded={!showBills && onAddBillsClick ? addMenuOpen : undefined}
+              >
+                +
+              </button>
+              {renderAddPopup(false)}
+            </div>
           )}
         </div>
       </div>
 
       {collapsed ? (
         <div className="accounts-collapsed-rail">
-          <button
-            type="button"
-            className="btn-plus"
-            onClick={onNewAccountClick}
-            title="Create New Account"
-            aria-label="Create New Account"
-          >
-            +
-          </button>
+          <div className="plus-menu-anchor" ref={railMenuRef}>
+            <button
+              type="button"
+              className="btn-plus"
+              onClick={handlePlusClick}
+              title={plusTitle}
+              aria-label={plusTitle}
+              aria-haspopup={!showBills && onAddBillsClick ? 'menu' : undefined}
+              aria-expanded={!showBills && onAddBillsClick ? addMenuOpen : undefined}
+            >
+              +
+            </button>
+            {renderAddPopup(true)}
+          </div>
           <button
             type="button"
             className="accounts-collapsed-expand-label"
@@ -90,7 +189,7 @@ export function AccountsPane({
         </div>
       ) : (
         <div className="accounts-list">
-          {accounts.length === 0 ? (
+          {accounts.length === 0 && !showBills ? (
             <p className="accounts-empty">No accounts yet. Click + to add one.</p>
           ) : (
             accounts.map((acc) => {
@@ -110,6 +209,21 @@ export function AccountsPane({
                 </button>
               );
             })
+          )}
+          {showBills && onSelectBills && (
+            <button
+              type="button"
+              className={`account-card account-card-bills ${billsSelected ? 'selected' : ''}`}
+              onClick={onSelectBills}
+            >
+              <div className="account-card-header">
+                <span className="account-card-name">Bills</span>
+                <span className="badge-account-type badge-bills">
+                  {billsCount} {billsCount === 1 ? 'bill' : 'bills'}
+                </span>
+              </div>
+              <p className="account-card-desc">Recurring bills &amp; reminders</p>
+            </button>
           )}
         </div>
       )}

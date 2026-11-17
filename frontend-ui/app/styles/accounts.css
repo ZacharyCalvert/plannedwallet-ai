@@ -411,3 +411,72 @@
   border-radius: 9999px;
   font-weight: 600;
 }
+
+.account-card-bills {
+  border-color: #fde68a;
+  background-color: #fffbeb;
+}
+
+.account-card-bills:hover {
+  border-color: #fcd34d;
+  background-color: #fef3c7;
+}
+
+.account-card-bills.selected {
+  border-color: #d97706;
+  background-color: #fef3c7;
+  box-shadow: 0 0 0 1px #d97706;
+}
+
+.badge-bills {
+  background-color: #fef3c7;
+  color: #b45309;
+  border: 1px solid #fcd34d;
+  text-transform: none;
+}
+
+.plus-menu-anchor {
+  position: relative;
+  display: inline-flex;
+}
+
+.add-choice-popup {
+  position: absolute;
+  top: calc(100% + 0.35rem);
+  right: 0;
+  min-width: 140px;
+  background-color: #ffffff;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  box-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.15), 0 4px 10px -2px rgba(15, 23, 42, 0.08);
+  padding: 0.35rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  z-index: 40;
+}
+
+.add-choice-popup-rail {
+  top: 0;
+  right: auto;
+  left: calc(100% + 0.5rem);
+}
+
+.add-choice-item {
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: none;
+  border-radius: 0.375rem;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #1e293b;
+  cursor: pointer;
+  transition: background-color 0.12s ease, color 0.12s ease;
+}
+
+.add-choice-item:hover {
+  background-color: #f1f5f9;
+  color: var(--primary);
+}

@@ -11,6 +11,7 @@ import { AccountCategoryPieChart } from './AccountCategoryPieChart';
 import { AccountCategoriesTab } from './AccountCategoriesTab';
 import { AccountReconcileTab } from './AccountReconcileTab';
 import { findLastCategoryForRecipient } from '../lib/accountCategories';
+import { getAmountColorClass } from '../lib/bills';
 import {
   fetchAccountRecords,
   createAccountRecord,
@@ -25,6 +26,7 @@ interface AccountDetailProps {
   urlTab?: string;
   onTabChange?: (tab: string, replace?: boolean) => void;
   onAccountDeleted?: (deletedId: string) => void;
+  refreshVersion?: number;
 }
 
 type AccountTab = 'records' | 'trend' | 'expenses' | 'categories' | 'reconcile';
@@ -58,18 +60,6 @@ function parseAmount(amtStr: string): number {
     return NaN;
   }
   return parseFloat(clean);
-}
-
-function getAmountColorClass(amtStr: string): string {
-  const clean = amtStr.replace(/,/g, '').trim();
-  if (!clean || clean === '-' || clean === '+') {
-    return 'amount-text-zero';
-  }
-  const num = parseFloat(clean);
-  if (isNaN(num) || num === 0) {
-    return 'amount-text-zero';
-  }
-  return num > 0 ? 'amount-text-positive' : 'amount-text-negative';
 }
 
 function isRecordCleared(r: AccountRecord): boolean {
@@ -131,6 +121,7 @@ export function AccountDetail({
   urlTab,
   onTabChange,
   onAccountDeleted,
+  refreshVersion = 0,
 }: AccountDetailProps) {
   const [records, setRecords] = useState<AccountRecord[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -235,6 +226,13 @@ export function AccountDetail({
     resetForm();
     setFocusCounter((c) => c + 1);
   }, [account.id, token]);
+
+  useEffect(() => {
+    if (refreshVersion > 0) {
+      loadRecords();
+      loadCategories();
+    }
+  }, [refreshVersion]);
 
   const categoryNameById = useMemo(() => {
     const map = new Map<string, string>();
