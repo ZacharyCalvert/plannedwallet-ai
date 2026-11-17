@@ -29,19 +29,19 @@ Medium priority:
 - [x] Add categories (expense categories)
 - [x] Reconcile calculations - locked records for edits + snapshot of net worth?
 - [x] rollup data (monthly)
-Review labels on credit card such that outgoing (negative) implies spend and positive implies you paid off CC
+- [x] Review labels on credit card such that outgoing (negative) implies spend and positive implies you paid off CC
 Bill reminders
 Add Money-in / Money-out features (trending) for asset and snapshot accounts to track growth/change
 create batch job for data grabs (indexes/prices, captcha cleanup)
 Monthly bill additions / automation
-cleanup UI
-full reconcile of records (monthly capture?)
-WAF geospacial lock-down
-Aggregate grouping, such as credit card debt, retirement funds, liquid assets, crypto
+- [x] cleanup UI
+- [x] full reconcile of records (monthly capture?)
+- [x] WAF geospacial lock-down
+- [x] Aggregate grouping, such as credit card debt, retirement funds, liquid assets, crypto
 money transfers between accounts
 Total net worth calculation / trending
 Auto ingestion / scraping of data from remote services (gas trends, silver, gold, etc)
-postgres auto vaccuuming - schedule, auto trigger
+- [x] postgres auto vaccuuming - schedule, auto trigger
 logging - log ingestion, formatting, context
 text search (find record by keyword) -> text search in postgres?
 fun money / daily money based on income expectations (payroll)

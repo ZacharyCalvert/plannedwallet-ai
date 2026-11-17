@@ -14,7 +14,7 @@ func TestInitSQLEmbedded_Tables(t *testing.T) {
 		"users", "accounts", "account_access", "categories", "reconcile_reports", "checking_records",
 		"assets", "asset_values", "asset_stores", "asset_store_records",
 		"account_assets", "account_snapshots", "captchas", "subscriptions",
-		"perspectives", "perspective_settings", "perspective_accounts", "perspective_access",
+		"perspectives", "perspective_settings", "perspective_accounts", "perspective_access", "bills",
 	}
 	for _, table := range expectedTables {
 		if !strings.Contains(initSQL, "CREATE TABLE IF NOT EXISTS "+table) {
@@ -91,6 +91,27 @@ func TestInitSQLEmbedded_ReconcileReports(t *testing.T) {
 		"idx_reconcile_reports_account_date",
 		"reconcile_report_id UUID REFERENCES reconcile_reports(id) ON DELETE SET NULL",
 		"idx_checking_records_reconcile_report_id",
+	}
+	for _, snippet := range expectedSnippets {
+		if !strings.Contains(initSQL, snippet) {
+			t.Errorf("expected initSQL to contain %q", snippet)
+		}
+	}
+}
+
+func TestInitSQLEmbedded_Bills(t *testing.T) {
+	expectedSnippets := []string{
+		"CREATE TABLE IF NOT EXISTS bills",
+		"user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE",
+		"account_id UUID REFERENCES accounts(id) ON DELETE SET NULL",
+		"category_id UUID REFERENCES categories(id) ON DELETE SET NULL",
+		"frequency VARCHAR(20) NOT NULL CHECK (frequency IN ('weekly', 'monthly', 'yearly'))",
+		"interval INTEGER NOT NULL DEFAULT 1 CHECK (interval >= 1)",
+		"schedule JSONB",
+		"reminder BOOLEAN NOT NULL DEFAULT FALSE",
+		"idx_bills_user_id",
+		"idx_bills_account_id",
+		"idx_bills_category_id",
 	}
 	for _, snippet := range expectedSnippets {
 		if !strings.Contains(initSQL, snippet) {

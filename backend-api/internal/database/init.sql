@@ -238,6 +238,29 @@ CREATE TABLE IF NOT EXISTS perspective_access (
 CREATE INDEX IF NOT EXISTS idx_perspective_access_perspective_id ON perspective_access(perspective_id);
 CREATE INDEX IF NOT EXISTS idx_perspective_access_user_id ON perspective_access(user_id);
 
+CREATE TABLE IF NOT EXISTS bills (
+    id UUID PRIMARY KEY,
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    account_id UUID REFERENCES accounts(id) ON DELETE SET NULL,
+    category_id UUID REFERENCES categories(id) ON DELETE SET NULL,
+    amount DOUBLE PRECISION NOT NULL CHECK (amount <> 0),
+    last_date_paid DATE,
+    frequency VARCHAR(20) NOT NULL CHECK (frequency IN ('weekly', 'monthly', 'yearly')),
+    interval INTEGER NOT NULL DEFAULT 1 CHECK (interval >= 1),
+    schedule JSONB,
+    recipient VARCHAR(255) NOT NULL,
+    description VARCHAR(500) NOT NULL DEFAULT '',
+    reminder BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+ALTER TABLE bills ADD COLUMN IF NOT EXISTS interval INTEGER NOT NULL DEFAULT 1 CHECK (interval >= 1);
+CREATE INDEX IF NOT EXISTS idx_bills_user_id ON bills(user_id);
+CREATE INDEX IF NOT EXISTS idx_bills_account_id ON bills(account_id);
+CREATE INDEX IF NOT EXISTS idx_bills_category_id ON bills(category_id);
+
+
 
 
 

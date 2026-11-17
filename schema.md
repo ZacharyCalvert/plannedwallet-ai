@@ -305,4 +305,17 @@ All HTTP requests require the `X-Client-ID` header. Protected endpoints require 
 - `GET /api/v1/features`: Returns enabled backend feature flags (e.g., `{"features": ["read_only"]}` when `PW_READONLY=true`, otherwise `{"features": []}`).
   - When `PW_READONLY=true`, write operations (`POST`, `PUT`, `PATCH`, `DELETE`) return `503 Service Unavailable` (`READ_ONLY_MODE`) while retaining read (`GET`) routes and user login (`POST /api/v1/users/{username}/token`).
 
+### 3.11 Recurring Bills & Reminders (`bills`)
+- Bills are strictly user-scoped (`bills.user_id`) and cannot be shared with other users.
+- Supports `frequency` (`weekly`, `monthly`, `yearly`), `interval` (`>= 1`, default `1`, e.g., `frequency="monthly"` + `interval=6` for every 6 months), optional structured `schedule` rules validated against `frequency` (`weekday`, `day_of_period`, `nth_weekday`, `month_day`), `last_date_paid`, `reminder` alert flag, optional `account_id` (`checking`, `savings`, `credit card`), and optional `category_id` (requires `account_id`).
+- Deleting a linked category sets `bills.category_id = NULL`; deleting a linked account sets both `bills.account_id = NULL` and `bills.category_id = NULL` while preserving the bill.
+- `POST /api/v1/bills`: Create a recurring bill.
+- `GET /api/v1/bills`: List bills owned by the authenticated user with computed `next_due_date`, `due_status`, and `days_until_due`.
+- `GET /api/v1/bills/reminders`: List `reminder=true` bills whose computed `due_status` is `upcoming` or `overdue`.
+- `GET /api/v1/bills/{billId}`: Get bill details.
+- `PUT /api/v1/bills/{billId}`: Update a bill.
+- `DELETE /api/v1/bills/{billId}`: Delete a bill.
+- `POST /api/v1/bills/{billId}/apply`: Creates a transaction record in the target checking/savings/credit card account and updates `bills.last_date_paid`.
+
+
 

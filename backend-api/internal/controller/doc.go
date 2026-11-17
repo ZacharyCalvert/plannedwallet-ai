@@ -10,4 +10,6 @@
 //   - Managing token exchange and credential verification with the authentication service.
 //   - Enforcing account type constraints and account ownership checks.
 //   - Orchestrating account transaction records CRUD operations.
+//   - Validating recurring bill frequencies and schedule rules, and computing
+//     clamped due dates and reminder statuses.
 package controller

@@ -42,6 +42,9 @@ tags:
   - name: Perspective Access
     summary: Perspective sharing and permissions
     description: Endpoints for sharing perspectives and managing user access levels (read, edit, admin).
+  - name: Bills
+    summary: Recurring bill automation and reminders
+    description: Private user-scoped recurring bills with schedule rules, optional account/category linking, reminders, and apply-to-account transaction generation.
   - name: Health
     summary: Service health check
     description: Smoke test and liveness endpoints.
@@ -3547,6 +3550,195 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
+  /api/v1/bills:
+    parameters:
+      - $ref: '#/components/parameters/XClientId'
+    post:
+      tags:
+        - Bills
+      summary: Create a recurring bill
+      description: Creates a private recurring bill owned by the authenticated user. Supports optional schedule constraints matching frequency (weekly, monthly, yearly), optional reminder flag, and optional linking to a checking/savings/credit card account and category.
+      operationId: createBill
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BillCreateRequest'
+      responses:
+        '201':
+          description: Bill created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BillResponse'
+        '400':
+          description: Invalid amount, frequency, schedule, account type, or category linkage.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    get:
+      tags:
+        - Bills
+      summary: List user bills
+      operationId: listBills
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: List of bills owned by the authenticated user.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/BillResponse'
+
+  /api/v1/bills/reminders:
+    parameters:
+      - $ref: '#/components/parameters/XClientId'
+    get:
+      tags:
+        - Bills
+      summary: List upcoming and overdue reminder bills
+      description: Returns bills belonging to the authenticated user that have reminder enabled and a computed due_status of upcoming or overdue.
+      operationId: listBillReminders
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Active bill reminder alerts.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/BillResponse'
+
+  /api/v1/bills/{billId}:
+    parameters:
+      - $ref: '#/components/parameters/XClientId'
+      - name: billId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    get:
+      tags:
+        - Bills
+      summary: Get a bill
+      operationId: getBill
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Bill details.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BillResponse'
+        '404':
+          description: Bill not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    put:
+      tags:
+        - Bills
+      summary: Update a bill
+      operationId: updateBill
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BillCreateRequest'
+      responses:
+        '200':
+          description: Updated bill.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BillResponse'
+        '400':
+          description: Validation error.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Bill, account, or category not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    delete:
+      tags:
+        - Bills
+      summary: Delete a bill
+      operationId: deleteBill
+      security:
+        - BearerAuth: []
+      responses:
+        '204':
+          description: Bill deleted.
+        '404':
+          description: Bill not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/bills/{billId}/apply:
+    parameters:
+      - $ref: '#/components/parameters/XClientId'
+      - name: billId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    post:
+      tags:
+        - Bills
+      summary: Apply bill to target account
+      description: Creates a transaction record in the bill's linked account (or specified override account_id) using the bill's amount, recipient, description, and category, and updates the bill's last_date_paid.
+      operationId: applyBillToAccount
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BillApplyRequest'
+      responses:
+        '201':
+          description: Record created and bill last_date_paid updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BillApplyResponse'
+        '400':
+          description: Bill has no linked account or invalid target account/date.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Bill or account not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
 components:
   securitySchemes:
     BearerAuth:
@@ -5016,6 +5208,184 @@ components:
           items:
             type: string
           example: ["read_only"]
+
+    BillSchedule:
+      type: object
+      required:
+        - type
+        - scope
+      properties:
+        type:
+          type: string
+          enum: [weekday, day_of_period, nth_weekday, month_day]
+          example: "nth_weekday"
+        scope:
+          type: string
+          enum: [week, month, year]
+          example: "month"
+        nth:
+          type: integer
+          nullable: true
+          description: Occurrence index (1..5 or -1 for last in month; 1..53 or -1 for last in year).
+          example: 3
+        weekday:
+          type: string
+          enum: [sunday, monday, tuesday, wednesday, thursday, friday, saturday]
+          example: "thursday"
+        day:
+          type: integer
+          nullable: true
+          description: Day of month (1..31) or day of year (1..366).
+        month:
+          type: integer
+          nullable: true
+          description: Month number (1..12) for yearly schedules.
+
+    BillCreateRequest:
+      type: object
+      required:
+        - amount
+        - frequency
+        - recipient
+      properties:
+        account_id:
+          type: string
+          format: uuid
+          nullable: true
+        category_id:
+          type: string
+          format: uuid
+          nullable: true
+        amount:
+          type: number
+          format: double
+          example: -125.50
+        last_date_paid:
+          type: string
+          format: date
+          nullable: true
+          example: "2026-10-15"
+        frequency:
+          type: string
+          enum: [weekly, monthly, yearly]
+          example: "monthly"
+        interval:
+          type: integer
+          minimum: 1
+          default: 1
+          description: Recurrence multiplier applied to frequency (e.g., interval=6 with frequency=monthly represents every 6 months).
+          example: 6
+        schedule:
+          allOf:
+            - $ref: '#/components/schemas/BillSchedule'
+          nullable: true
+        recipient:
+          type: string
+          maxLength: 255
+          example: "Electric Utility"
+        description:
+          type: string
+          maxLength: 500
+          example: "Monthly electricity service"
+        reminder:
+          type: boolean
+          default: false
+
+    BillResponse:
+      type: object
+      required:
+        - id
+        - user_id
+        - amount
+        - frequency
+        - interval
+        - recipient
+        - description
+        - reminder
+        - due_status
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        user_id:
+          type: string
+          format: uuid
+        account_id:
+          type: string
+          format: uuid
+          nullable: true
+        category_id:
+          type: string
+          format: uuid
+          nullable: true
+        amount:
+          type: number
+          format: double
+        last_date_paid:
+          type: string
+          format: date
+          nullable: true
+        frequency:
+          type: string
+          enum: [weekly, monthly, yearly]
+        interval:
+          type: integer
+          minimum: 1
+        schedule:
+          allOf:
+            - $ref: '#/components/schemas/BillSchedule'
+          nullable: true
+        recipient:
+          type: string
+        description:
+          type: string
+        reminder:
+          type: boolean
+        next_due_date:
+          type: string
+          format: date
+          nullable: true
+        due_status:
+          type: string
+          enum: [overdue, upcoming, scheduled, unscheduled]
+        days_until_due:
+          type: integer
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    BillApplyRequest:
+      type: object
+      properties:
+        account_id:
+          type: string
+          format: uuid
+          nullable: true
+        date:
+          type: string
+          format: date
+          nullable: true
+        date_cleared:
+          type: string
+          format: date
+          nullable: true
+
+    BillApplyResponse:
+      type: object
+      required:
+        - bill
+        - record
+      properties:
+        bill:
+          $ref: '#/components/schemas/BillResponse'
+        record:
+          $ref: '#/components/schemas/CheckingRecordResponse'
 
 
 

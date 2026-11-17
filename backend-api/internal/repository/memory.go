@@ -32,6 +32,7 @@ type MemoryRepository struct {
 	perspectiveSettings map[string]*models.PerspectiveSettings
 	perspectiveAccounts map[string]*models.PerspectiveAccount
 	perspectiveAccess map[string]*models.PerspectiveAccess
+	bills             map[string]*models.Bill
 }
 
 type memoryCaptcha struct {
@@ -88,6 +89,7 @@ func NewMemoryRepository() *MemoryRepository {
 		perspectiveSettings: make(map[string]*models.PerspectiveSettings),
 		perspectiveAccounts: make(map[string]*models.PerspectiveAccount),
 		perspectiveAccess:   make(map[string]*models.PerspectiveAccess),
+		bills:               make(map[string]*models.Bill),
 	}
 }
 
@@ -232,6 +234,14 @@ func (m *MemoryRepository) cascadeDeleteAccountData(id string) {
 	for k, pa := range m.perspectiveAccounts {
 		if pa.AccountID == id {
 			delete(m.perspectiveAccounts, k)
+		}
+	}
+	now := time.Now().UTC()
+	for _, bill := range m.bills {
+		if bill.AccountID != nil && *bill.AccountID == id {
+			bill.AccountID = nil
+			bill.CategoryID = nil
+			bill.UpdatedAt = now
 		}
 	}
 	m.cascadeDeleteAccountStores(id)
@@ -1590,6 +1600,12 @@ func (m *MemoryRepository) DeleteCategory(_ context.Context, id string) error {
 		if rec.CategoryID != nil && *rec.CategoryID == id {
 			rec.CategoryID = nil
 			rec.UpdatedAt = now
+		}
+	}
+	for _, bill := range m.bills {
+		if bill.CategoryID != nil && *bill.CategoryID == id {
+			bill.CategoryID = nil
+			bill.UpdatedAt = now
 		}
 	}
 	return nil
