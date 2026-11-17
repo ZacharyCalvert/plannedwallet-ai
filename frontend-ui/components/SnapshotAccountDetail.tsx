@@ -290,7 +290,6 @@ export function SnapshotAccountDetail({
             </button>
           </div>
           <p className="account-desc-text">{account.description}</p>
-          <p className="account-id-label">Account ID: {account.id}</p>
         </div>
 
         {/* Rightmost Balances */}
