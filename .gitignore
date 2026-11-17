@@ -14,4 +14,8 @@ frontend-ui/node_modules/
 frontend-ui/.next/
 frontend-ui/out/
 
+# Python cache
+__pycache__/
+*.py[cod]
+
 SQL_CONFIG.md
