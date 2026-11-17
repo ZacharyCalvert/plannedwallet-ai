@@ -1,4 +1,4 @@
-.PHONY: start stop clean build build-api build-frontend build-gateway test refresh local
+.PHONY: start stop clean build build-api build-frontend build-gateway test itest refresh local
 
 export DATA_DIR ?= data
 
@@ -32,3 +32,30 @@ build-gateway:
 test:
 	make -C backend-api test
 	make -C frontend-ui test
+
+itest: refresh
+	@status=0; \
+	ready=0; \
+	for i in $$(seq 1 60); do \
+		if curl -sf -H "X-Client-ID: make-itest" http://localhost:8181/api/health >/dev/null 2>&1 \
+			&& curl -sf http://localhost:8181 | grep -q "Planned Wallet"; then \
+			echo "Local gateway ready at http://localhost:8181"; \
+			ready=1; \
+			break; \
+		fi; \
+		echo "Waiting for local gateway ($$i/60)..."; \
+		sleep 2; \
+	done; \
+	if [ "$$ready" -ne 1 ]; then \
+		echo "Error: Local gateway failed to become ready within timeout"; \
+		docker compose ps; \
+		docker compose logs; \
+		make clean; \
+		exit 1; \
+	fi; \
+	make -C itests test TARGET_SERVER=http://localhost:8181 || status=$$?; \
+	if [ "$$status" -ne 0 ]; then \
+		docker compose logs || true; \
+	fi; \
+	make clean || true; \
+	exit $$status

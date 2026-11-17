@@ -185,6 +185,7 @@ erDiagram
 | `make refresh` | Wipes database data (`stop` + `clean`) and starts a completely fresh stack (`start`). Recommended before running `itests`. |
 | `make build` | Builds local Docker images for `backend-api`, `frontend-ui`, and `nginx-gateway`. |
 | `make test` | Runs both `make -C backend-api test` and `make -C frontend-ui test`. |
+| `make itest` | Launches a fresh Docker Compose stack (`make refresh`), waits for the local gateway (`:8181`), runs `itests`, and cleans up. |
 
 ### Component Makefiles
 
