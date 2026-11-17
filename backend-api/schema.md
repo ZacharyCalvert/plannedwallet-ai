@@ -44,11 +44,24 @@ Stores transaction categories for `checking`, `savings`, and `credit card` recor
 - **Constraints**: `UNIQUE NULLS NOT DISTINCT (user_id, name)`, `uq_categories_user_lower_name (user_id, LOWER(name)) NULLS NOT DISTINCT`
 - **Index**: `idx_categories_user_id`
 
-### 1.5 `checking_records`
+### 1.5 `reconcile_reports`
+Stores completed reconciliation reports for `checking`, `savings`, and `credit card` accounts.
+- `id` (UUID, Primary Key)
+- `account_id` (UUID, Not Null, FK -> `accounts(id)` ON DELETE CASCADE)
+- `name` (VARCHAR(100), Not Null, Default '') - Optional label (e.g. `Jan2026`, `Year-End`)
+- `report_date` (DATE, Not Null) - Report date (also applied as `date_cleared` for any attached record missing a cleared date)
+- `starting_balance` (DOUBLE PRECISION, Not Null)
+- `ending_balance` (DOUBLE PRECISION, Not Null) - Enforced to equal `starting_balance + SUM(attached records)`
+- `created_at` (TIMESTAMPTZ, Not Null, Default NOW())
+- `updated_at` (TIMESTAMPTZ, Not Null, Default NOW())
+- **Index**: `idx_reconcile_reports_account_date (account_id, report_date DESC)`
+
+### 1.6 `checking_records`
 Stores transaction line items for `checking`, `savings`, and `credit card` accounts.
 - `id` (UUID, Primary Key)
 - `account_id` (UUID, Not Null, FK -> `accounts(id)` ON DELETE CASCADE)
 - `category_id` (UUID, Nullable, FK -> `categories(id)` ON DELETE SET NULL) - Optional transaction category; set to `NULL` if a user-owned category is deleted
+- `reconcile_report_id` (UUID, Nullable, FK -> `reconcile_reports(id)` ON DELETE SET NULL) - Links a record to at most one reconcile report; reconciled records lock `value`, `date_sent`, `date_cleared`, and `entity` (`409 Conflict` on edits)
 - `value` (DOUBLE PRECISION, Not Null) - Positive (credits/deposits) or negative (debits/expenses)
 - `date_sent` (DATE, Not Null)
 - `date_cleared` (DATE, Nullable)
@@ -56,7 +69,7 @@ Stores transaction line items for `checking`, `savings`, and `credit card` accou
 - `description` (VARCHAR(500), Not Null, Default '')
 - `created_at` (TIMESTAMPTZ, Not Null, Default NOW())
 - `updated_at` (TIMESTAMPTZ, Not Null, Default NOW())
-- **Indexes**: `idx_checking_records_account_datesent (account_id, date_sent DESC)`, `idx_checking_records_category_id (category_id)`
+- **Indexes**: `idx_checking_records_account_datesent (account_id, date_sent DESC)`, `idx_checking_records_category_id (category_id)`, `idx_checking_records_reconcile_report_id (reconcile_report_id)`
 
 ### 1.5 `assets`
 Stores asset definitions (e.g. Bitcoin, Silver, Stocks).
@@ -238,6 +251,10 @@ All HTTP requests require the `X-Client-ID` header. Protected endpoints require 
 - `POST /api/v1/categories`: Create a user-scoped category.
 - `GET /api/v1/categories/{categoryId}`: Get a single accessible category.
 - `DELETE /api/v1/categories/{categoryId}`: Delete a user-created category (updates associated records to `category_id = null`; default categories cannot be deleted).
+- `POST /api/v1/accounts/{accountId}/reconcile-reports`: Create a reconcile report (enforces `starting_balance + sum(records) == ending_balance`, defaults missing `date_cleared` to `report_date`, and locks reconciled records from `value`/`date_sent`/`date_cleared`/`entity` edits with `409 Conflict`).
+- `GET /api/v1/accounts/{accountId}/reconcile-reports`: List completed reconcile reports for an account.
+- `GET /api/v1/accounts/{accountId}/reconcile-reports/{reportId}`: Get a single reconcile report and its attached records.
+- `DELETE /api/v1/accounts/{accountId}/reconcile-reports/{reportId}`: Delete a reconcile report, unlinking attached records (`reconcile_report_id = null`) without deleting the records.
 
 ### 3.6 Assets & Valuations
 - `POST /api/v1/assets`: Create asset definition.

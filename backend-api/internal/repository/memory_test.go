@@ -576,4 +576,58 @@ func TestMemoryRepo_DeleteCategoryNullifiesRecordsAndSharedVisibility(t *testing
 	}
 }
 
+func TestMemoryRepo_ReconcileReports(t *testing.T) {
+	repo := repository.NewMemoryRepository()
+	ctx := context.Background()
+	now := time.Now().UTC()
+	acc := &models.Account{ID: "acc-rec", AdminID: "u-1", Name: "Credit Card", Type: "credit card", CreatedAt: now, UpdatedAt: now}
+	_ = repo.CreateAccount(ctx, acc)
+
+	existingCleared := "2026-11-05"
+	r1 := &models.CheckingRecord{ID: "r1", AccountID: acc.ID, Value: -50.0, DateSent: "2026-11-04", DateCleared: &existingCleared, Entity: "Cafe", CreatedAt: now, UpdatedAt: now}
+	r2 := &models.CheckingRecord{ID: "r2", AccountID: acc.ID, Value: -25.0, DateSent: "2026-11-06", DateCleared: nil, Entity: "Market", CreatedAt: now, UpdatedAt: now}
+	_ = repo.CreateCheckingRecord(ctx, r1)
+	_ = repo.CreateCheckingRecord(ctx, r2)
+
+	rep := &models.ReconcileReport{
+		ID: "rep-1", AccountID: acc.ID, Name: "Nov2026", ReportDate: "2026-11-16",
+		StartingBalance: 0, EndingBalance: -75.0, CreatedAt: now, UpdatedAt: now,
+	}
+	if err := repo.CreateReconcileReport(ctx, rep, []string{"r1", "r2"}); err != nil {
+		t.Fatalf("CreateReconcileReport failed: %v", err)
+	}
+
+	got1, _ := repo.GetCheckingRecordByID(ctx, acc.ID, "r1")
+	got2, _ := repo.GetCheckingRecordByID(ctx, acc.ID, "r2")
+	if got1.ReconcileReportID == nil || *got1.ReconcileReportID != "rep-1" || *got1.DateCleared != "2026-11-05" {
+		t.Fatalf("unexpected r1 after reconcile: %+v", got1)
+	}
+	if got2.ReconcileReportID == nil || got2.DateCleared == nil || *got2.DateCleared != "2026-11-16" {
+		t.Fatalf("expected r2 DateCleared to default to report date 2026-11-16, got %+v", got2)
+	}
+
+	rep2 := &models.ReconcileReport{ID: "rep-2", AccountID: acc.ID, ReportDate: "2026-11-20", CreatedAt: now, UpdatedAt: now}
+	if err := repo.CreateReconcileReport(ctx, rep2, []string{"r1"}); !errors.Is(err, repository.ErrConflict) {
+		t.Fatalf("expected ErrConflict when reconciling already-reconciled record, got %v", err)
+	}
+	if err := repo.CreateReconcileReport(ctx, rep2, []string{"missing"}); !errors.Is(err, repository.ErrNotFound) {
+		t.Fatalf("expected ErrNotFound for missing record, got %v", err)
+	}
+	reports, grouped, err := repo.ListReconcileReports(ctx, acc.ID)
+	if err != nil || len(reports) != 1 || len(grouped["rep-1"]) != 2 {
+		t.Fatalf("unexpected ListReconcileReports output: reports=%d grouped=%d err=%v", len(reports), len(grouped["rep-1"]), err)
+	}
+
+	if err := repo.DeleteReconcileReport(ctx, acc.ID, "rep-1"); err != nil {
+		t.Fatalf("DeleteReconcileReport failed: %v", err)
+	}
+	if err := repo.DeleteReconcileReport(ctx, acc.ID, "rep-1"); !errors.Is(err, repository.ErrNotFound) {
+		t.Fatalf("expected ErrNotFound on second delete, got %v", err)
+	}
+	r1After, err := repo.GetCheckingRecordByID(ctx, acc.ID, "r1")
+	if err != nil || r1After.ReconcileReportID != nil {
+		t.Fatalf("expected r1 preserved with ReconcileReportID=nil after delete, got %+v err=%v", r1After, err)
+	}
+}
+
 

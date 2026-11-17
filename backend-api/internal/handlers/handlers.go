@@ -437,6 +437,11 @@ func (h *Handler) registerAccountRoutes(p *gin.RouterGroup) {
 	p.PATCH("/accounts/:accountId/records/:recordId", h.PatchCheckingRecord)
 	p.DELETE("/accounts/:accountId/records/:recordId", h.DeleteCheckingRecord)
 
+	p.POST("/accounts/:accountId/reconcile-reports", h.CreateReconcileReport)
+	p.GET("/accounts/:accountId/reconcile-reports", h.ListReconcileReports)
+	p.GET("/accounts/:accountId/reconcile-reports/:reportId", h.GetReconcileReport)
+	p.DELETE("/accounts/:accountId/reconcile-reports/:reportId", h.DeleteReconcileReport)
+
 	p.POST("/accounts/:accountId/assets", h.AddAccountAsset)
 	p.GET("/accounts/:accountId/assets", h.ListAccountAssets)
 	p.GET("/accounts/:accountId/assets/summary", h.GetAssetAccountSummary)

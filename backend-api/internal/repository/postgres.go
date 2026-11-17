@@ -225,12 +225,13 @@ func (p *PostgresRepository) RevokeAccountAccess(ctx context.Context, accountID,
 }
 
 func (p *PostgresRepository) CreateCheckingRecord(ctx context.Context, record *models.CheckingRecord) error {
-	query := `INSERT INTO checking_records (id, account_id, category_id, value, date_sent, date_cleared, entity, description, created_at, updated_at)
-	          VALUES ($1, $2, $3, $4, $5::date, $6::date, $7, $8, $9, $10)`
+	query := `INSERT INTO checking_records (id, account_id, category_id, reconcile_report_id, value, date_sent, date_cleared, entity, description, created_at, updated_at)
+	          VALUES ($1, $2, $3, $4, $5, $6::date, $7::date, $8, $9, $10, $11)`
 	_, err := p.db.ExecContext(ctx, query,
 		record.ID,
 		record.AccountID,
 		record.CategoryID,
+		record.ReconcileReportID,
 		record.Value,
 		record.DateSent,
 		record.DateCleared,
@@ -244,14 +245,18 @@ func (p *PostgresRepository) CreateCheckingRecord(ctx context.Context, record *m
 
 func scanCheckingRecord(scanner interface{ Scan(...interface{}) error }) (*models.CheckingRecord, error) {
 	var r models.CheckingRecord
-	var categoryID, dateCleared sql.NullString
-	err := scanner.Scan(&r.ID, &r.AccountID, &categoryID, &r.Value, &r.DateSent, &dateCleared, &r.Entity, &r.Description, &r.CreatedAt, &r.UpdatedAt)
+	var categoryID, reconcileReportID, dateCleared sql.NullString
+	err := scanner.Scan(&r.ID, &r.AccountID, &categoryID, &reconcileReportID, &r.Value, &r.DateSent, &dateCleared, &r.Entity, &r.Description, &r.CreatedAt, &r.UpdatedAt)
 	if err != nil {
 		return nil, err
 	}
 	if categoryID.Valid {
 		val := categoryID.String
 		r.CategoryID = &val
+	}
+	if reconcileReportID.Valid {
+		val := reconcileReportID.String
+		r.ReconcileReportID = &val
 	}
 	if dateCleared.Valid {
 		val := dateCleared.String
@@ -261,7 +266,7 @@ func scanCheckingRecord(scanner interface{ Scan(...interface{}) error }) (*model
 }
 
 func (p *PostgresRepository) GetCheckingRecordByID(ctx context.Context, accountID, recordID string) (*models.CheckingRecord, error) {
-	query := `SELECT id, account_id, category_id, value, TO_CHAR(date_sent, 'YYYY-MM-DD'), TO_CHAR(date_cleared, 'YYYY-MM-DD'), entity, description, created_at, updated_at
+	query := `SELECT id, account_id, category_id, reconcile_report_id, value, TO_CHAR(date_sent, 'YYYY-MM-DD'), TO_CHAR(date_cleared, 'YYYY-MM-DD'), entity, description, created_at, updated_at
 	          FROM checking_records
 	          WHERE id = $1 AND account_id = $2`
 	r, err := scanCheckingRecord(p.db.QueryRowContext(ctx, query, recordID, accountID))
@@ -276,7 +281,7 @@ func (p *PostgresRepository) GetCheckingRecordByID(ctx context.Context, accountI
 
 func (p *PostgresRepository) ListCheckingRecords(ctx context.Context, accountID string, cleared *bool, startDate, endDate *string) ([]*models.CheckingRecord, error) {
 	var sb strings.Builder
-	sb.WriteString(`SELECT id, account_id, category_id, value, TO_CHAR(date_sent, 'YYYY-MM-DD'), TO_CHAR(date_cleared, 'YYYY-MM-DD'), entity, description, created_at, updated_at
+	sb.WriteString(`SELECT id, account_id, category_id, reconcile_report_id, value, TO_CHAR(date_sent, 'YYYY-MM-DD'), TO_CHAR(date_cleared, 'YYYY-MM-DD'), entity, description, created_at, updated_at
 	                FROM checking_records
 	                WHERE account_id = $1`)
 

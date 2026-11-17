@@ -42,6 +42,12 @@ type Repository interface {
 	UpdateCheckingRecord(ctx context.Context, record *models.CheckingRecord) error
 	DeleteCheckingRecord(ctx context.Context, accountID, recordID string) error
 
+	// Reconcile Report operations
+	CreateReconcileReport(ctx context.Context, report *models.ReconcileReport, recordIDs []string) error
+	GetReconcileReportByID(ctx context.Context, accountID, reportID string) (*models.ReconcileReport, []*models.CheckingRecord, error)
+	ListReconcileReports(ctx context.Context, accountID string) ([]*models.ReconcileReport, map[string][]*models.CheckingRecord, error)
+	DeleteReconcileReport(ctx context.Context, accountID, reportID string) error
+
 	// Category operations
 	CreateCategory(ctx context.Context, category *models.Category) error
 	GetCategoryByID(ctx context.Context, id string) (*models.Category, error)
