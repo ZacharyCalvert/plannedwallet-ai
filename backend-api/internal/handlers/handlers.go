@@ -22,8 +22,9 @@ var usernameRegex = regexp.MustCompile(`^[a-zA-Z0-9_-]+$`)
 // Handler serves as the view layer in the MVC architecture, translating
 // HTTP requests/responses and interacting with the controller layer.
 type Handler struct {
-	ctrl *controller.Controller
-	auth *auth.Service
+	ctrl     *controller.Controller
+	auth     *auth.Service
+	readOnly bool
 }
 
 func NewHandler(ctrl *controller.Controller, authService *auth.Service) *Handler {
@@ -400,6 +401,7 @@ func (h *Handler) Health(c *gin.Context) {
 func (h *Handler) RegisterRoutes(r *gin.Engine) {
 	r.GET("/api/health", h.Health)
 	api := r.Group("/api/v1")
+	api.Use(h.ReadOnlyMiddleware())
 	h.registerPublicRoutes(api)
 
 	protected := api.Group("")
@@ -414,6 +416,7 @@ func (h *Handler) RegisterRoutes(r *gin.Engine) {
 func (h *Handler) registerPublicRoutes(api *gin.RouterGroup) {
 	api.GET("/health", h.Health)
 	api.GET("/hello", h.Hello)
+	api.GET("/features", h.GetFeatures)
 	api.GET("/captcha", h.GetCaptcha)
 	api.GET("/captcha/:captchaId", h.GetCaptchaImage)
 	api.POST("/users", h.RegisterUser)

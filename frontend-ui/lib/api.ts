@@ -29,6 +29,11 @@ import {
   UserRegistrationResponse,
 } from './types';
 import { createTraceparent, logTraceError, logTraceInfo } from './trace';
+import {
+  MAINTENANCE_EDIT_WARNING,
+  isReadOnlyErrorResponse,
+  notifyMaintenanceWarning,
+} from './maintenance';
 
 async function tracedFetch(url: string, init: RequestInit = {}): Promise<Response> {
   const traceparent = createTraceparent();
@@ -46,6 +51,13 @@ async function tracedFetch(url: string, init: RequestInit = {}): Promise<Respons
     const resTraceparent = res.headers.get('traceparent') || traceparent;
     if (!res.ok) {
       logTraceError(resTraceparent, `Response error ${res.status} for ${url}`);
+      const method = (init.method || 'GET').toUpperCase();
+      if (method !== 'GET' && method !== 'HEAD' && method !== 'OPTIONS') {
+        const errBody = await res.clone().json().catch(() => ({}));
+        if (isReadOnlyErrorResponse(res.status, errBody)) {
+          notifyMaintenanceWarning(MAINTENANCE_EDIT_WARNING);
+        }
+      }
     } else {
       logTraceInfo(resTraceparent, `Response success ${res.status} for ${url}`);
     }
@@ -53,6 +65,19 @@ async function tracedFetch(url: string, init: RequestInit = {}): Promise<Respons
   } catch (err) {
     logTraceError(traceparent, `Network failure for ${url}:`, err);
     throw err;
+  }
+}
+
+export async function fetchFeatures(): Promise<string[]> {
+  try {
+    const res = await tracedFetch('/api/v1/features');
+    if (!res.ok) {
+      return [];
+    }
+    const data = await res.json().catch(() => ({}));
+    return Array.isArray(data?.features) ? data.features : [];
+  } catch {
+    return [];
   }
 }
 

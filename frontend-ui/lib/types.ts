@@ -235,3 +235,7 @@ export interface UpdateAccountAssetRequest {
   quantity?: number;
   asset_date?: string;
 }
+
+export interface FeaturesResponse {
+  features: string[];
+}

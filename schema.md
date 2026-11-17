@@ -301,3 +301,8 @@ All HTTP requests require the `X-Client-ID` header. Protected endpoints require 
 - `DELETE /api/v1/perspectives/{perspectiveId}/access/{userId}`: Revoke access for a user.
 - `GET /api/v1/perspectives/{perspectiveId}/view`: Retrieve comprehensive aggregated viewing window (total portfolio value, historical trend line, average daily spend, year-over-year return rate, and ruined date runway forecast).
 
+### 3.10 System & Feature Flags
+- `GET /api/v1/features`: Returns enabled backend feature flags (e.g., `{"features": ["read_only"]}` when `PW_READONLY=true`, otherwise `{"features": []}`).
+  - When `PW_READONLY=true`, write operations (`POST`, `PUT`, `PATCH`, `DELETE`) return `503 Service Unavailable` (`READ_ONLY_MODE`) while retaining read (`GET`) routes and user login (`POST /api/v1/users/{username}/token`).
+
+

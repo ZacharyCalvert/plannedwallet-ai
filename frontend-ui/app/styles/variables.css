@@ -85,3 +85,26 @@ body {
   display: flex;
   flex-direction: column;
 }
+
+.maintenance-banner {
+  background-color: #fef3c7;
+  color: #92400e;
+  border-bottom: 1px solid #f59e0b;
+  padding: 0.6rem 1.5rem;
+  text-align: center;
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.maintenance-warning-backdrop {
+  z-index: 1100;
+}
+
+.maintenance-warning-text {
+  color: #92400e;
+  background-color: #fffbeb;
+  border: 1px solid #fcd34d;
+  border-radius: 6px;
+  padding: 0.75rem 1rem;
+  font-weight: 600;
+}
