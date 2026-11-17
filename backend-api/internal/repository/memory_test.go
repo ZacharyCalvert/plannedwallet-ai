@@ -652,6 +652,7 @@ func TestMemoryRepo_BillsLifecycleAndCascades(t *testing.T) {
 		ID: "bill-1", UserID: u1, AccountID: &acc.ID, CategoryID: &cat.ID,
 		Amount: -120.50, LastDatePaid: &paid, Frequency: models.BillFrequencyMonthly, Interval: 6,
 		Schedule:  &models.BillSchedule{Type: models.BillScheduleTypeDayOfPeriod, Scope: models.BillScheduleScopeMonth, Day: &day},
+		Name:      "Electric",
 		Recipient: "Electric Utility", Description: "Monthly power bill", Reminder: true,
 		CreatedAt: now, UpdatedAt: now,
 	}
@@ -659,8 +660,8 @@ func TestMemoryRepo_BillsLifecycleAndCascades(t *testing.T) {
 		t.Fatalf("CreateBill failed: %v", err)
 	}
 	storedBill, err := repo.GetBillByID(ctx, u1, bill.ID)
-	if err != nil || storedBill.Interval != 6 {
-		t.Fatalf("expected Interval=6, got %+v err=%v", storedBill, err)
+	if err != nil || storedBill.Interval != 6 || storedBill.Name != "Electric" {
+		t.Fatalf("expected Interval=6 and Name=Electric, got %+v err=%v", storedBill, err)
 	}
 	if _, err := repo.GetBillByID(ctx, u2, bill.ID); !errors.Is(err, repository.ErrNotFound) {
 		t.Fatalf("expected ErrNotFound for non-owner user, got %v", err)

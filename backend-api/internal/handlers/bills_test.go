@@ -33,7 +33,7 @@ func TestBillsHandlers_LifecycleAndCascades(t *testing.T) {
 		t.Fatalf("expected 400 for monthly scope on yearly frequency, got %d", wBad.Code)
 	}
 
-	// Valid bill linked to account + category + reminder
+	// Valid bill linked to account + category + reminder + short name
 	paid := "2026-10-01"
 	rem := true
 	wCreate := doAuthedJSON(t, r, http.MethodPost, "/api/v1/bills", token, models.BillCreateRequest{
@@ -43,6 +43,7 @@ func TestBillsHandlers_LifecycleAndCascades(t *testing.T) {
 		LastDatePaid: &paid,
 		Frequency:    models.BillFrequencyMonthly,
 		Schedule:     &models.BillSchedule{Type: "day_of_period", Scope: "month", Day: intPtrH(1)},
+		Name:         "Gas",
 		Recipient:    "Natural Gas Utility",
 		Description:  "Monthly heating bill",
 		Reminder:     &rem,
@@ -52,6 +53,20 @@ func TestBillsHandlers_LifecycleAndCascades(t *testing.T) {
 	}
 	var created models.BillResponse
 	_ = json.Unmarshal(wCreate.Body.Bytes(), &created)
+	if created.Name != "Gas" {
+		t.Fatalf("expected bill name='Gas', got %q", created.Name)
+	}
+
+	// Short name must be under 20 characters over HTTP
+	wLongName := doAuthedJSON(t, r, http.MethodPost, "/api/v1/bills", token, models.BillCreateRequest{
+		Amount:    &amt,
+		Frequency: models.BillFrequencyMonthly,
+		Name:      "TwentyCharactersName",
+		Recipient: "Electric Utility",
+	})
+	if wLongName.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for 20-char bill name, got %d", wLongName.Code)
+	}
 
 	// Non-owner receives 404 (bills cannot be shared)
 	wOther := doAuthedJSON(t, r, http.MethodGet, "/api/v1/bills/"+created.ID, otherTok, nil)

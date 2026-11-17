@@ -53,6 +53,7 @@ type Bill struct {
 	Frequency    string        `json:"frequency"`
 	Interval     int           `json:"interval"`
 	Schedule     *BillSchedule `json:"schedule"`
+	Name         string        `json:"name"`
 	Recipient    string        `json:"recipient"`
 	Description  string        `json:"description"`
 	Reminder     bool          `json:"reminder"`
@@ -69,6 +70,7 @@ type BillCreateRequest struct {
 	Frequency    string        `json:"frequency" binding:"required"`
 	Interval     *int          `json:"interval,omitempty"`
 	Schedule     *BillSchedule `json:"schedule,omitempty"`
+	Name         string        `json:"name" binding:"max=19"`
 	Recipient    string        `json:"recipient" binding:"required,max=255"`
 	Description  string        `json:"description,max=500"`
 	Reminder     *bool         `json:"reminder,omitempty"`
@@ -88,6 +90,7 @@ type BillResponse struct {
 	Frequency    string        `json:"frequency"`
 	Interval     int           `json:"interval"`
 	Schedule     *BillSchedule `json:"schedule"`
+	Name         string        `json:"name"`
 	Recipient    string        `json:"recipient"`
 	Description  string        `json:"description"`
 	Reminder     bool          `json:"reminder"`

@@ -14,7 +14,7 @@ func scanBill(scanner interface{ Scan(...interface{}) error }) (*models.Bill, er
 	var accID, catID, lastPaid, rawSched sql.NullString
 	err := scanner.Scan(
 		&b.ID, &b.UserID, &accID, &catID, &b.Amount, &lastPaid,
-		&b.Frequency, &b.Interval, &rawSched, &b.Recipient, &b.Description, &b.Reminder,
+		&b.Frequency, &b.Interval, &rawSched, &b.Name, &b.Recipient, &b.Description, &b.Reminder,
 		&b.CreatedAt, &b.UpdatedAt,
 	)
 	if err != nil {
@@ -55,11 +55,11 @@ func (p *PostgresRepository) CreateBill(ctx context.Context, bill *models.Bill) 
 	if err != nil {
 		return err
 	}
-	query := `INSERT INTO bills (id, user_id, account_id, category_id, amount, last_date_paid, frequency, interval, schedule, recipient, description, reminder, created_at, updated_at)
-	          VALUES ($1, $2, $3, $4, $5, $6::date, $7, $8, $9::jsonb, $10, $11, $12, $13, $14)`
+	query := `INSERT INTO bills (id, user_id, account_id, category_id, amount, last_date_paid, frequency, interval, schedule, name, recipient, description, reminder, created_at, updated_at)
+	          VALUES ($1, $2, $3, $4, $5, $6::date, $7, $8, $9::jsonb, $10, $11, $12, $13, $14, $15)`
 	_, err = p.db.ExecContext(ctx, query,
 		bill.ID, bill.UserID, bill.AccountID, bill.CategoryID, bill.Amount,
-		bill.LastDatePaid, bill.Frequency, bill.Interval, schedArg, bill.Recipient,
+		bill.LastDatePaid, bill.Frequency, bill.Interval, schedArg, bill.Name, bill.Recipient,
 		bill.Description, bill.Reminder, bill.CreatedAt, bill.UpdatedAt,
 	)
 	return err
@@ -67,7 +67,7 @@ func (p *PostgresRepository) CreateBill(ctx context.Context, bill *models.Bill) 
 
 func (p *PostgresRepository) GetBillByID(ctx context.Context, userID, billID string) (*models.Bill, error) {
 	query := `SELECT id, user_id, account_id, category_id, amount, TO_CHAR(last_date_paid, 'YYYY-MM-DD'),
-	                 frequency, interval, schedule::text, recipient, description, reminder, created_at, updated_at
+	                 frequency, interval, schedule::text, name, recipient, description, reminder, created_at, updated_at
 	          FROM bills WHERE id = $1 AND user_id = $2`
 	bill, err := scanBill(p.db.QueryRowContext(ctx, query, billID, userID))
 	if err != nil {
@@ -81,7 +81,7 @@ func (p *PostgresRepository) GetBillByID(ctx context.Context, userID, billID str
 
 func (p *PostgresRepository) ListBillsByUserID(ctx context.Context, userID string) ([]*models.Bill, error) {
 	query := `SELECT id, user_id, account_id, category_id, amount, TO_CHAR(last_date_paid, 'YYYY-MM-DD'),
-	                 frequency, interval, schedule::text, recipient, description, reminder, created_at, updated_at
+	                 frequency, interval, schedule::text, name, recipient, description, reminder, created_at, updated_at
 	          FROM bills WHERE user_id = $1 ORDER BY created_at DESC, recipient ASC`
 	rows, err := p.db.QueryContext(ctx, query, userID)
 	if err != nil {
@@ -107,12 +107,12 @@ func (p *PostgresRepository) UpdateBill(ctx context.Context, bill *models.Bill) 
 	}
 	query := `UPDATE bills
 	          SET account_id = $1, category_id = $2, amount = $3, last_date_paid = $4::date,
-	              frequency = $5, interval = $6, schedule = $7::jsonb, recipient = $8, description = $9,
-	              reminder = $10, updated_at = $11
-	          WHERE id = $12 AND user_id = $13`
+	              frequency = $5, interval = $6, schedule = $7::jsonb, name = $8, recipient = $9, description = $10,
+	              reminder = $11, updated_at = $12
+	          WHERE id = $13 AND user_id = $14`
 	res, err := p.db.ExecContext(ctx, query,
 		bill.AccountID, bill.CategoryID, bill.Amount, bill.LastDatePaid,
-		bill.Frequency, bill.Interval, schedArg, bill.Recipient, bill.Description,
+		bill.Frequency, bill.Interval, schedArg, bill.Name, bill.Recipient, bill.Description,
 		bill.Reminder, bill.UpdatedAt, bill.ID, bill.UserID,
 	)
 	if err != nil {

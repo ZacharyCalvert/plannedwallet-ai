@@ -248,6 +248,7 @@ CREATE TABLE IF NOT EXISTS bills (
     frequency VARCHAR(20) NOT NULL CHECK (frequency IN ('weekly', 'monthly', 'yearly')),
     interval INTEGER NOT NULL DEFAULT 1 CHECK (interval >= 1),
     schedule JSONB,
+    name VARCHAR(19) NOT NULL DEFAULT '' CHECK (char_length(name) < 20),
     recipient VARCHAR(255) NOT NULL,
     description VARCHAR(500) NOT NULL DEFAULT '',
     reminder BOOLEAN NOT NULL DEFAULT FALSE,
@@ -256,6 +257,7 @@ CREATE TABLE IF NOT EXISTS bills (
 );
 
 ALTER TABLE bills ADD COLUMN IF NOT EXISTS interval INTEGER NOT NULL DEFAULT 1 CHECK (interval >= 1);
+ALTER TABLE bills ADD COLUMN IF NOT EXISTS name VARCHAR(19) NOT NULL DEFAULT '' CHECK (char_length(name) < 20);
 CREATE INDEX IF NOT EXISTS idx_bills_user_id ON bills(user_id);
 CREATE INDEX IF NOT EXISTS idx_bills_account_id ON bills(account_id);
 CREATE INDEX IF NOT EXISTS idx_bills_category_id ON bills(category_id);

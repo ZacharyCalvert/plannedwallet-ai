@@ -305,13 +305,37 @@ func TestBillAccountCategoryAndSharingRules(t *testing.T) {
 		t.Fatal("expected error using another user's private category")
 	}
 
-	// Valid linked bill + custom category + reminder
+	// Valid linked bill + custom category + reminder + short name
 	bill, err := ctrl.CreateBill(ctx, u1, models.BillCreateRequest{
 		Amount: floatPtr(-110.25), Frequency: models.BillFrequencyMonthly, LastDatePaid: strPtr("2026-10-01"),
-		AccountID: &chk.ID, CategoryID: &cat1.ID, Recipient: "Electric Utility", Description: "Power service", Reminder: boolPtr(true),
+		AccountID: &chk.ID, CategoryID: &cat1.ID, Name: "Electric", Recipient: "Electric Utility", Description: "Power service", Reminder: boolPtr(true),
 	})
 	if err != nil {
 		t.Fatalf("CreateBill failed: %v", err)
+	}
+	if bill.Name != "Electric" {
+		t.Fatalf("expected bill Name='Electric', got %q", bill.Name)
+	}
+
+	// Short name must be strictly under 20 characters (19 allowed, 20 rejected)
+	if _, err := ctrl.CreateBill(ctx, u1, models.BillCreateRequest{
+		Amount: floatPtr(-45), Frequency: models.BillFrequencyMonthly, Name: "1234567890123456789", Recipient: "Water Utility",
+	}); err != nil {
+		t.Fatalf("expected 19-char bill name to succeed, got %v", err)
+	}
+	if _, err := ctrl.CreateBill(ctx, u1, models.BillCreateRequest{
+		Amount: floatPtr(-45), Frequency: models.BillFrequencyMonthly, Name: "12345678901234567890", Recipient: "Water Utility",
+	}); err == nil {
+		t.Fatal("expected 20-char bill name to be rejected")
+	}
+
+	// UpdateBill preserves updated short name and recipient stays intact on apply
+	updatedBill, err := ctrl.UpdateBill(ctx, u1, bill.ID, models.BillUpdateRequest{
+		Amount: floatPtr(-110.25), Frequency: models.BillFrequencyMonthly, LastDatePaid: strPtr("2026-10-01"),
+		AccountID: &chk.ID, CategoryID: &cat1.ID, Name: "Power", Recipient: "Electric Utility", Description: "Power service", Reminder: boolPtr(true),
+	})
+	if err != nil || updatedBill.Name != "Power" {
+		t.Fatalf("expected updated bill Name='Power', got %+v err=%v", updatedBill, err)
 	}
 
 	// Sharing prohibited: u2 cannot access or mutate u1's bill

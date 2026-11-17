@@ -307,7 +307,7 @@ All HTTP requests require the `X-Client-ID` header. Protected endpoints require 
 
 ### 3.11 Recurring Bills & Reminders (`bills`)
 - Bills are strictly user-scoped (`bills.user_id`) and cannot be shared with other users.
-- Supports `frequency` (`weekly`, `monthly`, `yearly`), `interval` (`>= 1`, default `1`, e.g., `frequency="monthly"` + `interval=6` for every 6 months), optional structured `schedule` rules validated against `frequency` (`weekday`, `day_of_period`, `nth_weekday`, `month_day`), `last_date_paid`, `reminder` alert flag, optional `account_id` (`checking`, `savings`, `credit card`), and optional `category_id` (requires `account_id`).
+- Supports optional short display `name` (`VARCHAR(19)`, strictly under 20 characters, e.g., `"Electric"` while `recipient` holds `"Electric Utility"`), `frequency` (`weekly`, `monthly`, `yearly`), `interval` (`>= 1`, default `1`, e.g., `frequency="monthly"` + `interval=6` for every 6 months), optional structured `schedule` rules validated against `frequency` (`weekday`, `day_of_period`, `nth_weekday`, `month_day`), `last_date_paid`, `reminder` alert flag, optional `account_id` (`checking`, `savings`, `credit card`), and optional `category_id` (requires `account_id`).
 - Deleting a linked category sets `bills.category_id = NULL`; deleting a linked account sets both `bills.account_id = NULL` and `bills.category_id = NULL` while preserving the bill.
 - `POST /api/v1/bills`: Create a recurring bill.
 - `GET /api/v1/bills`: List bills owned by the authenticated user with computed `next_due_date`, `due_status`, and `days_until_due`.

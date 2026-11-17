@@ -108,6 +108,7 @@ func TestInitSQLEmbedded_Bills(t *testing.T) {
 		"frequency VARCHAR(20) NOT NULL CHECK (frequency IN ('weekly', 'monthly', 'yearly'))",
 		"interval INTEGER NOT NULL DEFAULT 1 CHECK (interval >= 1)",
 		"schedule JSONB",
+		"name VARCHAR(19) NOT NULL DEFAULT '' CHECK (char_length(name) < 20)",
 		"reminder BOOLEAN NOT NULL DEFAULT FALSE",
 		"idx_bills_user_id",
 		"idx_bills_account_id",

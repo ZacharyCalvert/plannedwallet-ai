@@ -379,3 +379,56 @@ def test_bill_schedule_patterns_and_next_due_dates(api_context: APIRequestContex
         assert fetched.status == 200
         assert fetched.json()["next_due_date"] == expected_due
 
+
+def test_bill_short_name(api_context: APIRequestContext):
+    """Verify bills support an optional short display name strictly under 20 characters."""
+    _, token = create_authenticated_user(api_context)
+    headers = {"Authorization": f"Bearer {token}"}
+
+    # 20-char name rejected
+    too_long = api_context.post(
+        "/api/v1/bills",
+        data={
+            "amount": -125.00,
+            "frequency": "monthly",
+            "name": "12345678901234567890",
+            "recipient": "Regional Electric Utility",
+        },
+        headers=headers,
+    )
+    assert too_long.status == 400
+
+    # Valid short name (< 20 chars) created, retrieved, and updated
+    created_res = api_context.post(
+        "/api/v1/bills",
+        data={
+            "amount": -125.00,
+            "frequency": "monthly",
+            "name": "Electric",
+            "recipient": "Regional Electric Utility",
+        },
+        headers=headers,
+    )
+    assert created_res.status == 201, created_res.text()
+    bill = created_res.json()
+    assert bill["name"] == "Electric"
+    assert bill["recipient"] == "Regional Electric Utility"
+
+    updated_res = api_context.put(
+        f"/api/v1/bills/{bill['id']}",
+        data={
+            "amount": -130.00,
+            "frequency": "monthly",
+            "name": "Power",
+            "recipient": "Regional Electric Utility",
+        },
+        headers=headers,
+    )
+    assert updated_res.status == 200, updated_res.text()
+    assert updated_res.json()["name"] == "Power"
+
+    fetched = api_context.get(f"/api/v1/bills/{bill['id']}", headers=headers)
+    assert fetched.status == 200
+    assert fetched.json()["name"] == "Power"
+
+

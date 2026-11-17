@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
 
@@ -87,6 +88,7 @@ func toBillResponse(b *models.Bill, refNow time.Time) models.BillResponse {
 		Frequency:    b.Frequency,
 		Interval:     b.Interval,
 		Schedule:     b.Schedule,
+		Name:         b.Name,
 		Recipient:    b.Recipient,
 		Description:  b.Description,
 		Reminder:     b.Reminder,
@@ -98,27 +100,47 @@ func toBillResponse(b *models.Bill, refNow time.Time) models.BillResponse {
 	}
 }
 
-func (c *Controller) validateAndBuildBill(ctx context.Context, userID, id string, req models.BillCreateRequest, createdAt time.Time) (*models.Bill, error) {
+func validateBillIdentity(req models.BillCreateRequest) (string, string, error) {
+	name := strings.TrimSpace(req.Name)
+	if utf8.RuneCountInString(name) >= 20 {
+		return "", "", NewAppError(http.StatusBadRequest, "INVALID_NAME", "name must be under 20 characters.")
+	}
 	recipient := strings.TrimSpace(req.Recipient)
 	if recipient == "" {
-		return nil, NewAppError(http.StatusBadRequest, "INVALID_RECIPIENT", "recipient is required.")
+		return "", "", NewAppError(http.StatusBadRequest, "INVALID_RECIPIENT", "recipient is required.")
 	}
 	if req.Amount == nil || *req.Amount == 0 {
-		return nil, NewAppError(http.StatusBadRequest, "INVALID_AMOUNT", "amount must be non-zero.")
+		return "", "", NewAppError(http.StatusBadRequest, "INVALID_AMOUNT", "amount must be non-zero.")
 	}
+	return name, recipient, nil
+}
+
+func validateBillTiming(req models.BillCreateRequest) (*string, string, int, *models.BillSchedule, error) {
 	lastPaid, err := parseOptionalDateStr(req.LastDatePaid, "INVALID_DATE", "last_date_paid must be formatted as YYYY-MM-DD.")
 	if err != nil {
-		return nil, err
+		return nil, "", 0, nil, err
 	}
 	freq, err := normalizeBillFrequency(req.Frequency)
 	if err != nil {
-		return nil, err
+		return nil, "", 0, nil, err
 	}
 	interval, err := normalizeBillInterval(req.Interval)
 	if err != nil {
-		return nil, err
+		return nil, "", 0, nil, err
 	}
 	sched, err := normalizeAndValidateSchedule(freq, req.Schedule)
+	if err != nil {
+		return nil, "", 0, nil, err
+	}
+	return lastPaid, freq, interval, sched, nil
+}
+
+func (c *Controller) validateAndBuildBill(ctx context.Context, userID, id string, req models.BillCreateRequest, createdAt time.Time) (*models.Bill, error) {
+	name, recipient, err := validateBillIdentity(req)
+	if err != nil {
+		return nil, err
+	}
+	lastPaid, freq, interval, sched, err := validateBillTiming(req)
 	if err != nil {
 		return nil, err
 	}
@@ -137,6 +159,7 @@ func (c *Controller) validateAndBuildBill(ctx context.Context, userID, id string
 		Frequency:    freq,
 		Interval:     interval,
 		Schedule:     sched,
+		Name:         name,
 		Recipient:    recipient,
 		Description:  strings.TrimSpace(req.Description),
 		Reminder:     reminder,

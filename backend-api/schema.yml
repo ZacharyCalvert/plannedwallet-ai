@@ -5279,6 +5279,11 @@ components:
           allOf:
             - $ref: '#/components/schemas/BillSchedule'
           nullable: true
+        name:
+          type: string
+          maxLength: 19
+          description: Optional short display name under 20 characters for rendering in the bills list.
+          example: "Electric"
         recipient:
           type: string
           maxLength: 255
@@ -5299,6 +5304,7 @@ components:
         - amount
         - frequency
         - interval
+        - name
         - recipient
         - description
         - reminder
@@ -5337,6 +5343,11 @@ components:
           allOf:
             - $ref: '#/components/schemas/BillSchedule'
           nullable: true
+        name:
+          type: string
+          maxLength: 19
+          description: Optional short display name under 20 characters for rendering in the bills list.
+          example: "Electric"
         recipient:
           type: string
         description:
