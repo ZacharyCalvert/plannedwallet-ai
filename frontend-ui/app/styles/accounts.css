@@ -318,12 +318,6 @@
   margin-bottom: 0.35rem;
 }
 
-.account-id-label {
-  font-size: 0.75rem;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  color: #94a3b8;
-}
-
 /* Rightmost Balances */
 .account-balances {
   display: flex;
