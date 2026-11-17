@@ -29,8 +29,8 @@ Medium priority:
 - [x] Add categories (expense categories)
 - [x] Reconcile calculations - locked records for edits + snapshot of net worth?
 - [x] rollup data (monthly)
-Bill reminders
 Review labels on credit card such that outgoing (negative) implies spend and positive implies you paid off CC
+Bill reminders
 Add Money-in / Money-out features (trending) for asset and snapshot accounts to track growth/change
 create batch job for data grabs (indexes/prices, captcha cleanup)
 Monthly bill additions / automation
