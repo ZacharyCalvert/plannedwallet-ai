@@ -641,3 +641,14 @@ type PerspectiveViewResponse struct {
 	DaysUntilRuined   *int                    `json:"days_until_ruined,omitempty"`
 }
 
+// Feature flag constants exposed by GET /api/v1/features.
+const (
+	FeatureReadOnly = "read_only"
+)
+
+// FeaturesResponse represents active feature flags enabled on the backend.
+type FeaturesResponse struct {
+	Features []string `json:"features"`
+}
+
+

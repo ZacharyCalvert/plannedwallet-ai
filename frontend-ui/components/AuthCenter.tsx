@@ -6,10 +6,12 @@ import { CreateUserForm } from './CreateUserForm';
 
 interface AuthCenterProps {
   onSuccess: (username: string, token: string) => void;
+  readOnly?: boolean;
 }
 
-export function AuthCenter({ onSuccess }: AuthCenterProps) {
+export function AuthCenter({ onSuccess, readOnly = false }: AuthCenterProps) {
   const [tab, setTab] = useState<'signin' | 'create'>('signin');
+  const activeTab = readOnly ? 'signin' : tab;
 
   return (
     <div className="auth-center-container">
@@ -17,21 +19,23 @@ export function AuthCenter({ onSuccess }: AuthCenterProps) {
         <div className="auth-tabs">
           <button
             type="button"
-            className={`auth-tab ${tab === 'signin' ? 'active' : ''}`}
+            className={`auth-tab ${activeTab === 'signin' ? 'active' : ''}`}
             onClick={() => setTab('signin')}
           >
             Sign In
           </button>
-          <button
-            type="button"
-            className={`auth-tab ${tab === 'create' ? 'active' : ''}`}
-            onClick={() => setTab('create')}
-          >
-            Create Account
-          </button>
+          {!readOnly && (
+            <button
+              type="button"
+              className={`auth-tab ${activeTab === 'create' ? 'active' : ''}`}
+              onClick={() => setTab('create')}
+            >
+              Create Account
+            </button>
+          )}
         </div>
         <div className="auth-body">
-          {tab === 'signin' ? (
+          {activeTab === 'signin' ? (
             <SignInForm onSuccess={onSuccess} />
           ) : (
             <CreateUserForm onSuccess={onSuccess} />

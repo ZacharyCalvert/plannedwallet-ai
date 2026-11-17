@@ -34,6 +34,7 @@ services:
       JWT_SECRET: ${JWT_SECRET:-super-secret-jwt-key-replace-in-production}
       PRODUCTION_ENV: ${PRODUCTION_ENV:-false}
       EXPECTED_FDID: ${EXPECTED_FDID:-}
+      PW_READONLY: true
     ports:
       - "8080:8080"
     depends_on:

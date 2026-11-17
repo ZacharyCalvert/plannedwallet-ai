@@ -43,6 +43,10 @@ func isProduction() bool {
 	return strings.EqualFold(os.Getenv("PRODUCTION_ENV"), "true")
 }
 
+func isReadOnlyMode() bool {
+	return strings.EqualFold(strings.TrimSpace(os.Getenv("PW_READONLY")), "true")
+}
+
 func isDefaultJWTSecret(secret string) bool {
 	clean := strings.ToLower(strings.TrimSpace(secret))
 	if clean == "" || clean == defaultJWTSecret || clean == "dev-super-secret-jwt-key" {
@@ -170,6 +174,7 @@ func addHandlers(r *gin.Engine, repo repository.Repository, authService *auth.Se
 		ctrl.SetRequireCaptcha(true)
 	}
 	handler := handlers.NewHandler(ctrl, authService)
+	handler.SetReadOnly(isReadOnlyMode())
 	handler.RegisterRoutes(r)
 }
 

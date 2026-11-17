@@ -37,6 +37,30 @@ func TestIsProduction(t *testing.T) {
 	}
 }
 
+func TestIsReadOnlyMode(t *testing.T) {
+	orig := os.Getenv("PW_READONLY")
+	defer os.Setenv("PW_READONLY", orig)
+
+	testCases := []struct {
+		envVal   string
+		expected bool
+	}{
+		{"true", true},
+		{"TRUE", true},
+		{" true ", true},
+		{"false", false},
+		{"", false},
+		{"1", false},
+	}
+
+	for _, tc := range testCases {
+		os.Setenv("PW_READONLY", tc.envVal)
+		if actual := isReadOnlyMode(); actual != tc.expected {
+			t.Errorf("isReadOnlyMode() for %q: expected %v, got %v", tc.envVal, tc.expected, actual)
+		}
+	}
+}
+
 func TestIsDefaultJWTSecret(t *testing.T) {
 	defaults := []string{
 		defaultJWTSecret,

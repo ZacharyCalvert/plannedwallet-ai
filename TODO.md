@@ -27,7 +27,7 @@ Medium priority:
 - [x] Protect collision on imported records
 - [x] Add routing for deep linking to asset and asset tab
 - [x] Add categories (expense categories)
-Reconcile calculations - locked records for edits + snapshot of net worth?
+- [x] Reconcile calculations - locked records for edits + snapshot of net worth?
 - [x] rollup data (monthly)
 Bill reminders
 Review labels on credit card such that outgoing (negative) implies spend and positive implies you paid off CC

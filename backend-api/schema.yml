@@ -103,6 +103,34 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
+  /api/v1/features:
+    parameters:
+      - $ref: '#/components/parameters/XClientId'
+    get:
+      tags:
+        - Health
+      summary: List active backend feature flags
+      description: |
+        Returns the list of feature flags currently enabled on the backend service.
+        When the environment variable PW_READONLY is "true", this includes "read_only"
+        and mutating endpoints (POST/PUT/PATCH/DELETE, excluding credential login) return
+        503 Service Unavailable with error code READ_ONLY_MODE.
+      operationId: getFeatures
+      responses:
+        '200':
+          description: Active backend feature flags.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FeaturesResponse'
+        '400':
+          summary: Missing or invalid client ID
+          description: Missing or invalid required X-Client-ID header.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
   /api/v1/captcha:
     parameters:
       - $ref: '#/components/parameters/XClientId'
@@ -4267,6 +4295,7 @@ components:
           type: string
           format: date-time
 
+
     AssetAccountSummaryResponse:
       type: object
       required:
@@ -4369,6 +4398,7 @@ components:
           type: string
           format: date-time
 
+
     CreateAssetStoreRequest:
       type: object
       required:
@@ -4435,6 +4465,7 @@ components:
         updated_at:
           type: string
           format: date-time
+
 
     CreateStoreRecordRequest:
       type: object
@@ -4596,6 +4627,7 @@ components:
           type: string
           format: date-time
 
+
     PerspectiveSettingsInput:
       type: object
       properties:
@@ -4685,6 +4717,7 @@ components:
           type: string
           format: date-time
 
+
     PerspectiveAccessGrantRequest:
       type: object
       required:
@@ -4726,6 +4759,7 @@ components:
         updated_at:
           type: string
           format: date-time
+
 
     PerspectiveAccountLinkRequest:
       type: object
@@ -4841,6 +4875,7 @@ components:
         updated_at:
           type: string
           format: date-time
+
 
     CategoryExpenseSlice:
       type: object
@@ -4970,5 +5005,17 @@ components:
         updated_at:
           type: string
           format: date-time
+
+    FeaturesResponse:
+      type: object
+      required:
+        - features
+      properties:
+        features:
+          type: array
+          items:
+            type: string
+          example: ["read_only"]
+
 
 
