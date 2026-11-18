@@ -5,7 +5,7 @@ import { Account, AccountRecord, Category } from '../lib/types';
 import { DateInput, isoToDisplayDate } from './DateInput';
 import CsvUploadModal from './CsvUploadModal';
 import { DeleteAccountModal } from './DeleteAccountModal';
-import { CopyLinkButton } from './CopyLinkButton';
+import { AccountHeaderInfo } from './AccountHeaderInfo';
 import { AccountBalanceTrendGraph } from './AccountBalanceTrendGraph';
 import { AccountCategoryPieChart } from './AccountCategoryPieChart';
 import { AccountCategoriesTab } from './AccountCategoriesTab';
@@ -26,6 +26,7 @@ interface AccountDetailProps {
   token: string;
   urlTab?: string;
   onTabChange?: (tab: string, replace?: boolean) => void;
+  onAccountUpdated?: (updated: Account) => void;
   onAccountDeleted?: (deletedId: string) => void;
   refreshVersion?: number;
 }
@@ -121,6 +122,7 @@ export function AccountDetail({
   token,
   urlTab,
   onTabChange,
+  onAccountUpdated,
   onAccountDeleted,
   refreshVersion = 0,
 }: AccountDetailProps) {
@@ -430,25 +432,12 @@ export function AccountDetail({
     <div className="card account-detail-card">
       {/* Top Header: Account Info on Left, Balances on Rightmost Side */}
       <div className="account-detail-header">
-        <div className="account-detail-info">
-          <div className="account-title-row">
-            <h2>{account.name}</h2>
-            <span className={`badge-account-type badge-${(account.type || '').toLowerCase().replace(/\s+/g, '-')}`}>
-              {account.type}
-            </span>
-            <CopyLinkButton className="ml-2" />
-            <button
-              type="button"
-              className="btn-danger-outline btn-sm ml-2"
-              onClick={() => setDeleteModalOpen(true)}
-              title="Delete this account"
-              aria-label="Delete this account"
-            >
-              Delete Account
-            </button>
-          </div>
-          <p className="account-desc-text">{account.description}</p>
-        </div>
+        <AccountHeaderInfo
+          account={account}
+          token={token}
+          onAccountUpdated={onAccountUpdated}
+          onDeleteClick={() => setDeleteModalOpen(true)}
+        />
 
         {/* Rightmost side balances */}
         <div className="account-balances">

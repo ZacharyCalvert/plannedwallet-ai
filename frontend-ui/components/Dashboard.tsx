@@ -36,6 +36,7 @@ interface AccountRouteViewProps {
   accounts: Account[];
   accountsLoaded: boolean;
   token: string;
+  onAccountUpdated: (updated: Account) => void;
   onAccountDeleted: (deletedId: string) => void;
   accountRefreshVersion: number;
 }
@@ -44,6 +45,7 @@ function AccountRouteView({
   accounts,
   accountsLoaded,
   token,
+  onAccountUpdated,
   onAccountDeleted,
   accountRefreshVersion,
 }: AccountRouteViewProps) {
@@ -78,6 +80,7 @@ function AccountRouteView({
         token={token}
         urlTab={tab}
         onTabChange={handleTabChange}
+        onAccountUpdated={onAccountUpdated}
         onAccountDeleted={onAccountDeleted}
       />
     );
@@ -91,6 +94,7 @@ function AccountRouteView({
         token={token}
         urlTab={tab}
         onTabChange={handleTabChange}
+        onAccountUpdated={onAccountUpdated}
         onAccountDeleted={onAccountDeleted}
       />
     );
@@ -103,6 +107,7 @@ function AccountRouteView({
       token={token}
       urlTab={tab}
       onTabChange={handleTabChange}
+      onAccountUpdated={onAccountUpdated}
       onAccountDeleted={onAccountDeleted}
       refreshVersion={accountRefreshVersion}
     />
@@ -212,6 +217,10 @@ export function Dashboard({ session }: DashboardProps) {
   const handleActivateIncomes = () => {
     setIncomesActivated(true);
     navigate('/incomes');
+  };
+
+  const handleAccountUpdated = (updated: Account) => {
+    setAccounts((prev) => prev.map((a) => (a.id === updated.id ? updated : a)));
   };
 
   const handleAccountDeleted = (deletedId: string) => {
@@ -362,6 +371,7 @@ export function Dashboard({ session }: DashboardProps) {
                 accounts={accounts}
                 accountsLoaded={accountsLoaded}
                 token={session.token}
+                onAccountUpdated={handleAccountUpdated}
                 onAccountDeleted={handleAccountDeleted}
                 accountRefreshVersion={matchedId ? accountRefreshVersions[matchedId] || 0 : 0}
               />
@@ -374,6 +384,7 @@ export function Dashboard({ session }: DashboardProps) {
                 accounts={accounts}
                 accountsLoaded={accountsLoaded}
                 token={session.token}
+                onAccountUpdated={handleAccountUpdated}
                 onAccountDeleted={handleAccountDeleted}
                 accountRefreshVersion={matchedId ? accountRefreshVersions[matchedId] || 0 : 0}
               />

@@ -5,7 +5,7 @@ import { Account, AccountSnapshot } from '../lib/types';
 import { DateInput, displayDateToIso } from './DateInput';
 import { SnapshotTrendGraph } from './SnapshotTrendGraph';
 import { DeleteAccountModal } from './DeleteAccountModal';
-import { CopyLinkButton } from './CopyLinkButton';
+import { AccountHeaderInfo } from './AccountHeaderInfo';
 import {
   fetchAccountSnapshots,
   createAccountSnapshot,
@@ -18,6 +18,7 @@ interface SnapshotAccountDetailProps {
   token: string;
   urlTab?: string;
   onTabChange?: (tab: string, replace?: boolean) => void;
+  onAccountUpdated?: (updated: Account) => void;
   onAccountDeleted?: (deletedId: string) => void;
 }
 
@@ -70,6 +71,7 @@ export function SnapshotAccountDetail({
   token,
   urlTab,
   onTabChange,
+  onAccountUpdated,
   onAccountDeleted,
 }: SnapshotAccountDetailProps) {
   const [snapshots, setSnapshots] = useState<AccountSnapshot[]>([]);
@@ -272,25 +274,13 @@ export function SnapshotAccountDetail({
     <div className="card account-detail-card">
       {/* Top Header: Account Info on Left, Balances on Rightmost Side */}
       <div className="account-detail-header">
-        <div className="account-detail-info">
-          <div className="account-title-row">
-            <h2>{account.name}</h2>
-            <span className="badge-account-type badge-snapshot">
-              {account.type}
-            </span>
-            <CopyLinkButton className="ml-2" />
-            <button
-              type="button"
-              className="btn-danger-outline btn-sm ml-2"
-              onClick={() => setDeleteModalOpen(true)}
-              title="Delete this account"
-              aria-label="Delete this account"
-            >
-              Delete Account
-            </button>
-          </div>
-          <p className="account-desc-text">{account.description}</p>
-        </div>
+        <AccountHeaderInfo
+          account={account}
+          token={token}
+          badgeClassName="badge-snapshot"
+          onAccountUpdated={onAccountUpdated}
+          onDeleteClick={() => setDeleteModalOpen(true)}
+        />
 
         {/* Rightmost Balances */}
         <div className="account-balances">

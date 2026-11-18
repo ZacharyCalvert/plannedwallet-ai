@@ -35,13 +35,14 @@ import {
   deleteAssetValue,
 } from '../lib/api';
 import { DeleteAccountModal } from './DeleteAccountModal';
-import { CopyLinkButton } from './CopyLinkButton';
+import { AccountHeaderInfo } from './AccountHeaderInfo';
 
 interface AssetAccountDetailProps {
   account: Account;
   token: string;
   urlTab?: string;
   onTabChange?: (tab: string, replace?: boolean) => void;
+  onAccountUpdated?: (updated: Account) => void;
   onAccountDeleted?: (deletedId: string) => void;
 }
 
@@ -99,6 +100,7 @@ export function AssetAccountDetail({
   token,
   urlTab,
   onTabChange,
+  onAccountUpdated,
   onAccountDeleted,
 }: AssetAccountDetailProps) {
   const [stores, setStores] = useState<AssetStore[]>([]);
@@ -743,25 +745,13 @@ export function AssetAccountDetail({
     <div className="asset-account-detail">
       {/* Top Header */}
       <div className="account-detail-header mb-4">
-        <div className="account-detail-info">
-          <div className="account-title-row">
-            <h2>{account.name}</h2>
-            <span className="badge-account-type badge-asset">
-              {account.type}
-            </span>
-            <CopyLinkButton className="ml-2" />
-            <button
-              type="button"
-              className="btn-danger-outline btn-sm ml-2"
-              onClick={() => setDeleteModalOpen(true)}
-              title="Delete this account"
-              aria-label="Delete this account"
-            >
-              Delete Account
-            </button>
-          </div>
-          <p className="account-desc-text">{account.description}</p>
-        </div>
+        <AccountHeaderInfo
+          account={account}
+          token={token}
+          badgeClassName="badge-asset"
+          onAccountUpdated={onAccountUpdated}
+          onDeleteClick={() => setDeleteModalOpen(true)}
+        />
       </div>
 
       {/* Top Portfolio Summary Header */}

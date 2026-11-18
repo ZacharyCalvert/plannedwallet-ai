@@ -188,6 +188,26 @@ export async function deleteAccount(
   }
 }
 
+export async function patchAccount(
+  token: string,
+  accountId: string,
+  payload: { name?: string; description?: string }
+): Promise<Account> {
+  const res = await tracedFetch(`/api/v1/accounts/${encodeURIComponent(accountId)}`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || 'Failed to update account');
+  }
+  return res.json();
+}
+
 export async function fetchAccountRecords(
   token: string,
   accountId: string
