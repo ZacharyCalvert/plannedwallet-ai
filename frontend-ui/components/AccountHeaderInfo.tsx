@@ -3,7 +3,6 @@
 import { useState, useRef, useEffect, KeyboardEvent } from 'react';
 import { Account } from '../lib/types';
 import { patchAccount } from '../lib/api';
-import { CopyLinkButton } from './CopyLinkButton';
 
 type EditableField = 'name' | 'description';
 
@@ -131,7 +130,6 @@ export function AccountHeaderInfo({
           </h2>
         )}
         <span className={`badge-account-type ${resolvedBadgeClass}`}>{account.type}</span>
-        <CopyLinkButton className="ml-2" />
         <button
           type="button"
           className="btn-danger-outline btn-sm ml-2"

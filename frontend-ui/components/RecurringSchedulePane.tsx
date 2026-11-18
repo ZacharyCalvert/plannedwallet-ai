@@ -22,7 +22,6 @@ import {
   sortBillsForDisplay,
 } from '../lib/bills';
 import { DateInput, isoToDisplayDate } from './DateInput';
-import { CopyLinkButton } from './CopyLinkButton';
 
 type ScheduleMode =
   | 'none'
@@ -60,7 +59,6 @@ const MONTHS = [
 
 interface PaneCopyConfig {
   title: string;
-  badgeClass: string;
   description: string;
   countLabel: string;
   countSubtext: string;
@@ -91,7 +89,6 @@ interface PaneCopyConfig {
 const COPY_BY_KIND: Record<'bill' | 'income', PaneCopyConfig> = {
   bill: {
     title: 'Bills',
-    badgeClass: 'badge-bills',
     description: 'Manage recurring bills, due-date schedules, reminder alerts, and one-click account application',
     countLabel: 'Active Bills',
     countSubtext: 'Scheduled & tracked',
@@ -120,7 +117,6 @@ const COPY_BY_KIND: Record<'bill' | 'income', PaneCopyConfig> = {
   },
   income: {
     title: 'Income',
-    badgeClass: 'badge-incomes',
     description: 'Manage recurring income streams, deposit schedules, reminder alerts, and one-click account application',
     countLabel: 'Active Income',
     countSubtext: 'Scheduled & tracked',
@@ -450,8 +446,6 @@ export function RecurringSchedulePane({
         <div className="account-detail-info">
           <div className="account-title-row">
             <h2>{copy.title}</h2>
-            <span className={`badge-account-type ${copy.badgeClass}`}>Recurring</span>
-            <CopyLinkButton className="ml-auto" />
           </div>
           <p className="account-desc-text">{copy.description}</p>
         </div>
