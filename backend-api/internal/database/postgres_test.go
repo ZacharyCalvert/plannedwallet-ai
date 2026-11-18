@@ -131,3 +131,16 @@ func TestInitSQLEmbedded_RecurringTransactions(t *testing.T) {
 		}
 	}
 }
+
+func TestInitSQLEmbedded_UserDeleteCascades(t *testing.T) {
+	expected := []string{
+		"admin_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE",
+		"user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE",
+		"user_id UUID REFERENCES users(id) ON DELETE CASCADE",
+	}
+	for _, snippet := range expected {
+		if !strings.Contains(initSQL, snippet) {
+			t.Errorf("expected initSQL to contain cascade snippet %q", snippet)
+		}
+	}
+}

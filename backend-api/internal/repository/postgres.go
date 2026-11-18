@@ -98,6 +98,21 @@ func (p *PostgresRepository) GetUserByID(ctx context.Context, id string) (*model
 	return &u, nil
 }
 
+func (p *PostgresRepository) DeleteUser(ctx context.Context, id string) error {
+	res, err := p.db.ExecContext(ctx, `DELETE FROM users WHERE id = $1`, id)
+	if err != nil {
+		return err
+	}
+	cnt, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if cnt == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
 func (p *PostgresRepository) CreateAccount(ctx context.Context, account *models.Account) error {
 	query := `INSERT INTO accounts (id, admin_id, name, type, description, created_at, updated_at)
 	          VALUES ($1, $2, $3, $4, $5, $6, $7)`

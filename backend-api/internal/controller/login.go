@@ -66,8 +66,7 @@ func (c *Controller) ExchangePasswordForToken(ctx context.Context, username, pas
 	return c.issueTokenForUser(ctx, user, "Token exchange")
 }
 
-// RefreshToken exchanges an existing valid JWT for a freshly signed JWT for the same user.
-func (c *Controller) RefreshToken(ctx context.Context, userID, targetUsername string) (*models.TokenResponse, error) {
+func (c *Controller) verifyAuthenticatedTargetUser(ctx context.Context, userID, targetUsername, forbiddenMsg string) (*models.User, error) {
 	targetUsername = strings.TrimSpace(targetUsername)
 	if targetUsername == "" {
 		return nil, NewAppError(http.StatusBadRequest, "BAD_REQUEST", "Username path parameter is required.")
@@ -80,7 +79,16 @@ func (c *Controller) RefreshToken(ctx context.Context, userID, targetUsername st
 		return nil, NewAppError(http.StatusInternalServerError, "INTERNAL_ERROR", "Error retrieving user.")
 	}
 	if !strings.EqualFold(user.Username, targetUsername) {
-		return nil, NewAppError(http.StatusForbidden, "FORBIDDEN", "Cannot refresh token for another user.")
+		return nil, NewAppError(http.StatusForbidden, "FORBIDDEN", forbiddenMsg)
+	}
+	return user, nil
+}
+
+// RefreshToken exchanges an existing valid JWT for a freshly signed JWT for the same user.
+func (c *Controller) RefreshToken(ctx context.Context, userID, targetUsername string) (*models.TokenResponse, error) {
+	user, err := c.verifyAuthenticatedTargetUser(ctx, userID, targetUsername, "Cannot refresh token for another user.")
+	if err != nil {
+		return nil, err
 	}
 	return c.issueTokenForUser(ctx, user, "Token refresh")
 }

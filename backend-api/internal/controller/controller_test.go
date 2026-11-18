@@ -961,4 +961,27 @@ func TestPatchAccount_ValidationErrors(t *testing.T) {
 	}
 }
 
+func TestDeleteUser_CascadesAndAuthorization(t *testing.T) {
+	ctrl, _ := setupController()
+	ctx := context.Background()
+
+	uA, _ := ctrl.RegisterUser(ctx, models.UserRegistrationRequest{Username: "gone_user", Email: "gone@test.com", Password: "ValidPass123!"})
+	uB, _ := ctrl.RegisterUser(ctx, models.UserRegistrationRequest{Username: "stay_user", Email: "stay@test.com", Password: "ValidPass123!"})
+	accA, _ := ctrl.CreateAccount(ctx, uA.ID, models.AccountCreationRequest{Name: "Checking", Type: "checking", Description: "Personal"})
+	val := -25.0
+	_, _ = ctrl.CreateCheckingRecord(ctx, uA.ID, accA.ID, models.CheckingRecordCreateRequest{Value: &val, DateSent: "2026-11-10", Entity: "Market"})
+
+	assertAppErrorStatus(t, ctrl.DeleteUser(ctx, uB.ID, "gone_user"), http.StatusForbidden)
+	if err := ctrl.DeleteUser(ctx, uA.ID, "gone_user"); err != nil {
+		t.Fatalf("DeleteUser failed: %v", err)
+	}
+	assertAppErrorStatus(t, ctrl.DeleteUser(ctx, uA.ID, "gone_user"), http.StatusNotFound)
+	_, err := ctrl.RefreshToken(ctx, uA.ID, "gone_user")
+	assertAppErrorStatus(t, err, http.StatusNotFound)
+	_, err = ctrl.RegisterUser(ctx, models.UserRegistrationRequest{Username: "gone_user", Email: "gone@test.com", Password: "ValidPass123!"})
+	if err != nil {
+		t.Fatalf("re-registering deleted username/email failed: %v", err)
+	}
+}
+
 

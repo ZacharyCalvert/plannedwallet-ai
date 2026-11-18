@@ -149,3 +149,20 @@ func (c *Controller) RegisterUser(ctx context.Context, req models.UserRegistrati
 	trace.LogInfo(ctx, "User registered successfully: %s (id: %s)", user.Username, user.ID)
 	return buildUserResponse(user), nil
 }
+
+// DeleteUser permanently deletes a signed-in user and cascades all owned accounts and records.
+func (c *Controller) DeleteUser(ctx context.Context, userID, targetUsername string) error {
+	user, err := c.verifyAuthenticatedTargetUser(ctx, userID, targetUsername, "Users can only delete their own account.")
+	if err != nil {
+		return err
+	}
+	if err := c.repo.DeleteUser(ctx, user.ID); err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			return ErrUserNotFound
+		}
+		trace.LogError(ctx, err, "Failed to delete user %s (id: %s)", user.Username, user.ID)
+		return NewAppError(http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to delete user.")
+	}
+	trace.LogInfo(ctx, "User deleted permanently: %s (id: %s)", user.Username, user.ID)
+	return nil
+}

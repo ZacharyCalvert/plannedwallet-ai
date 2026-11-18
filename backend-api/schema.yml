@@ -246,6 +246,61 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
+  /api/v1/users/{username}:
+    parameters:
+      - $ref: '#/components/parameters/XClientId'
+    delete:
+      tags:
+        - Users
+      summary: Delete the authenticated user account and all associated records
+      description: |
+        Permanently deletes the signed-in user's account and cascades deletion across all owned
+        financial accounts, transaction records, reconcile reports, user-created categories,
+        user-created assets/valuations, asset stores, snapshots, subscriptions, perspectives,
+        recurring transactions, and shared access grants.
+      operationId: deleteUser
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: username
+          in: path
+          required: true
+          description: The username of the authenticated user to delete.
+          schema:
+            type: string
+            example: "johndoe"
+      responses:
+        '204':
+          description: User account and all owned records deleted successfully.
+        '400':
+          summary: Bad request
+          description: Missing username path parameter or X-Client-ID header.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          summary: Unauthorized
+          description: Missing, invalid, or expired Bearer JWT.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          summary: Forbidden
+          description: Signed-in user attempted to delete a different user's account.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          summary: User not found
+          description: User account no longer exists.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
   /api/v1/users/{username}/token:
     parameters:
       - $ref: '#/components/parameters/XClientId'

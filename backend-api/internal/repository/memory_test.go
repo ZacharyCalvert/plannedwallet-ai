@@ -732,5 +732,54 @@ func TestMemoryRepo_UpdateAccount(t *testing.T) {
 	}
 }
 
+func seedUserCascadeFixtures(ctx context.Context, t *testing.T, repo repository.Repository) (string, string, string, string) {
+	t.Helper()
+	now := time.Now().UTC()
+	u1, u2 := "del-u1", "del-u2"
+	_ = repo.CreateUser(ctx, &models.User{ID: u1, Username: "deluser1", Email: "du1@test.com", CreatedAt: now})
+	_ = repo.CreateUser(ctx, &models.User{ID: u2, Username: "deluser2", Email: "du2@test.com", CreatedAt: now})
+	_ = repo.CreateAccount(ctx, &models.Account{ID: "du1-acc", AdminID: u1, Name: "U1 Checking", Type: "checking", Description: "d", CreatedAt: now, UpdatedAt: now})
+	_ = repo.CreateAccount(ctx, &models.Account{ID: "du2-acc", AdminID: u2, Name: "U2 Checking", Type: "checking", Description: "d", CreatedAt: now, UpdatedAt: now})
+	_ = repo.GrantAccountAccess(ctx, &models.AccountAccess{ID: "aa-du1", AccountID: "du2-acc", UserID: u1, AccessLevel: models.AccessLevelEdit, CreatedAt: now, UpdatedAt: now})
+	_ = repo.CreateCategory(ctx, &models.Category{ID: "du1-cat", UserID: &u1, Name: "U1 Cat", CreatedAt: now, UpdatedAt: now})
+	catID := "du1-cat"
+	_ = repo.CreateCheckingRecord(ctx, &models.CheckingRecord{ID: "du1-rec", AccountID: "du1-acc", CategoryID: &catID, Value: -10, DateSent: "2026-11-10", Entity: "Market", CreatedAt: now, UpdatedAt: now})
+	_ = repo.CreateCheckingRecord(ctx, &models.CheckingRecord{ID: "du2-rec", AccountID: "du2-acc", CategoryID: &catID, Value: -20, DateSent: "2026-11-10", Entity: "Grocer", CreatedAt: now, UpdatedAt: now})
+	_ = repo.CreateAsset(ctx, &models.Asset{ID: "du1-ast", UserID: &u1, Label: "u1-gold", Description: "Gold", CreatedAt: now, UpdatedAt: now})
+	_ = repo.CreatePerspective(ctx, &models.Perspective{ID: "du1-p", UserID: u1, Name: "Net Worth", CreatedAt: now, UpdatedAt: now})
+	_ = repo.CreateSubscription(ctx, &models.Subscription{ID: "du1-sub", UserID: u1, PaidDate: "2026-01-01", SubscriberEnds: "2099-01-01", CreatedAt: now, UpdatedAt: now})
+	_ = repo.CreateRecurringTransaction(ctx, &models.RecurringTransaction{ID: "du1-rt", UserID: u1, Amount: -50, Frequency: models.RecurringFrequencyMonthly, Interval: 1, Entity: "Power", CreatedAt: now, UpdatedAt: now})
+	return u1, u2, "du1-acc", "du2-acc"
+}
+
+func TestMemoryRepo_DeleteUserCascadesAllData(t *testing.T) {
+	repo := repository.NewMemoryRepository()
+	ctx := context.Background()
+	u1, _, u1Acc, u2Acc := seedUserCascadeFixtures(ctx, t, repo)
+
+	if err := repo.DeleteUser(ctx, u1); err != nil {
+		t.Fatalf("DeleteUser failed: %v", err)
+	}
+	if _, err := repo.GetUserByID(ctx, u1); !errors.Is(err, repository.ErrNotFound) {
+		t.Fatalf("expected ErrNotFound for deleted user, got %v", err)
+	}
+	if _, err := repo.GetAccountByID(ctx, u1Acc); !errors.Is(err, repository.ErrNotFound) {
+		t.Fatalf("expected U1 account deleted, got %v", err)
+	}
+	if _, err := repo.GetAccountAccess(ctx, u2Acc, u1); !errors.Is(err, repository.ErrNotFound) {
+		t.Fatalf("expected U1 access grant removed, got %v", err)
+	}
+	u2Rec, err := repo.GetCheckingRecordByID(ctx, u2Acc, "du2-rec")
+	if err != nil || u2Rec.CategoryID != nil {
+		t.Fatalf("expected U2 record intact with CategoryID=nil, got %+v err=%v", u2Rec, err)
+	}
+	if list, _ := repo.ListRecurringTransactionsByUserID(ctx, u1); len(list) != 0 {
+		t.Fatalf("expected 0 recurring transactions for deleted user, got %d", len(list))
+	}
+	if err := repo.DeleteUser(ctx, u1); !errors.Is(err, repository.ErrNotFound) {
+		t.Fatalf("expected ErrNotFound deleting already-deleted user, got %v", err)
+	}
+}
+
 
 

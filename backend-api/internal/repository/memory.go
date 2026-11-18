@@ -157,6 +157,142 @@ func (m *MemoryRepository) GetUserByID(_ context.Context, id string) (*models.Us
 	return &copied, nil
 }
 
+func (m *MemoryRepository) deleteUserOwnedAccounts(userID string) {
+	for id, acc := range m.accounts {
+		if acc.AdminID == userID {
+			delete(m.accounts, id)
+			m.cascadeDeleteAccountData(id)
+		}
+	}
+}
+
+func (m *MemoryRepository) deleteUserOwnedCategories(userID string) {
+	for catID, cat := range m.categories {
+		if cat.UserID != nil && *cat.UserID == userID {
+			delete(m.categories, catID)
+			m.nullifyDeletedCategory(catID)
+		}
+	}
+}
+
+func (m *MemoryRepository) nullifyDeletedCategory(categoryID string) {
+	now := time.Now().UTC()
+	for _, cr := range m.checkingRecords {
+		if cr.CategoryID != nil && *cr.CategoryID == categoryID {
+			cr.CategoryID = nil
+			cr.UpdatedAt = now
+		}
+	}
+	for _, rt := range m.recurringTransactions {
+		if rt.CategoryID != nil && *rt.CategoryID == categoryID {
+			rt.CategoryID = nil
+			rt.UpdatedAt = now
+		}
+	}
+}
+
+func (m *MemoryRepository) deleteAssetReferences(assetID string) {
+	for k, av := range m.assetValues {
+		if av.AssetID == assetID {
+			delete(m.assetValues, k)
+		}
+	}
+	for k, aa := range m.accountAssets {
+		if aa.AssetID == assetID {
+			delete(m.accountAssets, k)
+		}
+	}
+	for k, as := range m.assetStores {
+		if as.AssetID == assetID {
+			m.deleteStoreRecordsByStoreID(as.ID)
+			delete(m.assetStores, k)
+		}
+	}
+}
+
+func (m *MemoryRepository) deleteStoreRecordsByStoreID(storeID string) {
+	for rk, asr := range m.assetStoreRecords {
+		if asr.AssetStoreID == storeID {
+			delete(m.assetStoreRecords, rk)
+		}
+	}
+}
+
+func (m *MemoryRepository) deleteUserOwnedAssets(userID string) {
+	for id, asset := range m.assets {
+		if asset.UserID != nil && *asset.UserID == userID {
+			delete(m.assets, id)
+			m.deleteAssetReferences(id)
+		}
+	}
+}
+
+func (m *MemoryRepository) deleteUserOwnedPerspectives(userID string) {
+	for pID, p := range m.perspectives {
+		if p.UserID == userID {
+			delete(m.perspectives, pID)
+			delete(m.perspectiveSettings, pID)
+			m.deletePerspectiveLinks(pID)
+		}
+	}
+}
+
+func (m *MemoryRepository) deletePerspectiveLinks(perspectiveID string) {
+	for k, pa := range m.perspectiveAccounts {
+		if pa.PerspectiveID == perspectiveID {
+			delete(m.perspectiveAccounts, k)
+		}
+	}
+	for k, pax := range m.perspectiveAccess {
+		if pax.PerspectiveID == perspectiveID {
+			delete(m.perspectiveAccess, k)
+		}
+	}
+}
+
+func (m *MemoryRepository) deleteUserAccessAndRecords(userID string) {
+	for k, aa := range m.accountAccess {
+		if aa.UserID == userID {
+			delete(m.accountAccess, k)
+		}
+	}
+	for k, pax := range m.perspectiveAccess {
+		if pax.UserID == userID {
+			delete(m.perspectiveAccess, k)
+		}
+	}
+	for k, sub := range m.subscriptions {
+		if sub.UserID == userID {
+			delete(m.subscriptions, k)
+		}
+	}
+	for k, rt := range m.recurringTransactions {
+		if rt.UserID == userID {
+			delete(m.recurringTransactions, k)
+		}
+	}
+}
+
+func (m *MemoryRepository) DeleteUser(_ context.Context, id string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	user, ok := m.users[id]
+	if !ok {
+		return ErrNotFound
+	}
+	delete(m.users, id)
+	delete(m.usersByUsername, strings.ToLower(user.Username))
+	delete(m.usersByEmail, strings.ToLower(user.Email))
+
+	m.deleteUserOwnedAccounts(id)
+	m.deleteUserOwnedCategories(id)
+	m.deleteUserOwnedAssets(id)
+	m.deleteUserOwnedPerspectives(id)
+	m.deleteUserAccessAndRecords(id)
+	return nil
+}
+
 func (m *MemoryRepository) CreateAccount(_ context.Context, account *models.Account) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -229,6 +365,11 @@ func (m *MemoryRepository) cascadeDeleteAccountData(id string) {
 	for k, aa := range m.accountAccess {
 		if aa.AccountID == id {
 			delete(m.accountAccess, k)
+		}
+	}
+	for k, rep := range m.reconcileReports {
+		if rep.AccountID == id {
+			delete(m.reconcileReports, k)
 		}
 	}
 	for k, cr := range m.checkingRecords {

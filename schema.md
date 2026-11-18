@@ -226,6 +226,7 @@ All HTTP requests require the `X-Client-ID` header. Protected endpoints require 
 - `GET /api/v1/captcha`: Generate a new visual CAPTCHA challenge (returns unique ID and base64 PNG data URI) to prevent automated bot account creations.
 - `GET /api/v1/captcha/{captchaId}`: Stream raw PNG image bytes for a CAPTCHA challenge.
 - `POST /api/v1/users`: User self-registration with password complexity, uniqueness checks, and CAPTCHA challenge verification (`captcha_id`, `captcha_solution`).
+- `DELETE /api/v1/users/{username}`: Permanently delete the signed-in user and cascade all owned accounts, transaction records, reconcile reports, categories, assets, snapshots, subscriptions, perspectives, recurring transactions, and access grants.
 - `POST /api/v1/users/{username}/token`: TOTP-authenticated JWT token exchange (issues a 15-minute / 900s JWT by default).
 - `POST /api/v1/users/{username}/token/refresh`: Exchanges an existing, valid Bearer JWT for a freshly signed 15-minute JWT without re-entering credentials.
 

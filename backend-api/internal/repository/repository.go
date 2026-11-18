@@ -22,6 +22,7 @@ type Repository interface {
 	GetUserByUsername(ctx context.Context, username string) (*models.User, error)
 	GetUserByEmail(ctx context.Context, email string) (*models.User, error)
 	GetUserByID(ctx context.Context, id string) (*models.User, error)
+	DeleteUser(ctx context.Context, id string) error
 
 	// Account operations
 	CreateAccount(ctx context.Context, account *models.Account) error
