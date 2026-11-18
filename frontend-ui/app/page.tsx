@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { BrowserRouter, useNavigate } from 'react-router-dom';
 import { UserSession } from '../lib/types';
 import { fetchFeatures, refreshToken } from '../lib/api';
-import { shouldRefreshTokenOnActivity } from '../lib/tokenRefresh';
+import { getRemainingSessionMs, shouldRefreshTokenOnActivity } from '../lib/tokenRefresh';
 import {
   isReadOnlyFeatureEnabled,
   subscribeMaintenanceWarning,
@@ -12,12 +12,14 @@ import {
 import { Banner } from '../components/Banner';
 import { AuthCenter } from '../components/AuthCenter';
 import { Dashboard } from '../components/Dashboard';
+import { Footer } from '../components/Footer';
 import { MaintenanceWarningModal } from '../components/MaintenanceWarningModal';
 
 function AppShell() {
   const [session, setSession] = useState<UserSession | null>(null);
   const [isReadOnly, setIsReadOnly] = useState(false);
   const [maintenanceWarning, setMaintenanceWarning] = useState<string | null>(null);
+  const [sessionNotice, setSessionNotice] = useState('');
   const navigate = useNavigate();
   const sessionRef = useRef<UserSession | null>(session);
   const refreshInFlightRef = useRef(false);
@@ -92,11 +94,35 @@ function AppShell() {
     };
   }, []);
 
+  useEffect(() => {
+    if (!session) return;
+    const remainingMs = getRemainingSessionMs(session.token, Date.now());
+    if (remainingMs === null) return;
+
+    const expireSession = () => {
+      setSession(null);
+      setSessionNotice('Your session expired after 15 minutes of inactivity. Please sign in again.');
+      navigate('/', { replace: true });
+    };
+
+    if (remainingMs === 0) {
+      expireSession();
+      return;
+    }
+
+    const timeoutId = window.setTimeout(expireSession, remainingMs + 50);
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [session, navigate]);
+
   const handleAuthSuccess = (username: string, token: string) => {
+    setSessionNotice('');
     setSession({ username, token });
   };
 
   const handleSignOut = () => {
+    setSessionNotice('');
     setSession(null);
     navigate('/', { replace: true });
   };
@@ -106,11 +132,12 @@ function AppShell() {
       <Banner username={session?.username} onSignOut={handleSignOut} readOnly={isReadOnly} />
       <div className="app-content">
         {!session ? (
-          <AuthCenter onSuccess={handleAuthSuccess} readOnly={isReadOnly} />
+          <AuthCenter onSuccess={handleAuthSuccess} readOnly={isReadOnly} sessionNotice={sessionNotice} />
         ) : (
           <Dashboard key={session.username} session={session} />
         )}
       </div>
+      <Footer />
       {maintenanceWarning && (
         <MaintenanceWarningModal
           message={maintenanceWarning}

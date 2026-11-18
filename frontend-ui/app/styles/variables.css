@@ -108,3 +108,40 @@ body {
   padding: 0.75rem 1rem;
   font-weight: 600;
 }
+
+/* Footer */
+.app-footer {
+  background-color: #1e293b;
+  color: #cbd5e1;
+  border-top: 1px solid #334155;
+  padding: 0.85rem 1.5rem;
+  font-size: 0.82rem;
+}
+
+.app-footer-content {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.75rem 1.5rem;
+}
+
+.app-footer-links {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.app-footer-link {
+  color: #e2e8f0;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.app-footer-link:hover {
+  color: #ffffff;
+}
+
+.app-footer-sep {
+  color: #64748b;
+}

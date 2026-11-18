@@ -7,9 +7,10 @@ import { CreateUserForm } from './CreateUserForm';
 interface AuthCenterProps {
   onSuccess: (username: string, token: string) => void;
   readOnly?: boolean;
+  sessionNotice?: string;
 }
 
-export function AuthCenter({ onSuccess, readOnly = false }: AuthCenterProps) {
+export function AuthCenter({ onSuccess, readOnly = false, sessionNotice }: AuthCenterProps) {
   const [tab, setTab] = useState<'signin' | 'create'>('signin');
   const activeTab = readOnly ? 'signin' : tab;
 
@@ -35,6 +36,11 @@ export function AuthCenter({ onSuccess, readOnly = false }: AuthCenterProps) {
           )}
         </div>
         <div className="auth-body">
+          {sessionNotice && (
+            <div className="alert-error mb-3" role="status">
+              {sessionNotice}
+            </div>
+          )}
           {activeTab === 'signin' ? (
             <SignInForm onSuccess={onSuccess} />
           ) : (

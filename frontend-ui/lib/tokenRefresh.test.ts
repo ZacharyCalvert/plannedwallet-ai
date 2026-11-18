@@ -1,6 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  getRemainingSessionMs,
   parseJwtExpirationMs,
   shouldRefreshTokenOnActivity,
   TOKEN_REFRESH_FAILURE_COOLDOWN_MS,
@@ -114,5 +115,15 @@ describe('Token Refresh Helpers', () => {
       }),
       true
     );
+  });
+
+  it('computes remaining session duration and clamps expired tokens to zero', () => {
+    const nowMs = 1_800_000_000_000;
+    const validToken = buildFakeJwt({ exp: Math.floor((nowMs + 900_000) / 1000) });
+    const expiredToken = buildFakeJwt({ exp: Math.floor((nowMs - 5_000) / 1000) });
+
+    assert.equal(getRemainingSessionMs(validToken, nowMs), 900_000);
+    assert.equal(getRemainingSessionMs(expiredToken, nowMs), 0);
+    assert.equal(getRemainingSessionMs('invalid', nowMs), null);
   });
 });

@@ -61,3 +61,11 @@ export function shouldRefreshTokenOnActivity({
   const remainingMs = expMs - nowMs;
   return remainingMs > 0 && remainingMs < thresholdMs;
 }
+
+export function getRemainingSessionMs(token: string, nowMs = Date.now()): number | null {
+  const expMs = parseJwtExpirationMs(token);
+  if (expMs === null) {
+    return null;
+  }
+  return Math.max(0, expMs - nowMs);
+}
