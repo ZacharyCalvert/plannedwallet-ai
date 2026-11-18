@@ -604,3 +604,50 @@ def test_account_recovery_resets_password_totp_and_rotates_single_use_phrase(
     ).status == 401
 
     assert api_context.delete(f"/api/v1/users/{user['username']}", headers=hdr2).status == 204
+
+
+def test_account_recovery_rejects_partial_11_of_12_and_reordered_phrases(
+    api_context: APIRequestContext,
+):
+    """Ensure account recovery fails when 11 of 12 words match, a word is omitted, or word order is altered."""
+    user = generate_user_data(prefix="rec_11of12")
+    reg_res = api_context.post("/api/v1/users", data=user)
+    assert reg_res.status == 201
+    reg = reg_res.json()
+    words = reg["recovery_phrase"].split()
+    assert len(words) == 12
+
+    wrong_first = ["decoy" if words[0] != "decoy" else "zebra"] + words[1:]
+    wrong_mid = words[:5] + ["decoy" if words[5] != "decoy" else "zebra"] + words[6:]
+    wrong_last = words[:11] + ["decoy" if words[11] != "decoy" else "zebra"]
+    truncated_11 = words[:11]
+    swapped_order = words[:10] + [words[11], words[10]]
+
+    for bad_phrase in (wrong_first, wrong_mid, wrong_last, truncated_11, swapped_order):
+        res = api_context.post(
+            f"/api/v1/users/{user['username']}/recover",
+            data={
+                "recovery_phrase": " ".join(bad_phrase),
+                "new_password": "AttemptedResetPass123!",
+            },
+        )
+        assert res.status == 401, f"Expected 401 for bad phrase {bad_phrase}, got {res.status}"
+        assert res.json().get("error") == "INVALID_RECOVERY_CREDENTIAL"
+
+    # Original credentials & genuine recovery phrase remain valid and unconsumed
+    tok_res = api_context.post(
+        f"/api/v1/users/{user['username']}/token",
+        data={"password": user["password"], "totp_code": compute_totp_code(reg["totp_secret"])},
+    )
+    assert tok_res.status == 200
+    hdr = {"Authorization": f"Bearer {tok_res.json()['access_token']}"}
+    assert api_context.delete(f"/api/v1/users/{user['username']}", headers=hdr).status == 204
+
+
+def test_password_over_72_bytes_returns_400_invalid_password(api_context: APIRequestContext):
+    """Ensure passwords exceeding bcrypt's 72-byte cap fail cleanly with 400 INVALID_PASSWORD instead of 500."""
+    too_long_user = generate_user_data(prefix="pw73")
+    too_long_user["password"] = "A1!" + ("x" * 70)
+    res = api_context.post("/api/v1/users", data=too_long_user)
+    assert res.status == 400, f"Expected 400 for 73-byte password, got {res.status}: {res.text()}"
+    assert res.json().get("error") == "INVALID_PASSWORD"

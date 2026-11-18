@@ -17,41 +17,49 @@ import (
 	"github.com/plannedwallet/internal/trace"
 )
 
+func classifyPasswordChars(password string) (upper, lower, digit, special bool) {
+	for _, r := range password {
+		switch {
+		case unicode.IsUpper(r):
+			upper = true
+		case unicode.IsLower(r):
+			lower = true
+		case unicode.IsDigit(r):
+			digit = true
+		case !unicode.IsLetter(r) && !unicode.IsDigit(r):
+			special = true
+		}
+	}
+	return upper, lower, digit, special
+}
+
+func validatePasswordComplexity(password string) error {
+	upper, lower, digit, special := classifyPasswordChars(password)
+	if !upper {
+		return NewAppError(http.StatusBadRequest, "INVALID_PASSWORD", "Password must contain at least one uppercase letter.")
+	}
+	if !lower {
+		return NewAppError(http.StatusBadRequest, "INVALID_PASSWORD", "Password must contain at least one lowercase letter.")
+	}
+	if !digit {
+		return NewAppError(http.StatusBadRequest, "INVALID_PASSWORD", "Password must contain at least one number.")
+	}
+	if !special {
+		return NewAppError(http.StatusBadRequest, "INVALID_PASSWORD", "Password must contain at least one special character not in the alphanumeric set.")
+	}
+	return nil
+}
+
 // ValidatePassword enforces password rules:
-// minimum length of 10 characters, at least 1 uppercase, 1 lowercase, 1 number, and 1 non-alphanumeric special character.
+// 10-72 bytes, at least 1 uppercase, 1 lowercase, 1 number, and 1 non-alphanumeric special character.
 func ValidatePassword(password string) error {
 	if len(password) < 10 {
 		return NewAppError(http.StatusBadRequest, "INVALID_PASSWORD", "Password must be at least 10 characters long.")
 	}
-
-	var hasUpper, hasLower, hasDigit, hasSpecial bool
-	for _, r := range password {
-		switch {
-		case unicode.IsUpper(r):
-			hasUpper = true
-		case unicode.IsLower(r):
-			hasLower = true
-		case unicode.IsDigit(r):
-			hasDigit = true
-		case !unicode.IsLetter(r) && !unicode.IsDigit(r):
-			hasSpecial = true
-		}
+	if len(password) > 72 {
+		return NewAppError(http.StatusBadRequest, "INVALID_PASSWORD", "Password must not exceed 72 bytes.")
 	}
-
-	if !hasUpper {
-		return NewAppError(http.StatusBadRequest, "INVALID_PASSWORD", "Password must contain at least one uppercase letter.")
-	}
-	if !hasLower {
-		return NewAppError(http.StatusBadRequest, "INVALID_PASSWORD", "Password must contain at least one lowercase letter.")
-	}
-	if !hasDigit {
-		return NewAppError(http.StatusBadRequest, "INVALID_PASSWORD", "Password must contain at least one number.")
-	}
-	if !hasSpecial {
-		return NewAppError(http.StatusBadRequest, "INVALID_PASSWORD", "Password must contain at least one special character not in the alphanumeric set.")
-	}
-
-	return nil
+	return validatePasswordComplexity(password)
 }
 
 func (c *Controller) validateUserUniqueness(ctx context.Context, username, email string) error {

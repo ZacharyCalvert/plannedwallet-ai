@@ -1,6 +1,7 @@
 package auth_test
 
 import (
+	"encoding/base64"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -95,5 +96,35 @@ func TestAuthMiddlewareSetsContext(t *testing.T) {
 	}
 	if got := w.Body.String(); !strings.Contains(got, `"terms":false`) {
 		t.Fatalf("expected termsApproved false in context response, got %s", got)
+	}
+}
+
+func TestValidateToken_RejectsForgeryAndAlgorithmConfusion(t *testing.T) {
+	svc := auth.NewService("test-secret-with-32-bytes-minimum!!", 900)
+	validTok, err := svc.GenerateToken("user-1", "alice", false, true)
+	if err != nil {
+		t.Fatalf("GenerateToken failed: %v", err)
+	}
+	parts := strings.Split(validTok, ".")
+	if len(parts) != 3 {
+		t.Fatalf("expected 3 JWT segments, got %d", len(parts))
+	}
+
+	noneHeader := base64.RawURLEncoding.EncodeToString([]byte(`{"alg":"none","typ":"JWT"}`))
+	if _, err := svc.ValidateToken(noneHeader + "." + parts[1] + "."); err == nil {
+		t.Fatal("expected alg:none token to be rejected")
+	}
+	rsHeader := base64.RawURLEncoding.EncodeToString([]byte(`{"alg":"RS256","typ":"JWT"}`))
+	if _, err := svc.ValidateToken(rsHeader + "." + parts[1] + "." + parts[2]); err == nil {
+		t.Fatal("expected RS256 header swap token to be rejected")
+	}
+	tamperedPayload := base64.RawURLEncoding.EncodeToString([]byte(`{"user_id":"user-1","username":"alice","subscriber":true,"terms_approved":true}`))
+	if _, err := svc.ValidateToken(parts[0] + "." + tamperedPayload + "." + parts[2]); err == nil {
+		t.Fatal("expected tampered payload token to be rejected")
+	}
+	wrongSigner := auth.NewService("different-secret-32-bytes-minimum!", 900)
+	forged, _ := wrongSigner.GenerateToken("user-1", "alice", false, true)
+	if _, err := svc.ValidateToken(forged); err == nil {
+		t.Fatal("expected token signed with wrong secret to be rejected")
 	}
 }

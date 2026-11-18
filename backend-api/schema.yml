@@ -4262,8 +4262,9 @@ components:
           type: string
           format: password
           minLength: 10
+          maxLength: 72
           writeOnly: true
-          description: Plaintext password provided during registration; hashed with bcrypt and salted before persistence. Must be at least 10 characters and contain at least 1 uppercase letter, 1 lowercase letter, 1 number, and 1 non-alphanumeric special character.
+          description: Plaintext password provided during registration; hashed with bcrypt and salted before persistence. Must be 10-72 bytes and contain at least 1 uppercase letter, 1 lowercase letter, 1 number, and 1 non-alphanumeric special character.
           example: "P@ssw0rd123!"
         captcha_id:
           type: string
@@ -4346,7 +4347,8 @@ components:
           type: string
           format: password
           minLength: 10
-          description: New account password satisfying complexity rules.
+          maxLength: 72
+          description: New account password (10-72 bytes) satisfying complexity rules.
         captcha_id:
           type: string
         captcha_solution:

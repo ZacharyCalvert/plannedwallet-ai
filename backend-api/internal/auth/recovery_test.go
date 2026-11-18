@@ -48,3 +48,43 @@ func TestGenerateAndVerifyRecoveryPhrase_Argon2id(t *testing.T) {
 		t.Fatal("expected malformed hash to fail verification cleanly")
 	}
 }
+
+func TestVerifyRecoveryPhrase_RejectsElevenOfTwelveAndTranspositions(t *testing.T) {
+	phrase, err := auth.GenerateRecoveryPhrase()
+	if err != nil {
+		t.Fatalf("GenerateRecoveryPhrase failed: %v", err)
+	}
+	hash, err := auth.HashRecoveryPhrase(phrase)
+	if err != nil {
+		t.Fatalf("HashRecoveryPhrase failed: %v", err)
+	}
+	words := strings.Fields(phrase)
+
+	// Mutating any 1 of the 12 words (leaving 11 of 12 exact) must fail verification
+	for idx := range words {
+		candidate := append([]string(nil), words...)
+		replacement := "zebra"
+		if candidate[idx] == replacement {
+			replacement = "quart"
+		}
+		candidate[idx] = replacement
+		if auth.VerifyRecoveryPhrase(hash, strings.Join(candidate, " ")) {
+			t.Fatalf("expected 11-of-12 match with word #%d altered to fail", idx+1)
+		}
+	}
+
+	// Swapping two adjacent words (all 12 words present, wrong order) must fail
+	swapped := append([]string(nil), words...)
+	swapped[0], swapped[1] = swapped[1], swapped[0]
+	if auth.VerifyRecoveryPhrase(hash, strings.Join(swapped, " ")) {
+		t.Fatal("expected transposed 12-word phrase to fail")
+	}
+
+	// Missing 12th word (11 words) and extra 13th word must fail
+	if auth.VerifyRecoveryPhrase(hash, strings.Join(words[:11], " ")) {
+		t.Fatal("expected truncated 11-word phrase to fail")
+	}
+	if auth.VerifyRecoveryPhrase(hash, phrase+" extra") {
+		t.Fatal("expected 13-word phrase to fail")
+	}
+}

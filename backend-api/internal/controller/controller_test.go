@@ -33,6 +33,8 @@ func TestValidatePassword(t *testing.T) {
 		{"No number", "SecurePass!!!!", true},
 		{"No special character", "SecurePass1234", true},
 		{"Valid with unicode special", "P@ssw0rd2026", false},
+		{"Exact 72 bytes valid", "A1!" + strings.Repeat("a", 69), false},
+		{"Exceeds 72 bytes", "A1!" + strings.Repeat("a", 70), true},
 	}
 
 	for _, tt := range tests {
@@ -40,6 +42,9 @@ func TestValidatePassword(t *testing.T) {
 			err := controller.ValidatePassword(tt.pw)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("ValidatePassword(%q) error = %v, wantErr %v", tt.pw, err, tt.wantErr)
+			}
+			if err != nil {
+				assertAppErrorStatus(t, err, http.StatusBadRequest)
 			}
 		})
 	}
@@ -1072,6 +1077,47 @@ func TestAccountRecoveryAndSingleUseRotation(t *testing.T) {
 	}
 	if entries, _ := repo.ListRecoveryKeysByUserID(ctx, u.ID); len(entries) != 3 {
 		t.Fatalf("expected 3 ledger entries (register, recover, rotate), got %d", len(entries))
+	}
+}
+
+func TestRecoverAccount_RejectsElevenOfTwelveWordsAndReorderedPhrase(t *testing.T) {
+	ctrl, repo := setupController()
+	ctx := context.Background()
+	u, err := ctrl.RegisterUser(ctx, models.UserRegistrationRequest{Username: "partial_rec", Email: "partial@test.com", Password: "InitialPass1!"})
+	if err != nil {
+		t.Fatalf("RegisterUser failed: %v", err)
+	}
+	words := strings.Fields(u.RecoveryPhrase)
+	elevenMatch := append([]string(nil), words[:11]...)
+	decoy := "anchor"
+	if words[11] == decoy {
+		decoy = "velvet"
+	}
+	elevenMatch = append(elevenMatch, decoy)
+	reordered := append([]string(nil), words...)
+	reordered[10], reordered[11] = reordered[11], reordered[10]
+
+	badCases := []string{
+		strings.Join(elevenMatch, " "),
+		strings.Join(words[:11], " "),
+		strings.Join(reordered, " "),
+	}
+	for _, attempt := range badCases {
+		_, recErr := ctrl.RecoverAccount(ctx, "partial_rec", "198.51.100.1", models.AccountRecoveryRequest{
+			RecoveryPhrase: attempt, NewPassword: "RotatedPass2!",
+		})
+		assertAppErrorStatus(t, recErr, http.StatusUnauthorized)
+	}
+
+	// Failed attempts must not consume the key or alter password/TOTP
+	activeKey, _ := repo.GetActiveRecoveryKeyByUserID(ctx, u.ID)
+	if !activeKey.Active || activeKey.UsedAt != nil {
+		t.Fatalf("expected active key preserved after failed recovery attempts, got %+v", activeKey)
+	}
+	if _, err := ctrl.RecoverAccount(ctx, "partial_rec", "198.51.100.2", models.AccountRecoveryRequest{
+		RecoveryPhrase: u.RecoveryPhrase, NewPassword: "RotatedPass2!",
+	}); err != nil {
+		t.Fatalf("expected genuine 12-word phrase to still succeed after failed partial attempts, got %v", err)
 	}
 }
 

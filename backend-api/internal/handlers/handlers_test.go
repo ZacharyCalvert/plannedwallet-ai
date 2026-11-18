@@ -1315,4 +1315,30 @@ func TestAccountRecoveryAndRotationEndpoints(t *testing.T) {
 	}
 }
 
+func TestPasswordExceeding72BytesReturns400InvalidPassword(t *testing.T) {
+	r, _ := setupTestRouter()
+	longPass := "A1!" + strings.Repeat("a", 70)
+
+	regBody, _ := json.Marshal(models.UserRegistrationRequest{
+		Username: "long_pw_u", Email: "longpw@example.com", Password: longPass,
+	})
+	reqReg := newTestRequest(http.MethodPost, "/api/v1/users", bytes.NewReader(regBody))
+	reqReg.Header.Set("Content-Type", "application/json")
+	wReg := httptest.NewRecorder()
+	r.ServeHTTP(wReg, reqReg)
+	if wReg.Code != http.StatusBadRequest || !strings.Contains(wReg.Body.String(), "INVALID_PASSWORD") {
+		t.Fatalf("expected 400 INVALID_PASSWORD on registration >72 bytes, got %d: %s", wReg.Code, wReg.Body.String())
+	}
+
+	u := registerUserFull(t, r, "long_pw_rec", "longrec@example.com", "Password123!")
+	recBody, _ := json.Marshal(models.AccountRecoveryRequest{RecoveryPhrase: u.RecoveryPhrase, NewPassword: longPass})
+	reqRec := newTestRequest(http.MethodPost, "/api/v1/users/long_pw_rec/recover", bytes.NewReader(recBody))
+	reqRec.Header.Set("Content-Type", "application/json")
+	wRec := httptest.NewRecorder()
+	r.ServeHTTP(wRec, reqRec)
+	if wRec.Code != http.StatusBadRequest || !strings.Contains(wRec.Body.String(), "INVALID_PASSWORD") {
+		t.Fatalf("expected 400 INVALID_PASSWORD on recovery >72 bytes, got %d: %s", wRec.Code, wRec.Body.String())
+	}
+}
+
 
