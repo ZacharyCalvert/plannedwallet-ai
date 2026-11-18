@@ -305,17 +305,17 @@ All HTTP requests require the `X-Client-ID` header. Protected endpoints require 
 - `GET /api/v1/features`: Returns enabled backend feature flags (e.g., `{"features": ["read_only"]}` when `PW_READONLY=true`, otherwise `{"features": []}`).
   - When `PW_READONLY=true`, write operations (`POST`, `PUT`, `PATCH`, `DELETE`) return `503 Service Unavailable` (`READ_ONLY_MODE`) while retaining read (`GET`) routes and user login (`POST /api/v1/users/{username}/token`).
 
-### 3.11 Recurring Bills & Reminders (`bills`)
-- Bills are strictly user-scoped (`bills.user_id`) and cannot be shared with other users.
-- Supports optional short display `name` (`VARCHAR(19)`, strictly under 20 characters, e.g., `"Electric"` while `recipient` holds `"Electric Utility"`), `frequency` (`weekly`, `monthly`, `yearly`), `interval` (`>= 1`, default `1`, e.g., `frequency="monthly"` + `interval=6` for every 6 months), optional structured `schedule` rules validated against `frequency` (`weekday`, `day_of_period`, `nth_weekday`, `month_day`), `last_date_paid`, `reminder` alert flag, optional `account_id` (`checking`, `savings`, `credit card`), and optional `category_id` (requires `account_id`).
-- Deleting a linked category sets `bills.category_id = NULL`; deleting a linked account sets both `bills.account_id = NULL` and `bills.category_id = NULL` while preserving the bill.
-- `POST /api/v1/bills`: Create a recurring bill.
-- `GET /api/v1/bills`: List bills owned by the authenticated user with computed `next_due_date`, `due_status`, and `days_until_due`.
-- `GET /api/v1/bills/reminders`: List `reminder=true` bills whose computed `due_status` is `upcoming` or `overdue`.
-- `GET /api/v1/bills/{billId}`: Get bill details.
-- `PUT /api/v1/bills/{billId}`: Update a bill.
-- `DELETE /api/v1/bills/{billId}`: Delete a bill.
-- `POST /api/v1/bills/{billId}/apply`: Creates a transaction record in the target checking/savings/credit card account and updates `bills.last_date_paid`.
+### 3.11 Recurring Transactions & Reminders (`recurring_transactions`)
+- Recurring transactions are strictly user-scoped (`recurring_transactions.user_id`) and represent both bills (`amount < 0`) and income (`amount > 0`) through a unified table and API.
+- Supports optional short display `name` (`VARCHAR(19)`, strictly under 20 characters, e.g., `"Electric"` or `"Paycheck"` while `entity` holds `"Electric Utility"` or `"Employer Payroll"`), non-zero `amount` (`CHECK (amount <> 0)`), `frequency` (`weekly`, `monthly`, `yearly`), `interval` (`>= 1`, default `1`, e.g., `frequency="monthly"` + `interval=6` for every 6 months), optional structured `schedule` rules validated against `frequency` (`weekday`, `day_of_period`, `nth_weekday`, `month_day`), `last_date_applied`, `reminder` alert flag, optional `account_id` (`checking`, `savings`, `credit card`), and optional `category_id` (requires `account_id`).
+- Deleting a linked category sets `recurring_transactions.category_id = NULL`; deleting a linked account sets both `recurring_transactions.account_id = NULL` and `recurring_transactions.category_id = NULL` while preserving the recurring transaction.
+- `POST /api/v1/recurring-transactions`: Create a recurring transaction.
+- `GET /api/v1/recurring-transactions`: List recurring transactions owned by the authenticated user with computed `next_due_date`, `due_status`, and `days_until_due`.
+- `GET /api/v1/recurring-transactions/reminders`: List `reminder=true` recurring transactions whose computed `due_status` is `upcoming` or `overdue`.
+- `GET /api/v1/recurring-transactions/{recurringId}`: Get recurring transaction details.
+- `PUT /api/v1/recurring-transactions/{recurringId}`: Update a recurring transaction.
+- `DELETE /api/v1/recurring-transactions/{recurringId}`: Delete a recurring transaction.
+- `POST /api/v1/recurring-transactions/{recurringId}/apply`: Creates a transaction record in the target checking/savings/credit card account and updates `recurring_transactions.last_date_applied`.
 
 
 

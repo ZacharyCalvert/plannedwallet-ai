@@ -42,9 +42,9 @@ tags:
   - name: Perspective Access
     summary: Perspective sharing and permissions
     description: Endpoints for sharing perspectives and managing user access levels (read, edit, admin).
-  - name: Bills
-    summary: Recurring bill automation and reminders
-    description: Private user-scoped recurring bills with schedule rules, optional account/category linking, reminders, and apply-to-account transaction generation.
+  - name: Recurring Transactions
+    summary: Recurring transaction automation and reminders
+    description: Private user-scoped recurring transactions (negative amounts represent bills; positive amounts represent income) with schedule rules, optional account/category linking, reminders, and apply-to-account transaction generation.
   - name: Health
     summary: Service health check
     description: Smoke test and liveness endpoints.
@@ -3550,15 +3550,15 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
-  /api/v1/bills:
+  /api/v1/recurring-transactions:
     parameters:
       - $ref: '#/components/parameters/XClientId'
     post:
       tags:
-        - Bills
-      summary: Create a recurring bill
-      description: Creates a private recurring bill owned by the authenticated user. Supports optional schedule constraints matching frequency (weekly, monthly, yearly), optional reminder flag, and optional linking to a checking/savings/credit card account and category.
-      operationId: createBill
+        - Recurring Transactions
+      summary: Create a recurring transaction
+      description: Creates a private recurring transaction (negative amount = bill, positive amount = income) owned by the authenticated user.
+      operationId: createRecurringTransaction
       security:
         - BearerAuth: []
       requestBody:
@@ -3566,62 +3566,62 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/BillCreateRequest'
+              $ref: '#/components/schemas/RecurringTransactionRequest'
       responses:
         '201':
-          description: Bill created.
+          description: Recurring transaction created.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/BillResponse'
+                $ref: '#/components/schemas/RecurringTransactionResponse'
         '400':
-          description: Invalid amount, frequency, schedule, account type, or category linkage.
+          description: Invalid amount, frequency, interval, schedule, name, account type, or category linkage.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
     get:
       tags:
-        - Bills
-      summary: List user bills
-      operationId: listBills
+        - Recurring Transactions
+      summary: List recurring transactions
+      operationId: listRecurringTransactions
       security:
         - BearerAuth: []
       responses:
         '200':
-          description: List of bills owned by the authenticated user.
+          description: List of recurring transactions owned by the authenticated user.
           content:
             application/json:
               schema:
                 type: array
                 items:
-                  $ref: '#/components/schemas/BillResponse'
+                  $ref: '#/components/schemas/RecurringTransactionResponse'
 
-  /api/v1/bills/reminders:
+  /api/v1/recurring-transactions/reminders:
     parameters:
       - $ref: '#/components/parameters/XClientId'
     get:
       tags:
-        - Bills
-      summary: List upcoming and overdue reminder bills
-      description: Returns bills belonging to the authenticated user that have reminder enabled and a computed due_status of upcoming or overdue.
-      operationId: listBillReminders
+        - Recurring Transactions
+      summary: List upcoming and overdue recurring transaction reminders
+      description: Returns recurring transactions belonging to the authenticated user that have reminder enabled and a computed due_status of upcoming or overdue.
+      operationId: listRecurringReminders
       security:
         - BearerAuth: []
       responses:
         '200':
-          description: Active bill reminder alerts.
+          description: Active recurring reminder alerts.
           content:
             application/json:
               schema:
                 type: array
                 items:
-                  $ref: '#/components/schemas/BillResponse'
+                  $ref: '#/components/schemas/RecurringTransactionResponse'
 
-  /api/v1/bills/{billId}:
+  /api/v1/recurring-transactions/{recurringId}:
     parameters:
       - $ref: '#/components/parameters/XClientId'
-      - name: billId
+      - name: recurringId
         in: path
         required: true
         schema:
@@ -3629,29 +3629,29 @@ paths:
           format: uuid
     get:
       tags:
-        - Bills
-      summary: Get a bill
-      operationId: getBill
+        - Recurring Transactions
+      summary: Get a recurring transaction
+      operationId: getRecurringTransaction
       security:
         - BearerAuth: []
       responses:
         '200':
-          description: Bill details.
+          description: Recurring transaction details.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/BillResponse'
+                $ref: '#/components/schemas/RecurringTransactionResponse'
         '404':
-          description: Bill not found.
+          description: Recurring transaction not found.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
     put:
       tags:
-        - Bills
-      summary: Update a bill
-      operationId: updateBill
+        - Recurring Transactions
+      summary: Update a recurring transaction
+      operationId: updateRecurringTransaction
       security:
         - BearerAuth: []
       requestBody:
@@ -3659,14 +3659,14 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/BillCreateRequest'
+              $ref: '#/components/schemas/RecurringTransactionRequest'
       responses:
         '200':
-          description: Updated bill.
+          description: Updated recurring transaction.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/BillResponse'
+                $ref: '#/components/schemas/RecurringTransactionResponse'
         '400':
           description: Validation error.
           content:
@@ -3674,32 +3674,32 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
         '404':
-          description: Bill, account, or category not found.
+          description: Recurring transaction, account, or category not found.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
     delete:
       tags:
-        - Bills
-      summary: Delete a bill
-      operationId: deleteBill
+        - Recurring Transactions
+      summary: Delete a recurring transaction
+      operationId: deleteRecurringTransaction
       security:
         - BearerAuth: []
       responses:
         '204':
-          description: Bill deleted.
+          description: Recurring transaction deleted.
         '404':
-          description: Bill not found.
+          description: Recurring transaction not found.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
-  /api/v1/bills/{billId}/apply:
+  /api/v1/recurring-transactions/{recurringId}/apply:
     parameters:
       - $ref: '#/components/parameters/XClientId'
-      - name: billId
+      - name: recurringId
         in: path
         required: true
         schema:
@@ -3707,10 +3707,10 @@ paths:
           format: uuid
     post:
       tags:
-        - Bills
-      summary: Apply bill to target account
-      description: Creates a transaction record in the bill's linked account (or specified override account_id) using the bill's amount, recipient, description, and category, and updates the bill's last_date_paid.
-      operationId: applyBillToAccount
+        - Recurring Transactions
+      summary: Apply recurring transaction to target account
+      description: Creates a transaction record in the recurring transaction's linked account (or specified override account_id) using its amount, entity, description, and category, and updates last_date_applied.
+      operationId: applyRecurringTransactionToAccount
       security:
         - BearerAuth: []
       requestBody:
@@ -3718,22 +3718,22 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/BillApplyRequest'
+              $ref: '#/components/schemas/RecurringTransactionApplyRequest'
       responses:
         '201':
-          description: Record created and bill last_date_paid updated.
+          description: Record created and last_date_applied updated.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/BillApplyResponse'
+                $ref: '#/components/schemas/RecurringTransactionApplyResponse'
         '400':
-          description: Bill has no linked account or invalid target account/date.
+          description: Recurring transaction has no linked account or invalid target account/date.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
         '404':
-          description: Bill or account not found.
+          description: Recurring transaction or account not found.
           content:
             application/json:
               schema:
@@ -5209,7 +5209,7 @@ components:
             type: string
           example: ["read_only"]
 
-    BillSchedule:
+    RecurringSchedule:
       type: object
       required:
         - type
@@ -5241,12 +5241,12 @@ components:
           nullable: true
           description: Month number (1..12) for yearly schedules.
 
-    BillCreateRequest:
+    RecurringTransactionRequest:
       type: object
       required:
         - amount
         - frequency
-        - recipient
+        - entity
       properties:
         account_id:
           type: string
@@ -5259,8 +5259,9 @@ components:
         amount:
           type: number
           format: double
+          description: Non-zero amount (negative for bills, positive for income).
           example: -125.50
-        last_date_paid:
+        last_date_applied:
           type: string
           format: date
           nullable: true
@@ -5277,16 +5278,17 @@ components:
           example: 6
         schedule:
           allOf:
-            - $ref: '#/components/schemas/BillSchedule'
+            - $ref: '#/components/schemas/RecurringSchedule'
           nullable: true
         name:
           type: string
           maxLength: 19
-          description: Optional short display name under 20 characters for rendering in the bills list.
+          description: Optional short display name under 20 characters for rendering in the bills or income list.
           example: "Electric"
-        recipient:
+        entity:
           type: string
           maxLength: 255
+          description: Payee (for bills) or payer/source (for income).
           example: "Electric Utility"
         description:
           type: string
@@ -5296,7 +5298,7 @@ components:
           type: boolean
           default: false
 
-    BillResponse:
+    RecurringTransactionResponse:
       type: object
       required:
         - id
@@ -5305,7 +5307,7 @@ components:
         - frequency
         - interval
         - name
-        - recipient
+        - entity
         - description
         - reminder
         - due_status
@@ -5329,7 +5331,7 @@ components:
         amount:
           type: number
           format: double
-        last_date_paid:
+        last_date_applied:
           type: string
           format: date
           nullable: true
@@ -5341,14 +5343,12 @@ components:
           minimum: 1
         schedule:
           allOf:
-            - $ref: '#/components/schemas/BillSchedule'
+            - $ref: '#/components/schemas/RecurringSchedule'
           nullable: true
         name:
           type: string
           maxLength: 19
-          description: Optional short display name under 20 characters for rendering in the bills list.
-          example: "Electric"
-        recipient:
+        entity:
           type: string
         description:
           type: string
@@ -5371,7 +5371,7 @@ components:
           type: string
           format: date-time
 
-    BillApplyRequest:
+    RecurringTransactionApplyRequest:
       type: object
       properties:
         account_id:
@@ -5387,14 +5387,14 @@ components:
           format: date
           nullable: true
 
-    BillApplyResponse:
+    RecurringTransactionApplyResponse:
       type: object
       required:
-        - bill
+        - recurring_transaction
         - record
       properties:
-        bill:
-          $ref: '#/components/schemas/BillResponse'
+        recurring_transaction:
+          $ref: '#/components/schemas/RecurringTransactionResponse'
         record:
           $ref: '#/components/schemas/CheckingRecordResponse'
 

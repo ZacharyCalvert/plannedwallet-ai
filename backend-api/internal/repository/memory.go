@@ -31,8 +31,8 @@ type MemoryRepository struct {
 	perspectives      map[string]*models.Perspective
 	perspectiveSettings map[string]*models.PerspectiveSettings
 	perspectiveAccounts map[string]*models.PerspectiveAccount
-	perspectiveAccess map[string]*models.PerspectiveAccess
-	bills             map[string]*models.Bill
+	perspectiveAccess     map[string]*models.PerspectiveAccess
+	recurringTransactions map[string]*models.RecurringTransaction
 }
 
 type memoryCaptcha struct {
@@ -88,8 +88,8 @@ func NewMemoryRepository() *MemoryRepository {
 		perspectives:        make(map[string]*models.Perspective),
 		perspectiveSettings: make(map[string]*models.PerspectiveSettings),
 		perspectiveAccounts: make(map[string]*models.PerspectiveAccount),
-		perspectiveAccess:   make(map[string]*models.PerspectiveAccess),
-		bills:               make(map[string]*models.Bill),
+		perspectiveAccess:     make(map[string]*models.PerspectiveAccess),
+		recurringTransactions: make(map[string]*models.RecurringTransaction),
 	}
 }
 
@@ -237,11 +237,11 @@ func (m *MemoryRepository) cascadeDeleteAccountData(id string) {
 		}
 	}
 	now := time.Now().UTC()
-	for _, bill := range m.bills {
-		if bill.AccountID != nil && *bill.AccountID == id {
-			bill.AccountID = nil
-			bill.CategoryID = nil
-			bill.UpdatedAt = now
+	for _, rt := range m.recurringTransactions {
+		if rt.AccountID != nil && *rt.AccountID == id {
+			rt.AccountID = nil
+			rt.CategoryID = nil
+			rt.UpdatedAt = now
 		}
 	}
 	m.cascadeDeleteAccountStores(id)
@@ -1602,10 +1602,10 @@ func (m *MemoryRepository) DeleteCategory(_ context.Context, id string) error {
 			rec.UpdatedAt = now
 		}
 	}
-	for _, bill := range m.bills {
-		if bill.CategoryID != nil && *bill.CategoryID == id {
-			bill.CategoryID = nil
-			bill.UpdatedAt = now
+	for _, rt := range m.recurringTransactions {
+		if rt.CategoryID != nil && *rt.CategoryID == id {
+			rt.CategoryID = nil
+			rt.UpdatedAt = now
 		}
 	}
 	return nil

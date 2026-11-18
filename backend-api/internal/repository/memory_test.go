@@ -630,78 +630,74 @@ func TestMemoryRepo_ReconcileReports(t *testing.T) {
 	}
 }
 
-func TestMemoryRepo_BillsLifecycleAndCascades(t *testing.T) {
+func TestMemoryRepo_RecurringTransactionsLifecycleAndCascades(t *testing.T) {
 	ctx := context.Background()
 	repo := repository.NewMemoryRepository()
 	now := time.Now().UTC()
 
-	u1 := "bill-u1"
-	u2 := "bill-u2"
-	acc := &models.Account{ID: "bill-acc-1", AdminID: u1, Name: "Primary Checking", Type: "checking", CreatedAt: now, UpdatedAt: now}
+	u1 := "rec-u1"
+	u2 := "rec-u2"
+	acc := &models.Account{ID: "rec-acc-1", AdminID: u1, Name: "Primary Checking", Type: "checking", CreatedAt: now, UpdatedAt: now}
 	if err := repo.CreateAccount(ctx, acc); err != nil {
 		t.Fatalf("CreateAccount failed: %v", err)
 	}
-	cat := &models.Category{ID: "bill-cat-1", UserID: &u1, Name: "Utilities Custom", CreatedAt: now, UpdatedAt: now}
+	cat := &models.Category{ID: "rec-cat-1", UserID: &u1, Name: "Utilities Custom", CreatedAt: now, UpdatedAt: now}
 	if err := repo.CreateCategory(ctx, cat); err != nil {
 		t.Fatalf("CreateCategory failed: %v", err)
 	}
 
 	day := 1
-	paid := "2026-10-01"
-	bill := &models.Bill{
-		ID: "bill-1", UserID: u1, AccountID: &acc.ID, CategoryID: &cat.ID,
-		Amount: -120.50, LastDatePaid: &paid, Frequency: models.BillFrequencyMonthly, Interval: 6,
-		Schedule:  &models.BillSchedule{Type: models.BillScheduleTypeDayOfPeriod, Scope: models.BillScheduleScopeMonth, Day: &day},
-		Name:      "Electric",
-		Recipient: "Electric Utility", Description: "Monthly power bill", Reminder: true,
+	applied := "2026-10-01"
+	rt := &models.RecurringTransaction{
+		ID: "rt-1", UserID: u1, AccountID: &acc.ID, CategoryID: &cat.ID,
+		Amount: -120.50, LastDateApplied: &applied, Frequency: models.RecurringFrequencyMonthly, Interval: 6,
+		Schedule: &models.RecurringSchedule{Type: models.RecurringScheduleTypeDayOfPeriod, Scope: models.RecurringScheduleScopeMonth, Day: &day},
+		Name:     "Electric", Entity: "Electric Utility", Description: "Monthly power bill", Reminder: true,
 		CreatedAt: now, UpdatedAt: now,
 	}
-	if err := repo.CreateBill(ctx, bill); err != nil {
-		t.Fatalf("CreateBill failed: %v", err)
+	if err := repo.CreateRecurringTransaction(ctx, rt); err != nil {
+		t.Fatalf("CreateRecurringTransaction failed: %v", err)
 	}
-	storedBill, err := repo.GetBillByID(ctx, u1, bill.ID)
-	if err != nil || storedBill.Interval != 6 || storedBill.Name != "Electric" {
-		t.Fatalf("expected Interval=6 and Name=Electric, got %+v err=%v", storedBill, err)
+	stored, err := repo.GetRecurringTransactionByID(ctx, u1, rt.ID)
+	if err != nil || stored.Interval != 6 || stored.Name != "Electric" {
+		t.Fatalf("expected Interval=6 and Name=Electric, got %+v err=%v", stored, err)
 	}
-	if _, err := repo.GetBillByID(ctx, u2, bill.ID); !errors.Is(err, repository.ErrNotFound) {
+	if _, err := repo.GetRecurringTransactionByID(ctx, u2, rt.ID); !errors.Is(err, repository.ErrNotFound) {
 		t.Fatalf("expected ErrNotFound for non-owner user, got %v", err)
 	}
 
-	// Deleting custom category clears bill.CategoryID while keeping bill & AccountID intact
 	if err := repo.DeleteCategory(ctx, cat.ID); err != nil {
 		t.Fatalf("DeleteCategory failed: %v", err)
 	}
-	afterCat, err := repo.GetBillByID(ctx, u1, bill.ID)
+	afterCat, err := repo.GetRecurringTransactionByID(ctx, u1, rt.ID)
 	if err != nil || afterCat.CategoryID != nil || afterCat.AccountID == nil || *afterCat.AccountID != acc.ID {
 		t.Fatalf("expected CategoryID=nil and AccountID kept after category delete, got %+v err=%v", afterCat, err)
 	}
 
-	// ApplyBillToAccount inserts CheckingRecord and updates LastDatePaid
-	newPaid := "2026-11-01"
-	afterCat.LastDatePaid = &newPaid
+	newApplied := "2026-11-01"
+	afterCat.LastDateApplied = &newApplied
 	rec := &models.CheckingRecord{
-		ID: "bill-rec-1", AccountID: acc.ID, Value: afterCat.Amount,
-		DateSent: newPaid, Entity: afterCat.Recipient, Description: afterCat.Description,
+		ID: "rt-rec-1", AccountID: acc.ID, Value: afterCat.Amount,
+		DateSent: newApplied, Entity: afterCat.Entity, Description: afterCat.Description,
 		CreatedAt: now, UpdatedAt: now,
 	}
-	if err := repo.ApplyBillToAccount(ctx, afterCat, rec); err != nil {
-		t.Fatalf("ApplyBillToAccount failed: %v", err)
+	if err := repo.ApplyRecurringTransactionToAccount(ctx, afterCat, rec); err != nil {
+		t.Fatalf("ApplyRecurringTransactionToAccount failed: %v", err)
 	}
 	storedRec, err := repo.GetCheckingRecordByID(ctx, acc.ID, rec.ID)
 	if err != nil || storedRec.Value != -120.50 {
 		t.Fatalf("expected applied checking record, got %+v err=%v", storedRec, err)
 	}
 
-	// Deleting linked account nulls both AccountID and CategoryID while preserving bill
 	if err := repo.DeleteAccount(ctx, acc.ID, u1); err != nil {
 		t.Fatalf("DeleteAccount failed: %v", err)
 	}
-	afterAcc, err := repo.GetBillByID(ctx, u1, bill.ID)
+	afterAcc, err := repo.GetRecurringTransactionByID(ctx, u1, rt.ID)
 	if err != nil || afterAcc.AccountID != nil || afterAcc.CategoryID != nil {
 		t.Fatalf("expected AccountID=nil and CategoryID=nil after account delete, got %+v err=%v", afterAcc, err)
 	}
-	if err := repo.DeleteBill(ctx, u1, bill.ID); err != nil {
-		t.Fatalf("DeleteBill failed: %v", err)
+	if err := repo.DeleteRecurringTransaction(ctx, u1, rt.ID); err != nil {
+		t.Fatalf("DeleteRecurringTransaction failed: %v", err)
 	}
 }
 

@@ -152,7 +152,7 @@ func (p *PostgresRepository) DeleteAccount(ctx context.Context, accountID, admin
 
 	if _, err := tx.ExecContext(
 		ctx,
-		`UPDATE bills SET account_id = NULL, category_id = NULL, updated_at = NOW() WHERE account_id = $1`,
+		`UPDATE recurring_transactions SET account_id = NULL, category_id = NULL, updated_at = NOW() WHERE account_id = $1`,
 		accountID,
 	); err != nil {
 		return err

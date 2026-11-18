@@ -411,7 +411,7 @@ func (h *Handler) RegisterRoutes(r *gin.Engine) {
 	h.registerAssetRoutes(protected)
 	h.registerCategoryRoutes(protected)
 	h.registerPerspectiveRoutes(protected)
-	h.registerBillRoutes(protected)
+	h.registerRecurringTransactionRoutes(protected)
 }
 
 func (h *Handler) registerPublicRoutes(api *gin.RouterGroup) {
@@ -521,12 +521,12 @@ func (h *Handler) registerPerspectiveRoutes(p *gin.RouterGroup) {
 	p.GET("/perspectives/:perspectiveId/view", h.GetPerspectiveView)
 }
 
-func (h *Handler) registerBillRoutes(p *gin.RouterGroup) {
-	p.POST("/bills", h.CreateBill)
-	p.GET("/bills", h.ListBills)
-	p.GET("/bills/reminders", h.ListBillReminders)
-	p.GET("/bills/:billId", h.GetBill)
-	p.PUT("/bills/:billId", h.UpdateBill)
-	p.DELETE("/bills/:billId", h.DeleteBill)
-	p.POST("/bills/:billId/apply", h.ApplyBillToAccount)
+func (h *Handler) registerRecurringTransactionRoutes(p *gin.RouterGroup) {
+	p.POST("/recurring-transactions", h.CreateRecurringTransaction)
+	p.GET("/recurring-transactions", h.ListRecurringTransactions)
+	p.GET("/recurring-transactions/reminders", h.ListRecurringReminders)
+	p.GET("/recurring-transactions/:recurringId", h.GetRecurringTransaction)
+	p.PUT("/recurring-transactions/:recurringId", h.UpdateRecurringTransaction)
+	p.DELETE("/recurring-transactions/:recurringId", h.DeleteRecurringTransaction)
+	p.POST("/recurring-transactions/:recurringId/apply", h.ApplyRecurringTransactionToAccount)
 }

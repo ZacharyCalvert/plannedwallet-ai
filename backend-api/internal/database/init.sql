@@ -238,29 +238,36 @@ CREATE TABLE IF NOT EXISTS perspective_access (
 CREATE INDEX IF NOT EXISTS idx_perspective_access_perspective_id ON perspective_access(perspective_id);
 CREATE INDEX IF NOT EXISTS idx_perspective_access_user_id ON perspective_access(user_id);
 
-CREATE TABLE IF NOT EXISTS bills (
+CREATE TABLE IF NOT EXISTS recurring_transactions (
     id UUID PRIMARY KEY,
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     account_id UUID REFERENCES accounts(id) ON DELETE SET NULL,
     category_id UUID REFERENCES categories(id) ON DELETE SET NULL,
     amount DOUBLE PRECISION NOT NULL CHECK (amount <> 0),
-    last_date_paid DATE,
+    last_date_applied DATE,
     frequency VARCHAR(20) NOT NULL CHECK (frequency IN ('weekly', 'monthly', 'yearly')),
     interval INTEGER NOT NULL DEFAULT 1 CHECK (interval >= 1),
     schedule JSONB,
     name VARCHAR(19) NOT NULL DEFAULT '' CHECK (char_length(name) < 20),
-    recipient VARCHAR(255) NOT NULL,
+    entity VARCHAR(255) NOT NULL,
     description VARCHAR(500) NOT NULL DEFAULT '',
     reminder BOOLEAN NOT NULL DEFAULT FALSE,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-ALTER TABLE bills ADD COLUMN IF NOT EXISTS interval INTEGER NOT NULL DEFAULT 1 CHECK (interval >= 1);
-ALTER TABLE bills ADD COLUMN IF NOT EXISTS name VARCHAR(19) NOT NULL DEFAULT '' CHECK (char_length(name) < 20);
-CREATE INDEX IF NOT EXISTS idx_bills_user_id ON bills(user_id);
-CREATE INDEX IF NOT EXISTS idx_bills_account_id ON bills(account_id);
-CREATE INDEX IF NOT EXISTS idx_bills_category_id ON bills(category_id);
+CREATE INDEX IF NOT EXISTS idx_recurring_transactions_user_id ON recurring_transactions(user_id);
+CREATE INDEX IF NOT EXISTS idx_recurring_transactions_account_id ON recurring_transactions(account_id);
+CREATE INDEX IF NOT EXISTS idx_recurring_transactions_category_id ON recurring_transactions(category_id);
+
+DROP INDEX IF EXISTS idx_bills_category_id;
+DROP INDEX IF EXISTS idx_bills_account_id;
+DROP INDEX IF EXISTS idx_bills_user_id;
+DROP TABLE IF EXISTS bills CASCADE;
+DROP INDEX IF EXISTS idx_incomes_category_id;
+DROP INDEX IF EXISTS idx_incomes_account_id;
+DROP INDEX IF EXISTS idx_incomes_user_id;
+DROP TABLE IF EXISTS incomes CASCADE;
 
 
 

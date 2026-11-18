@@ -9,7 +9,7 @@ import (
 	"github.com/plannedwallet/internal/models"
 )
 
-var billWeekdays = map[string]time.Weekday{
+var recurringWeekdays = map[string]time.Weekday{
 	"sunday":    time.Sunday,
 	"monday":    time.Monday,
 	"tuesday":   time.Tuesday,
@@ -27,20 +27,17 @@ func invalidScheduleErr(msg string) error {
 	return NewAppError(http.StatusBadRequest, "INVALID_SCHEDULE", msg)
 }
 
-func normalizeBillFrequency(raw string) (string, error) {
+func normalizeRecurringFrequency(raw string) (string, error) {
 	freq := strings.ToLower(strings.TrimSpace(raw))
 	switch freq {
-	case models.BillFrequencyWeekly, models.BillFrequencyMonthly, models.BillFrequencyYearly:
+	case models.RecurringFrequencyWeekly, models.RecurringFrequencyMonthly, models.RecurringFrequencyYearly:
 		return freq, nil
 	default:
 		return "", NewAppError(http.StatusBadRequest, "INVALID_FREQUENCY", "frequency must be one of: weekly, monthly, yearly.")
 	}
 }
 
-// normalizeBillInterval validates that an optional recurrence interval is >= 1,
-// defaulting to 1 when omitted. An interval multiplies the base frequency
-// (e.g., frequency="monthly", interval=6 represents every 6 months).
-func normalizeBillInterval(raw *int) (int, error) {
+func normalizeRecurringInterval(raw *int) (int, error) {
 	if raw == nil {
 		return 1, nil
 	}
@@ -50,23 +47,23 @@ func normalizeBillInterval(raw *int) (int, error) {
 	return *raw, nil
 }
 
-func parseBillWeekday(raw string) (time.Weekday, string, error) {
+func parseRecurringWeekday(raw string) (time.Weekday, string, error) {
 	clean := strings.ToLower(strings.TrimSpace(raw))
-	wd, ok := billWeekdays[clean]
+	wd, ok := recurringWeekdays[clean]
 	if !ok {
 		return 0, "", invalidScheduleErr("weekday must be sunday through saturday.")
 	}
 	return wd, clean, nil
 }
 
-func validateWeeklySchedule(s *models.BillSchedule) error {
-	if s.Scope != models.BillScheduleScopeWeek {
+func validateWeeklySchedule(s *models.RecurringSchedule) error {
+	if s.Scope != models.RecurringScheduleScopeWeek {
 		return invalidScheduleErr("weekly frequency requires schedule scope 'week'.")
 	}
-	if s.Type != models.BillScheduleTypeWeekday {
+	if s.Type != models.RecurringScheduleTypeWeekday {
 		return invalidScheduleErr("weekly frequency only supports schedule type 'weekday'.")
 	}
-	_, norm, err := parseBillWeekday(s.Weekday)
+	_, norm, err := parseRecurringWeekday(s.Weekday)
 	if err != nil {
 		return err
 	}
@@ -87,23 +84,21 @@ func validateNthValue(nth *int, maxNth int) error {
 	return invalidScheduleErr(fmt.Sprintf("nth must be between 1 and %d, or -1 for last.", maxNth))
 }
 
-func validateMonthlySchedule(s *models.BillSchedule) error {
-	if s.Scope != models.BillScheduleScopeMonth {
+func validateMonthlySchedule(s *models.RecurringSchedule) error {
+	if s.Scope != models.RecurringScheduleScopeMonth {
 		return invalidScheduleErr("monthly frequency requires schedule scope 'month'.")
 	}
 	switch s.Type {
-	case models.BillScheduleTypeDayOfPeriod:
+	case models.RecurringScheduleTypeDayOfPeriod:
 		return validateMonthlyDayOfPeriod(s)
-	case models.BillScheduleTypeNthWeekday:
+	case models.RecurringScheduleTypeNthWeekday:
 		return validateMonthlyNthWeekday(s)
 	default:
 		return invalidScheduleErr("monthly frequency only supports 'day_of_period' or 'nth_weekday'.")
 	}
 }
 
-// validateMonthlyDayOfPeriod accepts days 1..31; shorter months (e.g., Feb, Apr)
-// clamp days 29..31 to their last calendar day during due-date evaluation.
-func validateMonthlyDayOfPeriod(s *models.BillSchedule) error {
+func validateMonthlyDayOfPeriod(s *models.RecurringSchedule) error {
 	if s.Day == nil || *s.Day < 1 || *s.Day > 31 {
 		return invalidScheduleErr("monthly 'day_of_period' requires day between 1 and 31.")
 	}
@@ -113,11 +108,11 @@ func validateMonthlyDayOfPeriod(s *models.BillSchedule) error {
 	return nil
 }
 
-func validateMonthlyNthWeekday(s *models.BillSchedule) error {
+func validateMonthlyNthWeekday(s *models.RecurringSchedule) error {
 	if err := validateNthValue(s.Nth, 5); err != nil {
 		return err
 	}
-	_, norm, err := parseBillWeekday(s.Weekday)
+	_, norm, err := parseRecurringWeekday(s.Weekday)
 	if err != nil {
 		return err
 	}
@@ -128,25 +123,23 @@ func validateMonthlyNthWeekday(s *models.BillSchedule) error {
 	return nil
 }
 
-func validateYearlySchedule(s *models.BillSchedule) error {
-	if s.Scope != models.BillScheduleScopeYear {
+func validateYearlySchedule(s *models.RecurringSchedule) error {
+	if s.Scope != models.RecurringScheduleScopeYear {
 		return invalidScheduleErr("yearly frequency requires schedule scope 'year'.")
 	}
 	switch s.Type {
-	case models.BillScheduleTypeDayOfPeriod:
+	case models.RecurringScheduleTypeDayOfPeriod:
 		return validateYearlyDayOfPeriod(s)
-	case models.BillScheduleTypeMonthDay:
+	case models.RecurringScheduleTypeMonthDay:
 		return validateYearlyMonthDay(s)
-	case models.BillScheduleTypeNthWeekday:
+	case models.RecurringScheduleTypeNthWeekday:
 		return validateYearlyNthWeekday(s)
 	default:
 		return invalidScheduleErr("yearly frequency only supports 'day_of_period', 'month_day', or 'nth_weekday'.")
 	}
 }
 
-// validateYearlyDayOfPeriod accepts days 1..366; day 366 clamps to Dec 31
-// during non-leap years in yearlyOccurrence.
-func validateYearlyDayOfPeriod(s *models.BillSchedule) error {
+func validateYearlyDayOfPeriod(s *models.RecurringSchedule) error {
 	if s.Day == nil || *s.Day < 1 || *s.Day > 366 {
 		return invalidScheduleErr("yearly 'day_of_period' requires day between 1 and 366.")
 	}
@@ -156,9 +149,7 @@ func validateYearlyDayOfPeriod(s *models.BillSchedule) error {
 	return nil
 }
 
-// validateYearlyMonthDay validates a calendar month/day pair (accepting Feb 29,
-// which clamps to Feb 28 in non-leap years when calculating due dates).
-func validateYearlyMonthDay(s *models.BillSchedule) error {
+func validateYearlyMonthDay(s *models.RecurringSchedule) error {
 	if s.Month == nil || *s.Month < 1 || *s.Month > 12 {
 		return invalidScheduleErr("yearly 'month_day' requires month between 1 and 12.")
 	}
@@ -172,8 +163,8 @@ func validateYearlyMonthDay(s *models.BillSchedule) error {
 	return nil
 }
 
-func validateYearlyNthWeekday(s *models.BillSchedule) error {
-	_, norm, err := parseBillWeekday(s.Weekday)
+func validateYearlyNthWeekday(s *models.RecurringSchedule) error {
+	_, norm, err := parseRecurringWeekday(s.Weekday)
 	if err != nil {
 		return err
 	}
@@ -190,12 +181,7 @@ func validateYearlyNthWeekday(s *models.BillSchedule) error {
 	return validateNthValue(s.Nth, 53)
 }
 
-// normalizeAndValidateSchedule ensures that if a schedule rule is provided on a
-// bill, its scope and type match the bill's outer frequency (e.g., a monthly
-// scope such as "1st Sunday of the month" is invalid on a yearly frequency,
-// whereas "1st Sunday of the year" with scope "year" is valid). A nil schedule
-// is always valid and delegates recurrence timing to frequency + last_date_paid.
-func normalizeAndValidateSchedule(frequency string, raw *models.BillSchedule) (*models.BillSchedule, error) {
+func normalizeAndValidateRecurringSchedule(frequency string, raw *models.RecurringSchedule) (*models.RecurringSchedule, error) {
 	if raw == nil {
 		return nil, nil
 	}
@@ -204,14 +190,14 @@ func normalizeAndValidateSchedule(frequency string, raw *models.BillSchedule) (*
 	s.Scope = strings.ToLower(strings.TrimSpace(s.Scope))
 	s.Weekday = strings.ToLower(strings.TrimSpace(s.Weekday))
 
-	validators := map[string]func(*models.BillSchedule) error{
-		models.BillFrequencyWeekly:  validateWeeklySchedule,
-		models.BillFrequencyMonthly: validateMonthlySchedule,
-		models.BillFrequencyYearly:  validateYearlySchedule,
+	validators := map[string]func(*models.RecurringSchedule) error{
+		models.RecurringFrequencyWeekly:  validateWeeklySchedule,
+		models.RecurringFrequencyMonthly: validateMonthlySchedule,
+		models.RecurringFrequencyYearly:  validateYearlySchedule,
 	}
 	fn, ok := validators[frequency]
 	if !ok {
-		return nil, invalidScheduleErr("unsupported bill frequency.")
+		return nil, invalidScheduleErr("unsupported recurring frequency.")
 	}
 	if err := fn(&s); err != nil {
 		return nil, err

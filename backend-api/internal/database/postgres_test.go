@@ -14,7 +14,7 @@ func TestInitSQLEmbedded_Tables(t *testing.T) {
 		"users", "accounts", "account_access", "categories", "reconcile_reports", "checking_records",
 		"assets", "asset_values", "asset_stores", "asset_store_records",
 		"account_assets", "account_snapshots", "captchas", "subscriptions",
-		"perspectives", "perspective_settings", "perspective_accounts", "perspective_access", "bills",
+		"perspectives", "perspective_settings", "perspective_accounts", "perspective_access", "recurring_transactions",
 	}
 	for _, table := range expectedTables {
 		if !strings.Contains(initSQL, "CREATE TABLE IF NOT EXISTS "+table) {
@@ -99,20 +99,31 @@ func TestInitSQLEmbedded_ReconcileReports(t *testing.T) {
 	}
 }
 
-func TestInitSQLEmbedded_Bills(t *testing.T) {
+func TestInitSQLEmbedded_RecurringTransactions(t *testing.T) {
 	expectedSnippets := []string{
-		"CREATE TABLE IF NOT EXISTS bills",
+		"CREATE TABLE IF NOT EXISTS recurring_transactions",
 		"user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE",
 		"account_id UUID REFERENCES accounts(id) ON DELETE SET NULL",
 		"category_id UUID REFERENCES categories(id) ON DELETE SET NULL",
+		"amount DOUBLE PRECISION NOT NULL CHECK (amount <> 0)",
+		"last_date_applied DATE",
 		"frequency VARCHAR(20) NOT NULL CHECK (frequency IN ('weekly', 'monthly', 'yearly'))",
 		"interval INTEGER NOT NULL DEFAULT 1 CHECK (interval >= 1)",
 		"schedule JSONB",
 		"name VARCHAR(19) NOT NULL DEFAULT '' CHECK (char_length(name) < 20)",
+		"entity VARCHAR(255) NOT NULL",
 		"reminder BOOLEAN NOT NULL DEFAULT FALSE",
-		"idx_bills_user_id",
-		"idx_bills_account_id",
-		"idx_bills_category_id",
+		"idx_recurring_transactions_user_id",
+		"idx_recurring_transactions_account_id",
+		"idx_recurring_transactions_category_id",
+		"DROP INDEX IF EXISTS idx_bills_category_id",
+		"DROP INDEX IF EXISTS idx_bills_account_id",
+		"DROP INDEX IF EXISTS idx_bills_user_id",
+		"DROP TABLE IF EXISTS bills CASCADE",
+		"DROP INDEX IF EXISTS idx_incomes_category_id",
+		"DROP INDEX IF EXISTS idx_incomes_account_id",
+		"DROP INDEX IF EXISTS idx_incomes_user_id",
+		"DROP TABLE IF EXISTS incomes CASCADE",
 	}
 	for _, snippet := range expectedSnippets {
 		if !strings.Contains(initSQL, snippet) {
