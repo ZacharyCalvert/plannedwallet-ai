@@ -101,7 +101,7 @@ export default function CsvUploadModal({
         .then((cats) => setCategories(cats))
         .catch(() => {});
     }
-  }, [isOpen, token, accountId]);
+  }, [isOpen, accountId]);
 
   const collisionRowNumbers = useMemo(() => {
     if (!parsedResult) return new Set<number>();

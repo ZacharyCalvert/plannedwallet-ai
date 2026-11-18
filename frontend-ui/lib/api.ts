@@ -104,6 +104,23 @@ export async function loginUser(
   return data.access_token;
 }
 
+export async function refreshToken(
+  username: string,
+  token: string
+): Promise<string> {
+  const url = `/api/v1/users/${encodeURIComponent(username)}/token/refresh`;
+  const res = await tracedFetch(url, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || 'Failed to refresh access token');
+  }
+  const data = await res.json();
+  return data.access_token;
+}
+
 export async function fetchCaptcha(): Promise<CaptchaResponse> {
   const res = await tracedFetch('/api/v1/captcha');
   if (!res.ok) {

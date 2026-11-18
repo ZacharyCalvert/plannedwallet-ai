@@ -187,7 +187,7 @@ export function Dashboard({ session }: DashboardProps) {
     return () => {
       cancelled = true;
     };
-  }, [session.token]);
+  }, [session.username]);
 
   useEffect(() => {
     if (billsMatch) setBillsActivated(true);
@@ -202,7 +202,7 @@ export function Dashboard({ session }: DashboardProps) {
     return () => {
       cancelled = true;
     };
-  }, [billsMatch, incomesMatch, session.token]);
+  }, [billsMatch, incomesMatch, session.username]);
 
   const handleCreated = (newAcc: Account) => {
     setAccounts((prev) => [newAcc, ...prev]);

@@ -104,7 +104,7 @@ export function AccountReconcileTab({
     return () => {
       cancelled = true;
     };
-  }, [accountId, token]);
+  }, [accountId]);
 
   const categoryNameById = useMemo(() => {
     const map = new Map<string, string>();

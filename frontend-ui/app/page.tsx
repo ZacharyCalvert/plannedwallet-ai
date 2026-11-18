@@ -1,9 +1,10 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { BrowserRouter, useNavigate } from 'react-router-dom';
 import { UserSession } from '../lib/types';
-import { fetchFeatures } from '../lib/api';
+import { fetchFeatures, refreshToken } from '../lib/api';
+import { shouldRefreshTokenOnActivity } from '../lib/tokenRefresh';
 import {
   isReadOnlyFeatureEnabled,
   subscribeMaintenanceWarning,
@@ -18,6 +19,61 @@ function AppShell() {
   const [isReadOnly, setIsReadOnly] = useState(false);
   const [maintenanceWarning, setMaintenanceWarning] = useState<string | null>(null);
   const navigate = useNavigate();
+  const sessionRef = useRef<UserSession | null>(session);
+  const refreshInFlightRef = useRef(false);
+  const lastRefreshFailureRef = useRef<number | null>(null);
+  sessionRef.current = session;
+
+  useEffect(() => {
+    if (!session) {
+      refreshInFlightRef.current = false;
+      lastRefreshFailureRef.current = null;
+      return;
+    }
+
+    const handleUserActivity = () => {
+      const current = sessionRef.current;
+      if (!current) return;
+      const isAppFocused = typeof document.hasFocus === 'function' ? document.hasFocus() : true;
+      if (
+        !shouldRefreshTokenOnActivity({
+          token: current.token,
+          isAppFocused,
+          inFlight: refreshInFlightRef.current,
+          nowMs: Date.now(),
+          lastFailureAtMs: lastRefreshFailureRef.current,
+        })
+      ) {
+        return;
+      }
+
+      const activeUsername = current.username;
+      const activeToken = current.token;
+      refreshInFlightRef.current = true;
+      refreshToken(activeUsername, activeToken)
+        .then((nextToken) => {
+          lastRefreshFailureRef.current = null;
+          setSession((prev) =>
+            prev && prev.username === activeUsername && prev.token === activeToken
+              ? { ...prev, token: nextToken }
+              : prev
+          );
+        })
+        .catch(() => {
+          lastRefreshFailureRef.current = Date.now();
+        })
+        .finally(() => {
+          refreshInFlightRef.current = false;
+        });
+    };
+
+    document.addEventListener('click', handleUserActivity, true);
+    document.addEventListener('keydown', handleUserActivity, true);
+    return () => {
+      document.removeEventListener('click', handleUserActivity, true);
+      document.removeEventListener('keydown', handleUserActivity, true);
+    };
+  }, [Boolean(session)]);
 
   useEffect(() => {
     let cancelled = false;
@@ -52,7 +108,7 @@ function AppShell() {
         {!session ? (
           <AuthCenter onSuccess={handleAuthSuccess} readOnly={isReadOnly} />
         ) : (
-          <Dashboard session={session} />
+          <Dashboard key={session.username} session={session} />
         )}
       </div>
       {maintenanceWarning && (

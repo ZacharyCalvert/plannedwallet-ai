@@ -233,7 +233,7 @@ export function AccountDetail({
     loadCategories();
     resetForm();
     setFocusCounter((c) => c + 1);
-  }, [account.id, token]);
+  }, [account.id]);
 
   useEffect(() => {
     if (refreshVersion > 0) {

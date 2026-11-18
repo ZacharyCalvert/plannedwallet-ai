@@ -31,13 +31,19 @@ Medium priority:
 - [x] rollup data (monthly)
 - [x] Review labels on credit card such that outgoing (negative) implies spend and positive implies you paid off CC
 - [x] Bill reminders
-unit and integration tests from pull request
-validation including UI tests, unit tests for UI loading, docker standup, local itests
-Add income / schedule income
-safeguards against "too new" dependencies from dependabot
+- [x] unit and integration tests from pull request
+- [x] validation including UI tests, unit tests for UI loading, docker standup, local itests
+- [x] Add income / schedule income
+- [x] safeguards against "too new" dependencies from dependabot
+embed privacy and terms policy version in jwt.  Enforce
+Account recovery - password reset if you know totp, totp reset if you know password
+Account recovery - email username
+Email confirmation
+Email restrictions (1 email only in record system)
 Add Money-in / Money-out features (trending) for asset and snapshot accounts to track growth/change
 create batch job for data grabs (indexes/prices, captcha cleanup)
-Monthly bill additions / automation
+earmark
+- [x] Monthly bill additions / automation
 - [x] cleanup UI
 - [x] full reconcile of records (monthly capture?)
 - [x] WAF geospacial lock-down
@@ -64,17 +70,18 @@ Add financial records over 365 days old
 Bulk data upload (json/csv)
 over 5 accounts
 over 5 credit cards
-over 100k records on a single account
+over 10k records on a single account
 Share account with other member (read/write sharing)
-Creating your own snapshot trends?
+More than 10 snapshot assets
 Bill notifications (email / phone alerts)
 support / intake requests
 move / merge accounts
 Earmark / planning (5k for property taxes, earmark it for savings based on month)
 payment plans (like buying an iPhone split up by 12 months)
+Loan principal management
 
 Low priority:
-Means to halt/disable signups (new accounts)
+- [x] Means to halt/disable signups (new accounts)
 Allow to rename account
 Add sql injection test cases
 Help text / features on hover

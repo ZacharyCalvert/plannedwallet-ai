@@ -147,7 +147,7 @@ export function SnapshotAccountDetail({
     loadSnapshots();
     handleCancelEdit();
     setFocusCounter((c) => c + 1);
-  }, [account.id, token]);
+  }, [account.id]);
 
   // Chronologically sorted snapshots (oldest -> newest)
   const sortedSnapshots = useMemo(() => {

@@ -253,7 +253,7 @@ export function AssetAccountDetail({
 
   useEffect(() => {
     loadData();
-  }, [account.id, token]);
+  }, [account.id]);
 
   // Load valuations when selected asset for Tab 2 changes
   useEffect(() => {
@@ -273,7 +273,7 @@ export function AssetAccountDetail({
       .finally(() => {
         setLoadingHistory(false);
       });
-  }, [selectedAssetForValues, token]);
+  }, [selectedAssetForValues]);
 
   // Load records and trend when selected store for Tab 4 changes
   useEffect(() => {
@@ -298,7 +298,7 @@ export function AssetAccountDetail({
       .finally(() => {
         setLoadingRecords(false);
       });
-  }, [selectedStoreIdForRecords, account.id, token]);
+  }, [selectedStoreIdForRecords, account.id]);
 
   // Sync refs for dynamic overflow handling
   useEffect(() => {
