@@ -2,7 +2,7 @@ import hashlib
 import uuid
 import pytest
 from playwright.sync_api import APIRequestContext
-from conftest import decode_jwt_unverified, compute_totp_code
+from conftest import decode_jwt_unverified, compute_totp_code, load_frontend_pdf_bytes
 
 TEST_PASSWORD = "ComplexPassword123!"
 
@@ -401,9 +401,7 @@ def test_policy_agreement_ledger_lifecycle_and_validation(
     api_context: APIRequestContext, raw_context: APIRequestContext
 ):
     """Verify policy_agreements ledger captures client IP, timestamp, SHA-256 validation, and cascade cleanup."""
-    pdf_res = raw_context.get("/terms-of-use.pdf")
-    assert pdf_res.status == 200
-    terms_sha256 = hashlib.sha256(pdf_res.body()).hexdigest()
+    terms_sha256 = hashlib.sha256(load_frontend_pdf_bytes(raw_context, "terms-of-use.pdf")).hexdigest()
 
     user_a = generate_user_data(prefix="pol_a")
     user_b = generate_user_data(prefix="pol_b")

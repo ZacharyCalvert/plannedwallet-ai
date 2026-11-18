@@ -5,6 +5,7 @@ import hmac
 import json
 import struct
 import time
+from pathlib import Path
 import pytest
 from playwright.sync_api import sync_playwright, APIRequestContext
 
@@ -62,4 +63,19 @@ def compute_totp_code(secret: str) -> str:
     offset = h[-1] & 0x0F
     code = struct.unpack(">I", h[offset : offset + 4])[0] & 0x7FFFFFFF
     return f"{code % 1000000:06d}"
+
+
+def load_frontend_pdf_bytes(raw_context: APIRequestContext, asset_name: str) -> bytes:
+    """Fetch a static PDF over HTTP when targeting the gateway, or read from frontend-ui/public on backend-only runs."""
+    clean_name = asset_name.lstrip("/")
+    res = raw_context.get(f"/{clean_name}")
+    if res.status == 200:
+        content_type = res.headers.get("content-type", "")
+        assert "application/pdf" in content_type.lower(), f"Expected application/pdf, got {content_type}"
+        return res.body()
+    if raw_context.get("/").status == 200:
+        raise AssertionError(f"Expected 200 for /{clean_name} on gateway, got {res.status}")
+    pdf_path = Path(__file__).resolve().parent.parent / "frontend-ui" / "public" / clean_name
+    assert pdf_path.is_file(), f"Missing static PDF at {pdf_path}"
+    return pdf_path.read_bytes()
 
