@@ -1,7 +1,10 @@
+import hashlib
 import uuid
 import pytest
 from playwright.sync_api import APIRequestContext
+from conftest import compute_totp_code, load_frontend_pdf_bytes
 from test_checking import create_authenticated_user
+from test_users_auth import generate_user_data
 
 def test_user_isolation_default_denial(api_context: APIRequestContext):
     """
@@ -392,3 +395,178 @@ def test_duplicate_asset_creation_rejected(api_context: APIRequestContext):
         headers=headers2,
     )
     assert u2_dup.status == 409, f"Expected User 2 duplicate to fail with 409, got {u2_dup.status}"
+
+
+def test_sql_injection_protects_accounts_logins_recovery_and_ledgers(
+    api_context: APIRequestContext, raw_context: APIRequestContext
+):
+    """
+    Validate unauthenticated and authenticated SQL injection attacks cannot drop tables,
+    bypass login/recovery, tamper with ledgers, or corrupt existing user accounts and records.
+    """
+    # 1. Seed Victim (User A) with accounts, records, categories, perspectives, recurring items, policy ledger, and recovery key
+    victim = generate_user_data(prefix="sqli_vic")
+    reg_a = api_context.post("/api/v1/users", data=victim)
+    assert reg_a.status == 201
+    victim_reg = reg_a.json()
+    victim_phrase = victim_reg["recovery_phrase"]
+    victim_totp_secret = victim_reg["totp_secret"]
+
+    tok_a_res = api_context.post(
+        f"/api/v1/users/{victim['username']}/token",
+        data={"password": victim["password"], "totp_code": compute_totp_code(victim_totp_secret)},
+    )
+    assert tok_a_res.status == 200
+    hdr_a = {"Authorization": f"Bearer {tok_a_res.json()['access_token']}"}
+
+    terms_sha256 = hashlib.sha256(load_frontend_pdf_bytes(raw_context, "terms-of-use.pdf")).hexdigest()
+    pol_res = api_context.post(
+        f"/api/v1/users/{victim['username']}/policy-agreements",
+        data={"terms_approved": True, "privacy_approved": True, "us_customer": True, "terms_sha256": terms_sha256},
+        headers=hdr_a,
+    )
+    assert pol_res.status == 201
+    pol_id = pol_res.json()["id"]
+
+    acc_a = api_context.post(
+        "/api/v1/accounts",
+        data={"name": "Victim Primary Checking", "type": "checking", "description": "Baseline protected checking"},
+        headers=hdr_a,
+    ).json()["id"]
+    rec_a = api_context.post(
+        f"/api/v1/accounts/{acc_a}/records",
+        data={"value": 2500.0, "date_sent": "2026-11-10", "entity": "Employer Payroll", "description": "Direct deposit"},
+        headers=hdr_a,
+    ).json()["id"]
+    cat_a = api_context.post("/api/v1/categories", data={"name": f"Dining_{uuid.uuid4().hex[:6]}"}, headers=hdr_a).json()["id"]
+    persp_a = api_context.post(
+        "/api/v1/perspectives",
+        data={"name": "Victim Net Worth", "account_ids": [acc_a]},
+        headers=hdr_a,
+    ).json()["id"]
+    rt_a = api_context.post(
+        "/api/v1/recurring-transactions",
+        data={"amount": -120.0, "frequency": "monthly", "interval": 1, "entity": "Electric Utility", "account_id": acc_a},
+        headers=hdr_a,
+    ).json()["id"]
+
+    # 2. Authenticate separate Attacker (User B)
+    attacker, token_b = create_authenticated_user(api_context)
+    hdr_b = {"Authorization": f"Bearer {token_b}"}
+
+    sqli_targets = [
+        f"{victim['username']}' OR '1'='1",
+        "'; DROP TABLE users; --",
+        "'; DROP TABLE accounts; --",
+        "'; DROP TABLE policy_agreements; --",
+        "'; DROP TABLE user_recovery_keys; --",
+        f"{victim['username']}'; DELETE FROM policy_agreements; --",
+        f"{victim['username']}' UNION SELECT id, username, email, password_hash, totp_secret, created_at FROM users --",
+        "1' OR 1=1 --",
+    ]
+
+    # 3. Unauthenticated Login & Recovery SQLi attacks
+    for payload in sqli_targets:
+        login_attack = api_context.post(
+            f"/api/v1/users/{payload}/token",
+            data={"password": "' OR '1'='1", "totp_code": "' OR '1'='1"},
+        )
+        assert login_attack.status in (400, 401, 404)
+        assert "access_token" not in login_attack.text()
+
+        login_victim_attack = api_context.post(
+            f"/api/v1/users/{victim['username']}/token",
+            data={"password": payload, "totp_code": "123456"},
+        )
+        assert login_victim_attack.status == 401
+
+        rec_attack_path = api_context.post(
+            f"/api/v1/users/{payload}/recover",
+            data={"recovery_phrase": payload, "new_password": "HijackedPassword123!"},
+        )
+        assert rec_attack_path.status in (400, 401, 404)
+
+        rec_attack_victim = api_context.post(
+            f"/api/v1/users/{victim['username']}/recover",
+            data={"recovery_phrase": payload, "new_password": "HijackedPassword123!"},
+        )
+        assert rec_attack_victim.status == 401
+
+    # 4. Authenticated User B SQLi attacks across user, ledger, rotation, and resource endpoints
+    for payload in sqli_targets:
+        assert api_context.get(f"/api/v1/users/{payload}", headers=hdr_b).status in (400, 403, 404)
+        assert api_context.delete(f"/api/v1/users/{payload}", headers=hdr_b).status in (400, 403, 404)
+        assert api_context.post(f"/api/v1/users/{payload}/token/refresh", headers=hdr_b).status in (400, 403, 404)
+        assert api_context.get(f"/api/v1/users/{payload}/policy-agreements", headers=hdr_b).status in (400, 403, 404)
+        assert api_context.post(
+            f"/api/v1/users/{payload}/policy-agreements",
+            data={"terms_approved": True, "privacy_approved": True, "us_customer": True, "terms_sha256": payload},
+            headers=hdr_b,
+        ).status in (400, 403, 404)
+        assert api_context.post(
+            f"/api/v1/users/{payload}/recovery-key/rotate",
+            data={"password": payload, "totp_code": "000000"},
+            headers=hdr_b,
+        ).status in (400, 403, 404)
+
+        # Cross-resource & query-parameter SQLi by authenticated attacker User B
+        assert api_context.get(f"/api/v1/accounts/{acc_a}/records?cleared={payload}", headers=hdr_b).status in (400, 404)
+        assert api_context.get(f"/api/v1/accounts/{acc_a}/records?start_date={payload}", headers=hdr_b).status in (400, 404)
+        assert api_context.get(f"/api/v1/perspectives/{payload}/view", headers=hdr_b).status in (400, 404)
+        assert api_context.delete(f"/api/v1/categories/{payload}", headers=hdr_b).status in (400, 404)
+        assert api_context.delete(f"/api/v1/recurring-transactions/{payload}", headers=hdr_b).status in (400, 404)
+
+        # Authenticated SQLi payloads on User B's own resources must safely parameterize (never error 500 or alter Victim A)
+        b_cat = api_context.post("/api/v1/categories", data={"name": f"{payload[:25]}_{uuid.uuid4().hex[:4]}"}, headers=hdr_b)
+        assert b_cat.status != 500
+        b_persp = api_context.post("/api/v1/perspectives", data={"name": payload[:50]}, headers=hdr_b)
+        assert b_persp.status != 500
+        b_rt = api_context.post(
+            "/api/v1/recurring-transactions",
+            data={"amount": -10.0, "frequency": "monthly", "interval": 1, "entity": payload[:60]},
+            headers=hdr_b,
+        )
+        assert b_rt.status != 500
+
+    # User B injecting SQL in own policy-agreements terms_sha256 must fail validation (400) without harming policy_agreements
+    b_pol_sqli = api_context.post(
+        f"/api/v1/users/{attacker['username']}/policy-agreements",
+        data={"terms_approved": True, "privacy_approved": True, "us_customer": True, "terms_sha256": "'; DROP TABLE policy_agreements; --"},
+        headers=hdr_b,
+    )
+    assert b_pol_sqli.status == 400
+
+    # 5. Confirm ALL Victim (User A) state — login, accounts, records, ledgers, and recovery — remains intact
+    fresh_login = api_context.post(
+        f"/api/v1/users/{victim['username']}/token",
+        data={"password": victim["password"], "totp_code": compute_totp_code(victim_totp_secret)},
+    )
+    assert fresh_login.status == 200
+    fresh_hdr_a = {"Authorization": f"Bearer {fresh_login.json()['access_token']}"}
+
+    assert api_context.get(f"/api/v1/accounts/{acc_a}", headers=fresh_hdr_a).status == 200
+    assert api_context.get(f"/api/v1/accounts/{acc_a}/records/{rec_a}", headers=fresh_hdr_a).json()["value"] == 2500.0
+    assert any(c["id"] == cat_a for c in api_context.get("/api/v1/categories", headers=fresh_hdr_a).json())
+    assert api_context.get(f"/api/v1/perspectives/{persp_a}/view", headers=fresh_hdr_a).status == 200
+    assert api_context.get(f"/api/v1/recurring-transactions/{rt_a}", headers=fresh_hdr_a).status == 200
+
+    ledger_entries = api_context.get(f"/api/v1/users/{victim['username']}/policy-agreements", headers=fresh_hdr_a).json()
+    assert len(ledger_entries) == 1 and ledger_entries[0]["id"] == pol_id and ledger_entries[0]["active"] is True
+
+    # Victim's legitimate 12-word recovery phrase still works after all attacks
+    recovered = api_context.post(
+        f"/api/v1/users/{victim['username']}/recover",
+        data={"recovery_phrase": victim_phrase, "new_password": "PostAuditValidPassword1!"},
+    )
+    assert recovered.status == 200
+    post_rec_tok = api_context.post(
+        f"/api/v1/users/{victim['username']}/token",
+        data={"password": "PostAuditValidPassword1!", "totp_code": compute_totp_code(recovered.json()["totp_secret"])},
+    )
+    assert post_rec_tok.status == 200
+
+    assert api_context.delete(
+        f"/api/v1/users/{victim['username']}",
+        headers={"Authorization": f"Bearer {post_rec_tok.json()['access_token']}"},
+    ).status == 204
+    assert api_context.delete(f"/api/v1/users/{attacker['username']}", headers=hdr_b).status == 204
