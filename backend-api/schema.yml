@@ -426,6 +426,58 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
+    patch:
+      tags:
+        - Accounts
+      summary: Update account name and/or description
+      description: |
+        Partially updates an existing financial account's `name` and/or `description`.
+        At least one of `name` or `description` must be provided. Immutable account attributes
+        (`type`, `admin_id`, `id`) and unknown fields are rejected with `400 Bad Request`.
+        Requires `edit` or `admin` access.
+      operationId: patchAccount
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AccountPatchRequest'
+      responses:
+        '200':
+          summary: Account updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountResponse'
+        '400':
+          summary: Bad request
+          description: Missing patch fields, invalid/oversized name or description, disallowed fields, or missing X-Client-ID header.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          summary: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          summary: Forbidden
+          description: User has read-only access and cannot modify this account.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          summary: Account not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
     delete:
       tags:
         - Accounts
@@ -3918,6 +3970,24 @@ components:
           maxLength: 255
           description: Human-readable description or label for the account.
           example: "Primary Everyday Checking Account"
+
+    AccountPatchRequest:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+          description: Updated user-facing display name for the account.
+          example: "Household Checking"
+        description:
+          type: string
+          minLength: 1
+          maxLength: 255
+          description: Updated human-readable description or label for the account.
+          example: "Shared monthly household bills and expenses"
 
     AccountResponse:
       type: object

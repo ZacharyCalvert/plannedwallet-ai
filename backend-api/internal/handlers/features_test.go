@@ -111,6 +111,10 @@ func TestReadOnlyMiddleware_BlocksMutationsAllowsReadsAndLogin(t *testing.T) {
 	assertReadOnlyBlocked(t, r, http.MethodPatch, "/api/v1/accounts/"+accID+"/records/"+rec.ID, tokRes.AccessToken, models.CheckingRecordPatchRequest{
 		Description: &desc,
 	})
+	patchAccountName := "Blocked Rename"
+	assertReadOnlyBlocked(t, r, http.MethodPatch, "/api/v1/accounts/"+accID, tokRes.AccessToken, models.AccountPatchRequest{
+		Name: &patchAccountName,
+	})
 	assertReadOnlyBlocked(t, r, http.MethodDelete, "/api/v1/accounts/"+accID+"/records/"+rec.ID, tokRes.AccessToken, nil)
 }
 

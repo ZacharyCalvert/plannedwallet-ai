@@ -854,3 +854,80 @@ func testPerspectiveFlow(t *testing.T, ctx context.Context, ctrl *controller.Con
 	}
 }
 
+func registerTestAccountParticipants(t *testing.T, ctx context.Context, ctrl *controller.Controller) (ownerID, readerID, editorID, outsiderID, accID string) {
+	t.Helper()
+	owner, _ := ctrl.RegisterUser(ctx, models.UserRegistrationRequest{Username: "acc_owner", Email: "acc_owner@test.com", Password: "ValidPass123!"})
+	reader, _ := ctrl.RegisterUser(ctx, models.UserRegistrationRequest{Username: "acc_reader", Email: "acc_reader@test.com", Password: "ValidPass123!"})
+	editor, _ := ctrl.RegisterUser(ctx, models.UserRegistrationRequest{Username: "acc_editor", Email: "acc_editor@test.com", Password: "ValidPass123!"})
+	outsider, _ := ctrl.RegisterUser(ctx, models.UserRegistrationRequest{Username: "acc_out", Email: "acc_out@test.com", Password: "ValidPass123!"})
+	acc, err := ctrl.CreateAccount(ctx, owner.ID, models.AccountCreationRequest{
+		Name: "Primary Everyday Checking", Type: "checking", Description: "Monthly household budget",
+	})
+	if err != nil {
+		t.Fatalf("CreateAccount failed: %v", err)
+	}
+	_, _ = ctrl.GrantAccountAccess(ctx, owner.ID, acc.ID, reader.ID, models.AccessLevelRead)
+	_, _ = ctrl.GrantAccountAccess(ctx, owner.ID, acc.ID, editor.ID, models.AccessLevelEdit)
+	return owner.ID, reader.ID, editor.ID, outsider.ID, acc.ID
+}
+
+func assertAppErrorStatus(t *testing.T, err error, wantStatus int) {
+	t.Helper()
+	var appErr *controller.AppError
+	if !errors.As(err, &appErr) || appErr.Status != wantStatus {
+		t.Fatalf("expected status %d, got err=%v", wantStatus, err)
+	}
+}
+
+func TestPatchAccount_PermissionsAndPartialUpdates(t *testing.T) {
+	ctrl, _ := setupController()
+	ctx := context.Background()
+	ownerID, readerID, editorID, outsiderID, accID := registerTestAccountParticipants(t, ctx, ctrl)
+
+	newName := "  Renamed Operating Checking  "
+	res, err := ctrl.PatchAccount(ctx, ownerID, accID, models.AccountPatchRequest{Name: &newName})
+	if err != nil || res.Name != "Renamed Operating Checking" || res.Description != "Monthly household budget" {
+		t.Fatalf("owner name-only PatchAccount failed: res=%+v err=%v", res, err)
+	}
+
+	newDesc := "  Updated household expense tracking  "
+	resDesc, err := ctrl.PatchAccount(ctx, editorID, accID, models.AccountPatchRequest{Description: &newDesc})
+	if err != nil || resDesc.Name != "Renamed Operating Checking" || resDesc.Description != "Updated household expense tracking" {
+		t.Fatalf("editor description-only PatchAccount failed: res=%+v err=%v", resDesc, err)
+	}
+
+	bothName, bothDesc := "Joint Household Checking", "Shared monthly bills and groceries"
+	resBoth, err := ctrl.PatchAccount(ctx, ownerID, accID, models.AccountPatchRequest{Name: &bothName, Description: &bothDesc})
+	if err != nil || resBoth.Name != bothName || resBoth.Description != bothDesc || resBoth.Type != "checking" {
+		t.Fatalf("owner combined PatchAccount failed: res=%+v err=%v", resBoth, err)
+	}
+
+	_, err = ctrl.PatchAccount(ctx, readerID, accID, models.AccountPatchRequest{Name: &bothName})
+	assertAppErrorStatus(t, err, http.StatusForbidden)
+	_, err = ctrl.PatchAccount(ctx, outsiderID, accID, models.AccountPatchRequest{Name: &bothName})
+	assertAppErrorStatus(t, err, http.StatusNotFound)
+}
+
+func TestPatchAccount_ValidationErrors(t *testing.T) {
+	ctrl, _ := setupController()
+	ctx := context.Background()
+	ownerID, _, _, _, accID := registerTestAccountParticipants(t, ctx, ctrl)
+
+	blank := "   "
+	overName := "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	overDesc := overName + overName + "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+
+	cases := []models.AccountPatchRequest{
+		{},
+		{Name: &blank},
+		{Description: &blank},
+		{Name: &overName},
+		{Description: &overDesc},
+	}
+	for _, tc := range cases {
+		_, err := ctrl.PatchAccount(ctx, ownerID, accID, tc)
+		assertAppErrorStatus(t, err, http.StatusBadRequest)
+	}
+}
+
+

@@ -935,3 +935,117 @@ func sharePerspectiveWithUser(t *testing.T, r *gin.Engine, tokA, tokB, pID strin
 	}
 }
 
+func doPatchAccountRaw(r *gin.Engine, token, accountID, rawJSON string) *httptest.ResponseRecorder {
+	req := newTestRequest(http.MethodPatch, "/api/v1/accounts/"+accountID, strings.NewReader(rawJSON))
+	req.Header.Set("Content-Type", "application/json")
+	if token != "" {
+		req.Header.Set("Authorization", "Bearer "+token)
+	}
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	return w
+}
+
+func registerUserWithID(t *testing.T, r *gin.Engine, username, email string) (string, string) {
+	t.Helper()
+	regBody, _ := json.Marshal(models.UserRegistrationRequest{
+		Username: username, Email: email, Password: "Password123!",
+	})
+	req := newTestRequest(http.MethodPost, "/api/v1/users", bytes.NewReader(regBody))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d: %s", w.Code, w.Body.String())
+	}
+	var u models.UserResponse
+	_ = json.Unmarshal(w.Body.Bytes(), &u)
+	code, _ := auth.GenerateCode(u.TOTPSecret, time.Now().Unix()/30)
+	tokBody, _ := json.Marshal(models.TokenExchangeRequest{Password: "Password123!", TOTPCode: code})
+	tReq := newTestRequest(http.MethodPost, "/api/v1/users/"+username+"/token", bytes.NewReader(tokBody))
+	tReq.Header.Set("Content-Type", "application/json")
+	tw := httptest.NewRecorder()
+	r.ServeHTTP(tw, tReq)
+	var tok models.TokenResponse
+	_ = json.Unmarshal(tw.Body.Bytes(), &tok)
+	return u.ID, tok.AccessToken
+}
+
+func assertAccountPatchSuccess(t *testing.T, r *gin.Engine, token, accID, rawJSON, wantName, wantDesc string) {
+	t.Helper()
+	w := doPatchAccountRaw(r, token, accID, rawJSON)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200 on patch %s, got %d: %s", rawJSON, w.Code, w.Body.String())
+	}
+	var got models.AccountResponse
+	_ = json.Unmarshal(w.Body.Bytes(), &got)
+	if got.Name != wantName || got.Description != wantDesc || got.Type != "checking" {
+		t.Fatalf("unexpected account payload %+v (want name=%q desc=%q)", got, wantName, wantDesc)
+	}
+}
+
+func TestPatchAccount_NameAndDescriptionValidation(t *testing.T) {
+	r, _ := setupTestRouter()
+	token := registerAndGetToken(t, r, "rename_user", "rename@example.com", "Password123!")
+	accID := createAccount(t, r, token, "Primary Everyday Checking", "checking", "Monthly bills account")
+
+	assertAccountPatchSuccess(t, r, token, accID, `{"name":"Household Checking"}`, "Household Checking", "Monthly bills account")
+	assertAccountPatchSuccess(t, r, token, accID, `{"description":"Shared household budget"}`, "Household Checking", "Shared household budget")
+	assertAccountPatchSuccess(t, r, token, accID, `{"name":"Operating Checking","description":"Daily expenses"}`, "Operating Checking", "Daily expenses")
+
+	badPayloads := []string{
+		`{}`,
+		`{"name":""}`,
+		`{"name":"   "}`,
+		`{"description":""}`,
+		`{"description":"   "}`,
+		`{"type":"savings"}`,
+		`{"name":"Valid","type":"savings"}`,
+		`{"name":"Valid","admin_id":"00000000-0000-0000-0000-000000000001"}`,
+		`{"name":"` + strings.Repeat("x", 101) + `"}`,
+		`{"description":"` + strings.Repeat("d", 256) + `"}`,
+	}
+	for _, payload := range badPayloads {
+		if w := doPatchAccountRaw(r, token, accID, payload); w.Code != http.StatusBadRequest {
+			t.Fatalf("expected 400 for payload %s, got %d: %s", payload, w.Code, w.Body.String())
+		}
+	}
+	if w := doPatchAccountRaw(r, "", accID, `{"name":"Unauth"}`); w.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 without token, got %d", w.Code)
+	}
+}
+
+func TestPatchAccount_AccessControl(t *testing.T) {
+	r, _ := setupTestRouter()
+	_, ownerTok := registerUserWithID(t, r, "patch_owner", "po@example.com")
+	readerID, readerTok := registerUserWithID(t, r, "patch_reader", "pr@example.com")
+	editorID, editorTok := registerUserWithID(t, r, "patch_editor", "pe@example.com")
+	_, outsiderTok := registerUserWithID(t, r, "patch_out", "pout@example.com")
+	accID := createAccount(t, r, ownerTok, "Shared Checking", "checking", "Shared account")
+
+	for _, grant := range []string{
+		fmt.Sprintf(`{"user_id":%q,"access_level":"read"}`, readerID),
+		fmt.Sprintf(`{"user_id":%q,"access_level":"edit"}`, editorID),
+	} {
+		req := newTestRequest(http.MethodPost, "/api/v1/accounts/"+accID+"/access", strings.NewReader(grant))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer "+ownerTok)
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+		if w.Code != http.StatusOK {
+			t.Fatalf("expected 200 granting access, got %d: %s", w.Code, w.Body.String())
+		}
+	}
+
+	if w := doPatchAccountRaw(r, readerTok, accID, `{"name":"Reader Attempt"}`); w.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 for read access, got %d", w.Code)
+	}
+	if w := doPatchAccountRaw(r, outsiderTok, accID, `{"name":"Outsider Attempt"}`); w.Code != http.StatusNotFound {
+		t.Fatalf("expected 404 for unshared user, got %d", w.Code)
+	}
+	if w := doPatchAccountRaw(r, editorTok, accID, `{"name":"Editor Renamed Checking"}`); w.Code != http.StatusOK {
+		t.Fatalf("expected 200 for edit access, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+

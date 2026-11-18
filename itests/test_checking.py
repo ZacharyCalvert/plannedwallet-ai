@@ -122,3 +122,120 @@ def test_account_deletion_and_recreation(api_context: APIRequestContext):
     assert new_account["id"] != account_id
     assert new_account["name"] == account_name
 
+
+def test_account_patch_name_and_description(api_context: APIRequestContext):
+    """Validate PATCH /api/v1/accounts/{accountId} updates name and/or description and enforces access/validation."""
+    _, owner_token = create_authenticated_user(api_context)
+    reader, reader_token = create_authenticated_user(api_context)
+    editor, editor_token = create_authenticated_user(api_context)
+    _, outsider_token = create_authenticated_user(api_context)
+
+    owner_hdr = {"Authorization": f"Bearer {owner_token}"}
+    reader_hdr = {"Authorization": f"Bearer {reader_token}"}
+    editor_hdr = {"Authorization": f"Bearer {editor_token}"}
+    outsider_hdr = {"Authorization": f"Bearer {outsider_token}"}
+
+    # 1. Create account and seed a checking record
+    orig_name = f"Primary_Checking_{uuid.uuid4().hex[:6]}"
+    create_res = api_context.post(
+        "/api/v1/accounts",
+        data={"name": orig_name, "type": "checking", "description": "Original checking description"},
+        headers=owner_hdr,
+    )
+    assert create_res.status == 201, f"Failed to create account: {create_res.text()}"
+    account_id = create_res.json()["id"]
+    record = add_checking_record(api_context, account_id, owner_hdr)
+
+    # 2a. Owner updates name only (description stays intact)
+    renamed = f"Household_Checking_{uuid.uuid4().hex[:6]}"
+    patch_res = api_context.patch(
+        f"/api/v1/accounts/{account_id}",
+        data={"name": f"  {renamed}  "},
+        headers=owner_hdr,
+    )
+    assert patch_res.status == 200, f"Name patch failed: {patch_res.status} {patch_res.text()}"
+    patched_acc = patch_res.json()
+    assert patched_acc["name"] == renamed
+    assert patched_acc["type"] == "checking"
+    assert patched_acc["description"] == "Original checking description"
+
+    # 2b. Owner updates description only (name stays intact)
+    patch_desc_res = api_context.patch(
+        f"/api/v1/accounts/{account_id}",
+        data={"description": "  Updated checking description  "},
+        headers=owner_hdr,
+    )
+    assert patch_desc_res.status == 200, f"Description patch failed: {patch_desc_res.status} {patch_desc_res.text()}"
+    assert patch_desc_res.json()["name"] == renamed
+    assert patch_desc_res.json()["description"] == "Updated checking description"
+
+    # 2c. Owner updates both name and description together
+    final_name = f"Operating_Checking_{uuid.uuid4().hex[:6]}"
+    final_desc = "Combined monthly bills and household spending"
+    patch_both_res = api_context.patch(
+        f"/api/v1/accounts/{account_id}",
+        data={"name": final_name, "description": final_desc},
+        headers=owner_hdr,
+    )
+    assert patch_both_res.status == 200, f"Combined patch failed: {patch_both_res.status} {patch_both_res.text()}"
+    assert patch_both_res.json()["name"] == final_name
+    assert patch_both_res.json()["description"] == final_desc
+
+    # Verify persistence via GET single + GET list + records still intact
+    get_res = api_context.get(f"/api/v1/accounts/{account_id}", headers=owner_hdr)
+    assert get_res.status == 200
+    assert get_res.json()["name"] == final_name
+    assert get_res.json()["description"] == final_desc
+
+    list_res = api_context.get("/api/v1/accounts", headers=owner_hdr)
+    assert list_res.status == 200
+    assert any(a["id"] == account_id and a["name"] == final_name and a["description"] == final_desc for a in list_res.json())
+
+    rec_res = api_context.get(f"/api/v1/accounts/{account_id}/records", headers=owner_hdr)
+    assert rec_res.status == 200
+    assert any(r["id"] == record["id"] for r in rec_res.json())
+
+    # 3. Reject payloads with immutable/disallowed fields, missing patch fields, or invalid values
+    invalid_payloads = [
+        {},
+        {"name": ""},
+        {"name": "   "},
+        {"name": "x" * 101},
+        {"description": ""},
+        {"description": "   "},
+        {"description": "d" * 256},
+        {"type": "savings"},
+        {"name": "Blocked Rename", "type": "savings"},
+        {"name": "Blocked Rename", "admin_id": reader["id"]},
+    ]
+    for bad_payload in invalid_payloads:
+        bad_res = api_context.patch(f"/api/v1/accounts/{account_id}", data=bad_payload, headers=owner_hdr)
+        assert bad_res.status == 400, f"Expected 400 for {bad_payload}, got {bad_res.status}: {bad_res.text()}"
+
+    # 4. Enforce access control (unshared -> 404, read -> 403, edit -> 200)
+    assert api_context.patch(f"/api/v1/accounts/{account_id}", data={"name": "Outsider"}, headers=outsider_hdr).status == 404
+
+    assert api_context.post(
+        f"/api/v1/accounts/{account_id}/access",
+        data={"user_id": reader["id"], "access_level": "read"},
+        headers=owner_hdr,
+    ).status == 200
+    assert api_context.post(
+        f"/api/v1/accounts/{account_id}/access",
+        data={"user_id": editor["id"], "access_level": "edit"},
+        headers=owner_hdr,
+    ).status == 200
+
+    assert api_context.patch(f"/api/v1/accounts/{account_id}", data={"name": "Reader"}, headers=reader_hdr).status == 403
+
+    editor_name = f"Editor_Renamed_{uuid.uuid4().hex[:6]}"
+    editor_res = api_context.patch(
+        f"/api/v1/accounts/{account_id}",
+        data={"name": editor_name, "description": "Edited by shared editor"},
+        headers=editor_hdr,
+    )
+    assert editor_res.status == 200, f"Expected 200 for editor patch, got {editor_res.status}: {editor_res.text()}"
+    assert editor_res.json()["name"] == editor_name
+    assert editor_res.json()["description"] == "Edited by shared editor"
+
+

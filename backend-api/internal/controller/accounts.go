@@ -3,6 +3,7 @@ package controller
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"strings"
 	"time"
@@ -75,6 +76,10 @@ func (c *Controller) CreateAccount(ctx context.Context, userID string, req model
 	c.grantInitialAdminAccess(ctx, account.ID, userID, now)
 	trace.LogInfo(ctx, "Account created successfully: %s (id: %s) for user: %s", account.Name, account.ID, userID)
 
+	return toAccountResponse(account), nil
+}
+
+func toAccountResponse(account *models.Account) *models.AccountResponse {
 	return &models.AccountResponse{
 		ID:          account.ID,
 		AdminID:     account.AdminID,
@@ -83,7 +88,64 @@ func (c *Controller) CreateAccount(ctx context.Context, userID string, req model
 		Description: account.Description,
 		CreatedAt:   account.CreatedAt,
 		UpdatedAt:   account.UpdatedAt,
-	}, nil
+	}
+}
+
+func validateTrimmedField(raw string, maxRunes int, missingCode, invalidCode, fieldLabel string) (string, error) {
+	val := strings.TrimSpace(raw)
+	if val == "" {
+		return "", NewAppError(http.StatusBadRequest, missingCode, fieldLabel+" cannot be empty.")
+	}
+	if len([]rune(val)) > maxRunes {
+		return "", NewAppError(http.StatusBadRequest, invalidCode, fmt.Sprintf("%s must not exceed %d characters.", fieldLabel, maxRunes))
+	}
+	return val, nil
+}
+
+func resolveOptionalField(ptr *string, fallback string, maxRunes int, missingCode, invalidCode, label string) (string, error) {
+	if ptr == nil {
+		return fallback, nil
+	}
+	return validateTrimmedField(*ptr, maxRunes, missingCode, invalidCode, label)
+}
+
+func resolveAccountPatchFields(existing *models.Account, req models.AccountPatchRequest) (string, string, error) {
+	if req.Name == nil && req.Description == nil {
+		return "", "", NewAppError(http.StatusBadRequest, "MISSING_PATCH_FIELDS", "At least one of name or description must be provided.")
+	}
+	name, err := resolveOptionalField(req.Name, existing.Name, 100, "MISSING_NAME", "INVALID_NAME", "Account name")
+	if err != nil {
+		return "", "", err
+	}
+	desc, err := resolveOptionalField(req.Description, existing.Description, 255, "MISSING_DESCRIPTION", "INVALID_DESCRIPTION", "Account description")
+	if err != nil {
+		return "", "", err
+	}
+	return name, desc, nil
+}
+
+// PatchAccount updates an existing account's name and/or description. Requires edit or admin access.
+func (c *Controller) PatchAccount(ctx context.Context, userID, accountID string, req models.AccountPatchRequest) (*models.AccountResponse, error) {
+	existing, err := c.verifyAccountAccess(ctx, userID, accountID, models.AccessLevelEdit)
+	if err != nil {
+		return nil, err
+	}
+	name, desc, err := resolveAccountPatchFields(existing, req)
+	if err != nil {
+		return nil, err
+	}
+
+	updated, err := c.repo.UpdateAccount(ctx, accountID, name, desc, time.Now().UTC())
+	if err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			return nil, ErrAccountNotFound
+		}
+		trace.LogError(ctx, err, "Failed to update account %s", accountID)
+		return nil, NewAppError(http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to update account.")
+	}
+
+	trace.LogInfo(ctx, "Account %s updated (name=%q) by user %s", accountID, name, userID)
+	return toAccountResponse(updated), nil
 }
 
 // DeleteAccount deletes an account. Enforces that only the creator (admin_id) can delete it.

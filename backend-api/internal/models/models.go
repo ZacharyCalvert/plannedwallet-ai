@@ -114,6 +114,12 @@ type AccountCreationRequest struct {
 	Description string `json:"description" binding:"required,min=1,max=255"`
 }
 
+// AccountPatchRequest represents the payload to patch an account's name and/or description.
+type AccountPatchRequest struct {
+	Name        *string `json:"name,omitempty"`
+	Description *string `json:"description,omitempty"`
+}
+
 // AccountResponse represents the account returned by the API.
 type AccountResponse struct {
 	ID          string    `json:"id"`

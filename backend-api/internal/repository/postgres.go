@@ -143,6 +143,22 @@ func (p *PostgresRepository) ListAccountsByUserID(ctx context.Context, userID st
 	return accounts, rows.Err()
 }
 
+func (p *PostgresRepository) UpdateAccount(ctx context.Context, accountID, name, description string, updatedAt time.Time) (*models.Account, error) {
+	query := `UPDATE accounts
+	          SET name = $1, description = $2, updated_at = $3
+	          WHERE id = $4
+	          RETURNING id, admin_id, name, type, description, created_at, updated_at`
+	row := p.db.QueryRowContext(ctx, query, name, description, updatedAt, accountID)
+	var a models.Account
+	if err := row.Scan(&a.ID, &a.AdminID, &a.Name, &a.Type, &a.Description, &a.CreatedAt, &a.UpdatedAt); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrNotFound
+		}
+		return nil, err
+	}
+	return &a, nil
+}
+
 func (p *PostgresRepository) DeleteAccount(ctx context.Context, accountID, adminID string) error {
 	tx, err := p.db.BeginTx(ctx, nil)
 	if err != nil {

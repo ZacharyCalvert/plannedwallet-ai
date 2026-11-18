@@ -701,4 +701,36 @@ func TestMemoryRepo_RecurringTransactionsLifecycleAndCascades(t *testing.T) {
 	}
 }
 
+func TestMemoryRepo_UpdateAccount(t *testing.T) {
+	repo := repository.NewMemoryRepository()
+	ctx := context.Background()
+	createdAt := time.Date(2026, 11, 1, 10, 0, 0, 0, time.UTC)
+
+	acc := &models.Account{
+		ID: "acc-rename", AdminID: "user-1", Name: "Primary Everyday Checking",
+		Type: "checking", Description: "Household operating account",
+		CreatedAt: createdAt, UpdatedAt: createdAt,
+	}
+	if err := repo.CreateAccount(ctx, acc); err != nil {
+		t.Fatalf("CreateAccount failed: %v", err)
+	}
+
+	updatedAt := createdAt.Add(2 * time.Hour)
+	updated, err := repo.UpdateAccount(ctx, acc.ID, "Joint Household Checking", "Updated joint household expenses", updatedAt)
+	if err != nil {
+		t.Fatalf("UpdateAccount failed: %v", err)
+	}
+	if updated.Name != "Joint Household Checking" || updated.Description != "Updated joint household expenses" || !updated.UpdatedAt.Equal(updatedAt) {
+		t.Fatalf("unexpected updated fields: %+v", updated)
+	}
+	if updated.Type != "checking" || updated.AdminID != "user-1" {
+		t.Fatalf("UpdateAccount unexpectedly modified immutable fields: %+v", updated)
+	}
+
+	if _, err := repo.UpdateAccount(ctx, "missing-id", "Nope", "Desc", updatedAt); !errors.Is(err, repository.ErrNotFound) {
+		t.Fatalf("expected ErrNotFound for missing account, got %v", err)
+	}
+}
+
+
 

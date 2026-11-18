@@ -197,6 +197,21 @@ func (m *MemoryRepository) ListAccountsByUserID(_ context.Context, userID string
 	return result, nil
 }
 
+func (m *MemoryRepository) UpdateAccount(_ context.Context, accountID, name, description string, updatedAt time.Time) (*models.Account, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	acc, ok := m.accounts[accountID]
+	if !ok {
+		return nil, ErrNotFound
+	}
+	acc.Name = name
+	acc.Description = description
+	acc.UpdatedAt = updatedAt
+	copied := *acc
+	return &copied, nil
+}
+
 func (m *MemoryRepository) cascadeDeleteAccountStores(accountID string) {
 	for k, as := range m.assetStores {
 		if as.AccountID == accountID {

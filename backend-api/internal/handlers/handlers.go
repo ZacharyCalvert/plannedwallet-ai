@@ -2,7 +2,9 @@ package handlers
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"regexp"
 	"strconv"
@@ -10,6 +12,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/gin-gonic/gin/binding"
 
 	"github.com/plannedwallet/internal/auth"
 	"github.com/plannedwallet/internal/controller"
@@ -65,6 +68,19 @@ func (h *Handler) getUserID(c *gin.Context) (string, bool) {
 		return "", false
 	}
 	return userIDVal.(string), true
+}
+
+func bindStrictJSON(c *gin.Context, dst any) error {
+	dec := json.NewDecoder(c.Request.Body)
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(dst); err != nil {
+		return err
+	}
+	var extra any
+	if err := dec.Decode(&extra); err != io.EOF {
+		return errors.New("unexpected trailing JSON data")
+	}
+	return binding.Validator.ValidateStruct(dst)
 }
 
 // RegisterUser handles POST /api/v1/users
@@ -162,6 +178,29 @@ func (h *Handler) GetAccount(c *gin.Context) {
 
 	accountID := c.Param("accountId")
 	res, err := h.ctrl.GetAccount(c.Request.Context(), userID, accountID)
+	if err != nil {
+		h.handleError(c, err)
+		return
+	}
+
+	c.JSON(http.StatusOK, res)
+}
+
+// PatchAccount handles PATCH /api/v1/accounts/:accountId (updates account name and/or description)
+func (h *Handler) PatchAccount(c *gin.Context) {
+	userID, ok := h.getUserID(c)
+	if !ok {
+		return
+	}
+
+	accountID := strings.TrimSpace(c.Param("accountId"))
+	var req models.AccountPatchRequest
+	if err := bindStrictJSON(c, &req); err != nil {
+		h.sendError(c, http.StatusBadRequest, "BAD_REQUEST", err.Error())
+		return
+	}
+
+	res, err := h.ctrl.PatchAccount(c.Request.Context(), userID, accountID, req)
 	if err != nil {
 		h.handleError(c, err)
 		return
@@ -428,6 +467,7 @@ func (h *Handler) registerAccountRoutes(p *gin.RouterGroup) {
 	p.POST("/accounts", h.CreateAccount)
 	p.GET("/accounts", h.ListAccounts)
 	p.GET("/accounts/:accountId", h.GetAccount)
+	p.PATCH("/accounts/:accountId", h.PatchAccount)
 	p.DELETE("/accounts/:accountId", h.DeleteAccount)
 	p.POST("/accounts/:accountId/access", h.GrantAccountAccess)
 	p.GET("/accounts/:accountId/access/:userId", h.GetAccountAccess)

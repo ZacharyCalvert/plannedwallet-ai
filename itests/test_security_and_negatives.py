@@ -99,6 +99,7 @@ def test_user_isolation_default_denial(api_context: APIRequestContext):
 
     # Direct access to User A's checking account: 404
     assert api_context.get(f"/api/v1/accounts/{chk_a_id}", headers=headers_b).status == 404
+    assert api_context.patch(f"/api/v1/accounts/{chk_a_id}", data={"name": "Hijacked"}, headers=headers_b).status == 404
     assert api_context.get(f"/api/v1/accounts/{chk_a_id}/records", headers=headers_b).status == 404
     assert api_context.get(f"/api/v1/accounts/{chk_a_id}/records/{rec_a_id}", headers=headers_b).status == 404
 
