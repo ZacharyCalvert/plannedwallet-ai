@@ -60,13 +60,103 @@ def test_login_and_validate_jwt(api_context: APIRequestContext):
 
     assert "access_token" in token_data and len(token_data["access_token"]) > 0
     assert token_data.get("token_type") == "Bearer"
-    assert token_data.get("expires_in") == 3600
+    assert token_data.get("expires_in") == 900
 
     payload = decode_jwt_unverified(token_data["access_token"])
     assert payload.get("sub") == user_id
     assert payload.get("username") == user_data["username"]
     assert payload.get("subscriber") is False
-    assert payload.get("exp", 0) > payload.get("iat", 0)
+    assert payload.get("exp", 0) - payload.get("iat", 0) == 900
+
+
+def test_refresh_valid_jwt(api_context: APIRequestContext):
+    """Test: Exchange a valid 15-minute JWT for a newly issued JWT without re-entering credentials."""
+    user_data = generate_user_data(prefix="refresh")
+    create_res = api_context.post("/api/v1/users", data=user_data)
+    assert create_res.status == 201
+    create_data = create_res.json()
+
+    totp_code = compute_totp_code(create_data["totp_secret"])
+    login_res = api_context.post(
+        f"/api/v1/users/{user_data['username']}/token",
+        data={"password": user_data["password"], "totp_code": totp_code},
+    )
+    assert login_res.status == 200
+    old_token = login_res.json()["access_token"]
+    old_payload = decode_jwt_unverified(old_token)
+
+    refresh_res = api_context.post(
+        f"/api/v1/users/{user_data['username']}/token/refresh",
+        headers={"Authorization": f"Bearer {old_token}"},
+    )
+    assert refresh_res.status == 200, f"Refresh failed: {refresh_res.text()}"
+    ref_data = refresh_res.json()
+    assert ref_data.get("token_type") == "Bearer"
+    assert ref_data.get("expires_in") == 900
+    new_token = ref_data["access_token"]
+    assert new_token != old_token
+
+    new_payload = decode_jwt_unverified(new_token)
+    assert new_payload.get("sub") == create_data["id"]
+    assert new_payload.get("username") == user_data["username"]
+    assert new_payload.get("exp", 0) >= old_payload.get("exp", 0)
+    assert new_payload.get("exp", 0) - new_payload.get("iat", 0) == 900
+
+    # Refreshed JWT accesses authenticated endpoints
+    acc_res = api_context.get("/api/v1/accounts", headers={"Authorization": f"Bearer {new_token}"})
+    assert acc_res.status == 200
+
+    # Invalid / missing JWT is rejected (401)
+    assert api_context.post(f"/api/v1/users/{user_data['username']}/token/refresh").status == 401
+    assert api_context.post(
+        f"/api/v1/users/{user_data['username']}/token/refresh",
+        headers={"Authorization": "Bearer invalid.jwt.token"},
+    ).status == 401
+
+
+def test_user_a_cannot_exchange_token_for_user_b(api_context: APIRequestContext):
+    """Test: Logging in as User A and attempting to exchange/refresh a token for User B must fail."""
+    user_a = generate_user_data(prefix="usera")
+    create_a = api_context.post("/api/v1/users", data=user_a)
+    assert create_a.status == 201
+    secret_a = create_a.json()["totp_secret"]
+
+    user_b = generate_user_data(prefix="userb")
+    create_b = api_context.post("/api/v1/users", data=user_b)
+    assert create_b.status == 201
+
+    totp_a = compute_totp_code(secret_a)
+    login_a = api_context.post(
+        f"/api/v1/users/{user_a['username']}/token",
+        data={"password": user_a["password"], "totp_code": totp_a},
+    )
+    assert login_a.status == 200
+    token_a = login_a.json()["access_token"]
+
+    # 1. User A attempting to exchange User A's valid JWT for User B's JWT fails with 403
+    refresh_for_b = api_context.post(
+        f"/api/v1/users/{user_b['username']}/token/refresh",
+        headers={"Authorization": f"Bearer {token_a}"},
+    )
+    assert refresh_for_b.status == 403, f"Expected 403, got {refresh_for_b.status}: {refresh_for_b.text()}"
+    assert refresh_for_b.json().get("error") == "FORBIDDEN"
+    assert "access_token" not in refresh_for_b.json()
+
+    # 2. User A attempting password/TOTP login against User B with User A's credentials fails with 401
+    creds_for_b = api_context.post(
+        f"/api/v1/users/{user_b['username']}/token",
+        data={"password": user_a["password"], "totp_code": totp_a},
+    )
+    assert creds_for_b.status == 401, f"Expected 401, got {creds_for_b.status}: {creds_for_b.text()}"
+    assert "access_token" not in creds_for_b.json()
+
+    # 3. User A attempting /users/{userB}/token using Bearer token only (no password/TOTP) fails with 400
+    bearer_only_for_b = api_context.post(
+        f"/api/v1/users/{user_b['username']}/token",
+        headers={"Authorization": f"Bearer {token_a}"},
+    )
+    assert bearer_only_for_b.status == 400, f"Expected 400, got {bearer_only_for_b.status}: {bearer_only_for_b.text()}"
+    assert "access_token" not in bearer_only_for_b.json()
 
 def test_new_account_jwt_subscriber_is_false(api_context: APIRequestContext):
     """Test: Confirm the issued JWT for a new account has subscriber value of false."""

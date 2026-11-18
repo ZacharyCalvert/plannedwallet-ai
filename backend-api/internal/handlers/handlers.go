@@ -108,8 +108,8 @@ func (h *Handler) RegisterUser(c *gin.Context) {
 	c.JSON(http.StatusCreated, res)
 }
 
-// ExchangeToken handles POST /api/v1/users/{username}/token
-func (h *Handler) ExchangeToken(c *gin.Context) {
+// ExchangePasswordForToken handles POST /api/v1/users/{username}/token
+func (h *Handler) ExchangePasswordForToken(c *gin.Context) {
 	username := strings.TrimSpace(c.Param("username"))
 	if username == "" {
 		h.sendError(c, http.StatusBadRequest, "BAD_REQUEST", "Username path parameter is required.")
@@ -122,7 +122,28 @@ func (h *Handler) ExchangeToken(c *gin.Context) {
 		return
 	}
 
-	res, err := h.ctrl.ExchangeToken(c.Request.Context(), username, req.Password, req.TOTPCode)
+	res, err := h.ctrl.ExchangePasswordForToken(c.Request.Context(), username, req.Password, req.TOTPCode)
+	if err != nil {
+		h.handleError(c, err)
+		return
+	}
+
+	c.JSON(http.StatusOK, res)
+}
+
+// RefreshToken handles POST /api/v1/users/{username}/token/refresh
+func (h *Handler) RefreshToken(c *gin.Context) {
+	userID, ok := h.getUserID(c)
+	if !ok {
+		return
+	}
+	username := strings.TrimSpace(c.Param("username"))
+	if username == "" {
+		h.sendError(c, http.StatusBadRequest, "BAD_REQUEST", "Username path parameter is required.")
+		return
+	}
+
+	res, err := h.ctrl.RefreshToken(c.Request.Context(), userID, username)
 	if err != nil {
 		h.handleError(c, err)
 		return
@@ -445,6 +466,7 @@ func (h *Handler) RegisterRoutes(r *gin.Engine) {
 
 	protected := api.Group("")
 	protected.Use(h.auth.Middleware())
+	protected.POST("/users/:username/token/refresh", h.RefreshToken)
 	h.registerAccountRoutes(protected)
 	h.registerStoreAndSnapshotRoutes(protected)
 	h.registerAssetRoutes(protected)
@@ -460,7 +482,7 @@ func (h *Handler) registerPublicRoutes(api *gin.RouterGroup) {
 	api.GET("/captcha", h.GetCaptcha)
 	api.GET("/captcha/:captchaId", h.GetCaptchaImage)
 	api.POST("/users", h.RegisterUser)
-	api.POST("/users/:username/token", h.ExchangeToken)
+	api.POST("/users/:username/token", h.ExchangePasswordForToken)
 }
 
 func (h *Handler) registerAccountRoutes(p *gin.RouterGroup) {

@@ -4,10 +4,38 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/plannedwallet/internal/auth"
 )
+
+func TestDefaultExpiration_FifteenMinutesAndUniqueJTI(t *testing.T) {
+	svc := auth.NewService("test-secret", 0)
+	if svc.ExpirationSeconds() != 900 {
+		t.Fatalf("expected default expiration 900s (15m), got %d", svc.ExpirationSeconds())
+	}
+
+	tok1, err := svc.GenerateToken("user-1", "alice", false)
+	if err != nil {
+		t.Fatalf("GenerateToken 1 failed: %v", err)
+	}
+	tok2, err := svc.GenerateToken("user-1", "alice", false)
+	if err != nil {
+		t.Fatalf("GenerateToken 2 failed: %v", err)
+	}
+	if tok1 == tok2 {
+		t.Fatal("expected distinct tokens due to unique jti claims")
+	}
+
+	claims, err := svc.ValidateToken(tok1)
+	if err != nil {
+		t.Fatalf("ValidateToken failed: %v", err)
+	}
+	if claims.ExpiresAt.Time.Sub(claims.IssuedAt.Time) != 15*time.Minute {
+		t.Fatalf("expected 15m TTL, got %v", claims.ExpiresAt.Time.Sub(claims.IssuedAt.Time))
+	}
+}
 
 func TestGenerateAndValidateToken_SubscriberTrue(t *testing.T) {
 	svc := auth.NewService("test-secret", 3600)

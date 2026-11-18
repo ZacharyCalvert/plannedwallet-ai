@@ -116,10 +116,10 @@ func initJWTService(isProd bool) *auth.Service {
 	if jwtSecret == "" {
 		jwtSecret = defaultJWTSecret
 	}
-	jwtExpStr := getEnv("JWT_EXPIRATION_SECONDS", "3600")
+	jwtExpStr := getEnv("JWT_EXPIRATION_SECONDS", strconv.Itoa(auth.DefaultExpirationSeconds))
 	jwtExp, err := strconv.Atoi(jwtExpStr)
 	if err != nil {
-		jwtExp = 3600
+		jwtExp = auth.DefaultExpirationSeconds
 	}
 	return auth.NewService(jwtSecret, jwtExp)
 }

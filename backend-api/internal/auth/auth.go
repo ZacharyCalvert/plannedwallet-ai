@@ -8,10 +8,13 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
 
 	"github.com/plannedwallet/internal/models"
 )
+
+const DefaultExpirationSeconds = 900
 
 var (
 	ErrInvalidToken = errors.New("invalid or expired token")
@@ -34,7 +37,7 @@ func NewService(secret string, expirationSeconds int) *Service {
 		secret = "development-secret-key-change-in-production"
 	}
 	if expirationSeconds <= 0 {
-		expirationSeconds = 3600
+		expirationSeconds = DefaultExpirationSeconds
 	}
 	return &Service{
 		secret:     []byte(secret),
@@ -63,6 +66,7 @@ func (s *Service) GenerateToken(userID, username string, isSubscriber bool) (str
 		Username:   username,
 		Subscriber: isSubscriber,
 		RegisteredClaims: jwt.RegisteredClaims{
+			ID:        uuid.New().String(),
 			Subject:   userID,
 			IssuedAt:  jwt.NewNumericDate(now),
 			ExpiresAt: jwt.NewNumericDate(now.Add(s.expiration)),

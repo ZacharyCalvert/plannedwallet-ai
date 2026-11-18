@@ -38,12 +38,7 @@ func (c *Controller) authenticateUser(ctx context.Context, username, password, t
 	return user, nil
 }
 
-// ExchangeToken validates user credentials including TOTP and issues a signed JWT token.
-func (c *Controller) ExchangeToken(ctx context.Context, username, password, totpCode string) (*models.TokenResponse, error) {
-	user, err := c.authenticateUser(ctx, username, password, totpCode)
-	if err != nil {
-		return nil, err
-	}
+func (c *Controller) issueTokenForUser(ctx context.Context, user *models.User, action string) (*models.TokenResponse, error) {
 	isSubscriber, err := c.repo.IsUserSubscriber(ctx, user.ID)
 	if err != nil {
 		trace.LogError(ctx, err, "Error checking subscriber status for: %s", user.Username)
@@ -54,10 +49,38 @@ func (c *Controller) ExchangeToken(ctx context.Context, username, password, totp
 		trace.LogError(ctx, err, "Token generation failed for user: %s", user.Username)
 		return nil, NewAppError(http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to generate token.")
 	}
-	trace.LogInfo(ctx, "Token exchange succeeded for user: %s (subscriber=%t)", user.Username, isSubscriber)
+	trace.LogInfo(ctx, "%s succeeded for user: %s (subscriber=%t)", action, user.Username, isSubscriber)
 	return &models.TokenResponse{
 		AccessToken: token,
 		TokenType:   "Bearer",
 		ExpiresIn:   c.auth.ExpirationSeconds(),
 	}, nil
+}
+
+// ExchangePasswordForToken validates user credentials including TOTP and issues a signed JWT token.
+func (c *Controller) ExchangePasswordForToken(ctx context.Context, username, password, totpCode string) (*models.TokenResponse, error) {
+	user, err := c.authenticateUser(ctx, username, password, totpCode)
+	if err != nil {
+		return nil, err
+	}
+	return c.issueTokenForUser(ctx, user, "Token exchange")
+}
+
+// RefreshToken exchanges an existing valid JWT for a freshly signed JWT for the same user.
+func (c *Controller) RefreshToken(ctx context.Context, userID, targetUsername string) (*models.TokenResponse, error) {
+	targetUsername = strings.TrimSpace(targetUsername)
+	if targetUsername == "" {
+		return nil, NewAppError(http.StatusBadRequest, "BAD_REQUEST", "Username path parameter is required.")
+	}
+	user, err := c.repo.GetUserByID(ctx, userID)
+	if err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			return nil, ErrUserNotFound
+		}
+		return nil, NewAppError(http.StatusInternalServerError, "INTERNAL_ERROR", "Error retrieving user.")
+	}
+	if !strings.EqualFold(user.Username, targetUsername) {
+		return nil, NewAppError(http.StatusForbidden, "FORBIDDEN", "Cannot refresh token for another user.")
+	}
+	return c.issueTokenForUser(ctx, user, "Token refresh")
 }

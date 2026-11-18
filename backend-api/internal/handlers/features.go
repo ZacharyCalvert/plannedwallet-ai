@@ -27,16 +27,20 @@ func isWriteMethod(method string) bool {
 		method == http.MethodPatch
 }
 
+func trimSingleSegmentPrefix(trimmed, suffix string) bool {
+	if !strings.HasSuffix(trimmed, suffix) {
+		return false
+	}
+	username := strings.TrimSuffix(trimmed, suffix)
+	return username != "" && !strings.Contains(username, "/")
+}
+
 func isLoginTokenPath(method, path string) bool {
 	if method != http.MethodPost || !strings.HasPrefix(path, "/api/v1/users/") {
 		return false
 	}
 	trimmed := strings.TrimPrefix(path, "/api/v1/users/")
-	if !strings.HasSuffix(trimmed, "/token") {
-		return false
-	}
-	username := strings.TrimSuffix(trimmed, "/token")
-	return username != "" && !strings.Contains(username, "/")
+	return trimSingleSegmentPrefix(trimmed, "/token") || trimSingleSegmentPrefix(trimmed, "/token/refresh")
 }
 
 // ReadOnlyMiddleware rejects state-mutating HTTP methods with 503 Service Unavailable

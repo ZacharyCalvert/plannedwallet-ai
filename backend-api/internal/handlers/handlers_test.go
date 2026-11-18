@@ -38,7 +38,7 @@ func setupTestRouter() (*gin.Engine, *handlers.Handler) {
 
 	repo := repository.NewMemoryRepository()
 	captcha.SetCustomStore(captcha.NewRepoStore(repo))
-	authService := auth.NewService("test-secret-key-12345", 3600)
+	authService := auth.NewService("test-secret-key-12345", auth.DefaultExpirationSeconds)
 	ctrl := controller.NewController(repo, authService)
 	h := handlers.NewHandler(ctrl, authService)
 	h.RegisterRoutes(r)
@@ -270,6 +270,47 @@ func TestTokenExchange_TOTPAndAuthentication(t *testing.T) {
 	r.ServeHTTP(wBadTotp, reqBadTotp)
 	if wBadTotp.Code != http.StatusUnauthorized {
 		t.Fatalf("expected 401 for bad TOTP, got %d", wBadTotp.Code)
+	}
+}
+
+func TestRefreshTokenEndpoint(t *testing.T) {
+	r, _ := setupTestRouter()
+	token := registerAndGetToken(t, r, "ref_user", "ref@example.com", "Password123!")
+
+	req := newTestRequest(http.MethodPost, "/api/v1/users/ref_user/token/refresh", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200 refreshing valid JWT, got %d: %s", w.Code, w.Body.String())
+	}
+	var tokRes models.TokenResponse
+	_ = json.Unmarshal(w.Body.Bytes(), &tokRes)
+	if tokRes.ExpiresIn != 900 || tokRes.TokenType != "Bearer" || tokRes.AccessToken == "" || tokRes.AccessToken == token {
+		t.Fatalf("unexpected refresh response: %+v", tokRes)
+	}
+
+	reqAcc := newTestRequest(http.MethodGet, "/api/v1/accounts", nil)
+	reqAcc.Header.Set("Authorization", "Bearer "+tokRes.AccessToken)
+	wAcc := httptest.NewRecorder()
+	r.ServeHTTP(wAcc, reqAcc)
+	if wAcc.Code != http.StatusOK {
+		t.Fatalf("expected refreshed token to access protected route, got %d", wAcc.Code)
+	}
+
+	reqOther := newTestRequest(http.MethodPost, "/api/v1/users/someone_else/token/refresh", nil)
+	reqOther.Header.Set("Authorization", "Bearer "+token)
+	wOther := httptest.NewRecorder()
+	r.ServeHTTP(wOther, reqOther)
+	if wOther.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 refreshing another username, got %d", wOther.Code)
+	}
+
+	reqUnauth := newTestRequest(http.MethodPost, "/api/v1/users/ref_user/token/refresh", nil)
+	wUnauth := httptest.NewRecorder()
+	r.ServeHTTP(wUnauth, reqUnauth)
+	if wUnauth.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 without JWT, got %d", wUnauth.Code)
 	}
 }
 

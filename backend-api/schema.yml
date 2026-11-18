@@ -256,7 +256,7 @@ paths:
       description: |
         Exchanges a username (provided in the path) and a password (provided in the request body)
         for a signed JWT access token. The submitted password is verified against the stored bcrypt hash.
-      operationId: exchangeToken
+      operationId: exchangePasswordForToken
       parameters:
         - name: username
           in: path
@@ -296,6 +296,64 @@ paths:
         '404':
           summary: User not found
           description: No user found matching the provided username.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/users/{username}/token/refresh:
+    parameters:
+      - $ref: '#/components/parameters/XClientId'
+    post:
+      tags:
+        - Authentication
+      summary: Exchange an existing valid JWT for a new JWT
+      description: |
+        Exchanges a currently valid Bearer JWT for a freshly signed 15-minute JWT (`expires_in` seconds)
+        for the authenticated user without requiring password or TOTP re-entry.
+      operationId: refreshToken
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: username
+          in: path
+          required: true
+          description: The username of the authenticated user refreshing their token.
+          schema:
+            type: string
+            example: "johndoe"
+      responses:
+        '200':
+          summary: New JWT token issued
+          description: Existing JWT was valid; returns a freshly signed JWT access token.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenResponse'
+        '400':
+          summary: Bad request
+          description: Missing username path parameter or X-Client-ID header.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          summary: Unauthorized
+          description: Missing, invalid, or expired Bearer JWT.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          summary: Forbidden
+          description: Authenticated token subject does not match path username.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          summary: User not found
+          description: Authenticated user record no longer exists.
           content:
             application/json:
               schema:
@@ -3946,8 +4004,8 @@ components:
           example: "Bearer"
         expires_in:
           type: integer
-          description: Token validity duration in seconds.
-          example: 3600
+          description: Token validity duration in seconds (default 900 seconds / 15 minutes).
+          example: 900
 
     AccountCreationRequest:
       type: object

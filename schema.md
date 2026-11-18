@@ -226,7 +226,8 @@ All HTTP requests require the `X-Client-ID` header. Protected endpoints require 
 - `GET /api/v1/captcha`: Generate a new visual CAPTCHA challenge (returns unique ID and base64 PNG data URI) to prevent automated bot account creations.
 - `GET /api/v1/captcha/{captchaId}`: Stream raw PNG image bytes for a CAPTCHA challenge.
 - `POST /api/v1/users`: User self-registration with password complexity, uniqueness checks, and CAPTCHA challenge verification (`captcha_id`, `captcha_solution`).
-- `POST /api/v1/users/{username}/token`: TOTP-authenticated JWT token exchange.
+- `POST /api/v1/users/{username}/token`: TOTP-authenticated JWT token exchange (issues a 15-minute / 900s JWT by default).
+- `POST /api/v1/users/{username}/token/refresh`: Exchanges an existing, valid Bearer JWT for a freshly signed 15-minute JWT without re-entering credentials.
 
 ### 3.3 Accounts
 - `POST /api/v1/accounts`: Create account (`checking`, `savings`, `credit card`, `asset`, `snapshot`).
@@ -304,7 +305,7 @@ All HTTP requests require the `X-Client-ID` header. Protected endpoints require 
 
 ### 3.10 System & Feature Flags
 - `GET /api/v1/features`: Returns enabled backend feature flags (e.g., `{"features": ["read_only"]}` when `PW_READONLY=true`, otherwise `{"features": []}`).
-  - When `PW_READONLY=true`, write operations (`POST`, `PUT`, `PATCH`, `DELETE`) return `503 Service Unavailable` (`READ_ONLY_MODE`) while retaining read (`GET`) routes and user login (`POST /api/v1/users/{username}/token`).
+  - When `PW_READONLY=true`, write operations (`POST`, `PUT`, `PATCH`, `DELETE`) return `503 Service Unavailable` (`READ_ONLY_MODE`) while retaining read (`GET`) routes, user login (`POST /api/v1/users/{username}/token`), and JWT refresh (`POST /api/v1/users/{username}/token/refresh`).
 
 ### 3.11 Recurring Transactions & Reminders (`recurring_transactions`)
 - Recurring transactions are strictly user-scoped (`recurring_transactions.user_id`) and represent both bills (`amount < 0`) and income (`amount > 0`) through a unified table and API.

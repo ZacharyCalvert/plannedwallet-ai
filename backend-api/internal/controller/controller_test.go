@@ -15,7 +15,7 @@ import (
 
 func setupController() (*controller.Controller, repository.Repository) {
 	repo := repository.NewMemoryRepository()
-	authService := auth.NewService("test-secret-123456", 3600)
+	authService := auth.NewService("test-secret-123456", auth.DefaultExpirationSeconds)
 	return controller.NewController(repo, authService), repo
 }
 
@@ -141,7 +141,7 @@ func TestRegisterUser_CaptchaEnforcement(t *testing.T) {
 	}
 }
 
-func TestExchangeToken_TOTP(t *testing.T) {
+func TestExchangePasswordForToken_TOTP(t *testing.T) {
 	ctrl, _ := setupController()
 	ctx := context.Background()
 
@@ -153,7 +153,7 @@ func TestExchangeToken_TOTP(t *testing.T) {
 
 	validCode, _ := auth.GenerateCode(userRes.TOTPSecret, time.Now().Unix()/30)
 
-	tok, err := ctrl.ExchangeToken(ctx, "totp_user", "ValidPassword123!", validCode)
+	tok, err := ctrl.ExchangePasswordForToken(ctx, "totp_user", "ValidPassword123!", validCode)
 	if err != nil || tok.AccessToken == "" {
 		t.Fatalf("expected successful token exchange, got %v", err)
 	}
@@ -164,13 +164,13 @@ func TestExchangeToken_TOTP(t *testing.T) {
 		t.Error("expected new user to have subscriber claim false")
 	}
 
-	_, err = ctrl.ExchangeToken(ctx, "totp_user", "ValidPassword123!", "000000")
+	_, err = ctrl.ExchangePasswordForToken(ctx, "totp_user", "ValidPassword123!", "000000")
 	if err == nil {
 		t.Fatal("expected error with invalid TOTP code")
 	}
 }
 
-func TestExchangeToken_SubscriberClaim(t *testing.T) {
+func TestExchangePasswordForToken_SubscriberClaim(t *testing.T) {
 	ctrl, repo := setupController()
 	ctx := context.Background()
 
@@ -184,16 +184,47 @@ func TestExchangeToken_SubscriberClaim(t *testing.T) {
 	})
 
 	code, _ := auth.GenerateCode(userRes.TOTPSecret, time.Now().Unix()/30)
-	tok, err := ctrl.ExchangeToken(ctx, "sub_user", "ValidPassword123!", code)
+	tok, err := ctrl.ExchangePasswordForToken(ctx, "sub_user", "ValidPassword123!", code)
 	if err != nil {
-		t.Fatalf("ExchangeToken failed: %v", err)
+		t.Fatalf("ExchangePasswordForToken failed: %v", err)
 	}
 
-	authSvc := auth.NewService("test-secret-123456", 3600)
+	authSvc := auth.NewService("test-secret-123456", auth.DefaultExpirationSeconds)
 	claims, err := authSvc.ValidateToken(tok.AccessToken)
 	if err != nil || !claims.Subscriber {
 		t.Fatalf("expected subscriber true, got %v (err: %v)", claims.Subscriber, err)
 	}
+}
+
+func TestRefreshToken_ValidAndForbiddenCases(t *testing.T) {
+	ctrl, repo := setupController()
+	ctx := context.Background()
+
+	userRes, _ := ctrl.RegisterUser(ctx, models.UserRegistrationRequest{
+		Username: "refresh_user", Email: "refresh@example.com", Password: "ValidPassword123!",
+	})
+	code, _ := auth.GenerateCode(userRes.TOTPSecret, time.Now().Unix()/30)
+	initial, err := ctrl.ExchangePasswordForToken(ctx, "refresh_user", "ValidPassword123!", code)
+	if err != nil || initial.ExpiresIn != 900 {
+		t.Fatalf("expected initial ExpiresIn=900, got %+v err=%v", initial, err)
+	}
+
+	_ = repo.CreateSubscription(ctx, &models.Subscription{
+		ID: "sub-ref-1", UserID: userRes.ID, PaidDate: "2026-01-01", SubscriberEnds: "2099-12-31",
+	})
+	refreshed, err := ctrl.RefreshToken(ctx, userRes.ID, "refresh_user")
+	if err != nil || refreshed.ExpiresIn != 900 || refreshed.AccessToken == initial.AccessToken {
+		t.Fatalf("unexpected refresh result: %+v err=%v", refreshed, err)
+	}
+	claims, err := auth.NewService("test-secret-123456", 900).ValidateToken(refreshed.AccessToken)
+	if err != nil || !claims.Subscriber || claims.UserID != userRes.ID {
+		t.Fatalf("unexpected refreshed claims: %+v err=%v", claims, err)
+	}
+
+	_, err = ctrl.RefreshToken(ctx, userRes.ID, "other_user")
+	assertAppErrorStatus(t, err, http.StatusForbidden)
+	_, err = ctrl.RefreshToken(ctx, "missing-user-id", "refresh_user")
+	assertAppErrorStatus(t, err, http.StatusNotFound)
 }
 
 func TestAccountAndCheckingRecordWorkflow(t *testing.T) {

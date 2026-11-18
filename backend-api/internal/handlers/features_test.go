@@ -88,6 +88,15 @@ func TestReadOnlyMiddleware_BlocksMutationsAllowsReadsAndLogin(t *testing.T) {
 		t.Fatalf("expected 200 on login during read-only mode, got %d: %s", wLogin.Code, wLogin.Body.String())
 	}
 
+	// Valid JWT refresh must also succeed in read-only mode so active sessions stay alive.
+	reqRefresh := newTestRequest(http.MethodPost, "/api/v1/users/ro_user1/token/refresh", nil)
+	reqRefresh.Header.Set("Authorization", "Bearer "+tokRes.AccessToken)
+	wRefresh := httptest.NewRecorder()
+	r.ServeHTTP(wRefresh, reqRefresh)
+	if wRefresh.Code != http.StatusOK {
+		t.Fatalf("expected 200 on token refresh during read-only mode, got %d: %s", wRefresh.Code, wRefresh.Body.String())
+	}
+
 	// Read endpoints succeed.
 	wList := doAuthedJSON(t, r, http.MethodGet, "/api/v1/accounts/"+accID+"/records", tokRes.AccessToken, nil)
 	if wList.Code != http.StatusOK {

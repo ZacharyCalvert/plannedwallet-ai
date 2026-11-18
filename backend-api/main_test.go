@@ -136,6 +136,12 @@ func TestInitJWTServiceSecureInProduction(t *testing.T) {
 	}()
 
 	os.Setenv("JWT_SECRET", "custom-production-secret-token-key-256")
+	os.Unsetenv("JWT_EXPIRATION_SECONDS")
+	defaultSvc := initJWTService(true)
+	if defaultSvc.ExpirationSeconds() != 900 {
+		t.Errorf("Expected default expiration 900, got %d", defaultSvc.ExpirationSeconds())
+	}
+
 	os.Setenv("JWT_EXPIRATION_SECONDS", "7200")
 
 	svc := initJWTService(true)
