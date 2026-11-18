@@ -12,21 +12,34 @@ function decodeBase64Url(segment: string): string {
   return Buffer.from(padded, 'base64').toString('utf8');
 }
 
-export function parseJwtExpirationMs(token: string): number | null {
+export function parseJwtClaims(token: string): Record<string, unknown> | null {
   if (!token) return null;
   const parts = token.split('.');
   if (parts.length !== 3 || !parts[1]) {
     return null;
   }
   try {
-    const parsed = JSON.parse(decodeBase64Url(parts[1])) as { exp?: unknown };
-    if (typeof parsed?.exp !== 'number' || !Number.isFinite(parsed.exp)) {
-      return null;
-    }
-    return parsed.exp * 1000;
+    const parsed = JSON.parse(decodeBase64Url(parts[1]));
+    return parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : null;
   } catch {
     return null;
   }
+}
+
+export function isJwtTermsApproved(token: string): boolean {
+  const claims = parseJwtClaims(token);
+  if (!claims) {
+    return true;
+  }
+  return claims.terms_approved !== false;
+}
+
+export function parseJwtExpirationMs(token: string): number | null {
+  const parsed = parseJwtClaims(token);
+  if (!parsed || typeof parsed.exp !== 'number' || !Number.isFinite(parsed.exp)) {
+    return null;
+  }
+  return parsed.exp * 1000;
 }
 
 export interface RefreshEvaluationInput {

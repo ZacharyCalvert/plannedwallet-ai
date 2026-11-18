@@ -21,6 +21,8 @@ import {
   CreateRecordRequest,
   CreateSnapshotRequest,
   CreateStoreRecordRequest,
+  PolicyAgreement,
+  PolicyAgreementRequest,
   ReconcileReport,
   RecurringTransaction,
   RecurringTransactionApplyRequest,
@@ -39,6 +41,10 @@ import {
   isReadOnlyErrorResponse,
   notifyMaintenanceWarning,
 } from './maintenance';
+import {
+  isPolicyApprovalRequiredResponse,
+  notifyPolicyRequired,
+} from './policyAgreement';
 
 async function tracedFetch(url: string, init: RequestInit = {}): Promise<Response> {
   const traceparent = createTraceparent();
@@ -56,9 +62,12 @@ async function tracedFetch(url: string, init: RequestInit = {}): Promise<Respons
     const resTraceparent = res.headers.get('traceparent') || traceparent;
     if (!res.ok) {
       logTraceError(resTraceparent, `Response error ${res.status} for ${url}`);
+      const errBody = await res.clone().json().catch(() => ({}));
+      if (isPolicyApprovalRequiredResponse(res.status, errBody)) {
+        notifyPolicyRequired();
+      }
       const method = (init.method || 'GET').toUpperCase();
       if (method !== 'GET' && method !== 'HEAD' && method !== 'OPTIONS') {
-        const errBody = await res.clone().json().catch(() => ({}));
         if (isReadOnlyErrorResponse(res.status, errBody)) {
           notifyMaintenanceWarning(MAINTENANCE_EDIT_WARNING);
         }
@@ -150,6 +159,27 @@ export async function deleteUserAccount(
     const err = await res.json().catch(() => ({}));
     throw new Error(err.message || 'Failed to delete user account');
   }
+}
+
+export async function submitPolicyAgreement(
+  token: string,
+  username: string,
+  payload: PolicyAgreementRequest
+): Promise<PolicyAgreement> {
+  const url = `/api/v1/users/${encodeURIComponent(username)}/policy-agreements`;
+  const res = await tracedFetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || 'Failed to record policy agreement');
+  }
+  return res.json();
 }
 
 export async function fetchCaptcha(): Promise<CaptchaResponse> {

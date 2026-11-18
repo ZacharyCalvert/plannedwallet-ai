@@ -10,6 +10,25 @@ export interface UserProfile {
   created_at: string;
 }
 
+export interface PolicyAgreementRequest {
+  terms_approved: boolean;
+  privacy_approved: boolean;
+  us_customer: boolean;
+  terms_sha256: string;
+}
+
+export interface PolicyAgreement {
+  id: string;
+  user_id: string;
+  terms_sha256: string;
+  terms_approved: boolean;
+  privacy_approved: boolean;
+  us_customer: boolean;
+  active: boolean;
+  client_ip: string;
+  agreed_at: string;
+}
+
 export interface UserRegistrationResponse {
   id: string;
   username: string;

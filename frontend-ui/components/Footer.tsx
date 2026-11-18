@@ -9,21 +9,21 @@ export function Footer() {
         </span>
         <nav className="app-footer-links" aria-label="Legal and security policies">
           <a
+            href="/terms-of-use.pdf"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="app-footer-link"
+          >
+            Terms of Use
+          </a>
+          <span className="app-footer-sep" aria-hidden="true">|</span>
+          <a
             href="/privacy-and-security-policy.pdf"
             target="_blank"
             rel="noopener noreferrer"
             className="app-footer-link"
           >
             Privacy Policy
-          </a>
-          <span className="app-footer-sep" aria-hidden="true">|</span>
-          <a
-            href="/privacy-and-security-policy.pdf#page=2"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="app-footer-link"
-          >
-            Security Policy
           </a>
         </nav>
       </div>

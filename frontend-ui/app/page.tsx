@@ -4,14 +4,20 @@ import { useState, useEffect, useRef } from 'react';
 import { BrowserRouter, useNavigate } from 'react-router-dom';
 import { UserSession } from '../lib/types';
 import { fetchFeatures, refreshToken } from '../lib/api';
-import { getRemainingSessionMs, shouldRefreshTokenOnActivity } from '../lib/tokenRefresh';
+import {
+  getRemainingSessionMs,
+  isJwtTermsApproved,
+  shouldRefreshTokenOnActivity,
+} from '../lib/tokenRefresh';
 import {
   isReadOnlyFeatureEnabled,
   subscribeMaintenanceWarning,
 } from '../lib/maintenance';
+import { subscribePolicyRequired } from '../lib/policyAgreement';
 import { Banner } from '../components/Banner';
 import { AuthCenter } from '../components/AuthCenter';
 import { Dashboard } from '../components/Dashboard';
+import { PolicyAgreementPrompt } from '../components/PolicyAgreementPrompt';
 import { Footer } from '../components/Footer';
 import { MaintenanceWarningModal } from '../components/MaintenanceWarningModal';
 
@@ -19,6 +25,7 @@ function AppShell() {
   const [session, setSession] = useState<UserSession | null>(null);
   const [isReadOnly, setIsReadOnly] = useState(false);
   const [maintenanceWarning, setMaintenanceWarning] = useState<string | null>(null);
+  const [policyRequired, setPolicyRequired] = useState(false);
   const [sessionNotice, setSessionNotice] = useState('');
   const navigate = useNavigate();
   const sessionRef = useRef<UserSession | null>(session);
@@ -88,9 +95,13 @@ function AppShell() {
       setIsReadOnly(true);
       setMaintenanceWarning(msg);
     });
+    const unsubscribePolicy = subscribePolicyRequired(() => {
+      setPolicyRequired(true);
+    });
     return () => {
       cancelled = true;
       unsubscribe();
+      unsubscribePolicy();
     };
   }, []);
 
@@ -118,32 +129,50 @@ function AppShell() {
 
   const handleAuthSuccess = (username: string, token: string) => {
     setSessionNotice('');
+    setPolicyRequired(!isJwtTermsApproved(token));
     setSession({ username, token });
+  };
+
+  const handlePolicyApproved = (nextToken: string) => {
+    setPolicyRequired(false);
+    setSession((prev) => (prev ? { ...prev, token: nextToken } : prev));
   };
 
   const handleSignOut = () => {
     setSessionNotice('');
+    setPolicyRequired(false);
     setSession(null);
     navigate('/', { replace: true });
   };
 
   const handleUserDeleted = () => {
     setSessionNotice('Your user account and all associated records have been permanently deleted.');
+    setPolicyRequired(false);
     setSession(null);
     navigate('/', { replace: true });
   };
+
+  const needsPolicyApproval = Boolean(
+    session && (policyRequired || !isJwtTermsApproved(session.token))
+  );
 
   return (
     <div className="app-root">
       <Banner
         username={session?.username}
-        onUserClick={() => navigate('/user')}
+        onUserClick={needsPolicyApproval ? undefined : () => navigate('/user')}
         onSignOut={handleSignOut}
         readOnly={isReadOnly}
       />
       <div className="app-content">
         {!session ? (
           <AuthCenter onSuccess={handleAuthSuccess} readOnly={isReadOnly} sessionNotice={sessionNotice} />
+        ) : needsPolicyApproval ? (
+          <PolicyAgreementPrompt
+            session={session}
+            onApproved={handlePolicyApproved}
+            onSignOut={handleSignOut}
+          />
         ) : (
           <Dashboard key={session.username} session={session} onUserDeleted={handleUserDeleted} />
         )}

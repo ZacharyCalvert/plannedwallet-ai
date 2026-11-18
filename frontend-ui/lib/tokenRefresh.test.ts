@@ -2,6 +2,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   getRemainingSessionMs,
+  isJwtTermsApproved,
   parseJwtExpirationMs,
   shouldRefreshTokenOnActivity,
   TOKEN_REFRESH_FAILURE_COOLDOWN_MS,
@@ -125,5 +126,12 @@ describe('Token Refresh Helpers', () => {
     assert.equal(getRemainingSessionMs(validToken, nowMs), 900_000);
     assert.equal(getRemainingSessionMs(expiredToken, nowMs), 0);
     assert.equal(getRemainingSessionMs('invalid', nowMs), null);
+  });
+
+  it('detects terms_approved JWT claim state cleanly', () => {
+    assert.equal(isJwtTermsApproved(buildFakeJwt({ terms_approved: false })), false);
+    assert.equal(isJwtTermsApproved(buildFakeJwt({ terms_approved: true })), true);
+    assert.equal(isJwtTermsApproved(buildFakeJwt({ sub: 'legacy-token' })), true);
+    assert.equal(isJwtTermsApproved('not-a-jwt'), true);
   });
 });
