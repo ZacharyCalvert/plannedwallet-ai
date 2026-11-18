@@ -15,7 +15,7 @@ on:
         type: choice
         options:
           - stage
-          - production
+          - prod
 
 permissions:
   id-token: write
@@ -56,8 +56,8 @@ jobs:
       - name: Execute Raw SQL Script inside VNet via Container App Job
         env:
           TARGET_ENV: ${{ inputs.environment || 'stage' }}
-          AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP || (inputs.environment == 'production' && 'rg-plannedwallet-prod' || 'rg-plannedwallet-stage') }}
-          MIGRATION_JOB_NAME: ${{ vars.MIGRATION_JOB_NAME || (inputs.environment == 'production' && 'job-pw-prod-migrations' || 'job-pw-stage-migrations') }}
+          AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP || (inputs.environment == 'prod' && 'rg-plannedwallet-prod' || 'rg-plannedwallet-stage') }}
+          MIGRATION_JOB_NAME: ${{ vars.MIGRATION_JOB_NAME || (inputs.environment == 'prod' && 'job-pw-prod-migrations' || 'job-pw-stage-migrations') }}
           CONTAINER_IMAGE: ${{ vars.MIGRATION_CONTAINER_IMAGE || 'postgres:16-alpine' }}
           SQL_FILE_PATH: 'backend-api/internal/database/init.sql'
         run: |

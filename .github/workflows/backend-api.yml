@@ -17,7 +17,6 @@ on:
         type: choice
         options:
           - stage
-          - production
           - prod
       run_migrations:
         description: 'Execute ephemeral database migration job before deploying'
@@ -157,13 +156,13 @@ jobs:
           cache-from: type=gha
 
   deploy-backend:
-    name: Deploy Backend to ${{ (inputs.environment == 'production' || inputs.environment == 'prod') && 'production' || 'stage' }}
+    name: Deploy Backend to ${{ (github.event_name == 'workflow_dispatch' && inputs.environment == 'prod') && 'prod' || 'stage' }}
     needs: test-and-build
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    environment: ${{ (github.event_name == 'workflow_dispatch' && (inputs.environment == 'production' || inputs.environment == 'prod')) && 'production' || 'stage' }}
+    environment: ${{ (github.event_name == 'workflow_dispatch' && inputs.environment == 'prod') && 'prod' || 'stage' }}
     concurrency:
-      group: deployment-${{ (github.event_name == 'workflow_dispatch' && (inputs.environment == 'production' || inputs.environment == 'prod')) && 'production' || 'stage' }}
+      group: deployment-${{ (github.event_name == 'workflow_dispatch' && inputs.environment == 'prod') && 'prod' || 'stage' }}
       cancel-in-progress: false
 
     steps:
@@ -198,8 +197,8 @@ jobs:
       - name: Resolve Target Environment and ACR Metadata
         id: meta
         run: |
-          if [ "${{ inputs.environment }}" = "production" ] || [ "${{ inputs.environment }}" = "prod" ]; then
-            TARGET_ENV="production"
+          if [ "${{ inputs.environment }}" = "prod" ]; then
+            TARGET_ENV="prod"
             ENV_SHORT="prod"
           else
             TARGET_ENV="stage"

@@ -10,7 +10,7 @@ on:
         type: choice
         options:
           - stage
-          - production
+          - prod
 
 permissions:
   id-token: write
@@ -34,8 +34,8 @@ jobs:
           TARGET_ENV: ${{ inputs.environment }}
         run: |
           echo "Selected Target Environment: $TARGET_ENV"
-          if [ "$TARGET_ENV" != "stage" ] && [ "$TARGET_ENV" != "production" ]; then
-            echo "::error::Invalid target environment '$TARGET_ENV'. Must be stage or production."
+          if [ "$TARGET_ENV" != "stage" ] && [ "$TARGET_ENV" != "prod" ]; then
+            echo "::error::Invalid target environment '$TARGET_ENV'. Must be stage or prod."
             exit 1
           fi
 
@@ -49,8 +49,8 @@ jobs:
       - name: Execute Read-Only Statistics Script inside VNet via Container App Job
         env:
           TARGET_ENV: ${{ inputs.environment }}
-          AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP || (inputs.environment == 'production' && 'rg-plannedwallet-prod' || 'rg-plannedwallet-stage') }}
-          MIGRATION_JOB_NAME: ${{ vars.MIGRATION_JOB_NAME || (inputs.environment == 'production' && 'job-pw-prod-migrations' || 'job-pw-stage-migrations') }}
+          AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP || (inputs.environment == 'prod' && 'rg-plannedwallet-prod' || 'rg-plannedwallet-stage') }}
+          MIGRATION_JOB_NAME: ${{ vars.MIGRATION_JOB_NAME || (inputs.environment == 'prod' && 'job-pw-prod-migrations' || 'job-pw-stage-migrations') }}
           CONTAINER_IMAGE: ${{ vars.MIGRATION_CONTAINER_IMAGE || 'postgres:16-alpine' }}
           SQL_FILE_PATH: '.github/scripts/db-statistics.sql'
         run: |
