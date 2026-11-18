@@ -1252,4 +1252,67 @@ func TestRecordPolicyAgreement_ResolvesAzureClientIP(t *testing.T) {
 	}
 }
 
+func registerUserFull(t *testing.T, r *gin.Engine, username, email, password string) models.UserResponse {
+	t.Helper()
+	body, _ := json.Marshal(models.UserRegistrationRequest{Username: username, Email: email, Password: password})
+	req := newTestRequest(http.MethodPost, "/api/v1/users", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("registerUserFull expected 201, got %d: %s", w.Code, w.Body.String())
+	}
+	var res models.UserResponse
+	_ = json.Unmarshal(w.Body.Bytes(), &res)
+	return res
+}
+
+func exchangeTokenWithSecret(t *testing.T, r *gin.Engine, username, password, totpSecret string) string {
+	t.Helper()
+	code, _ := auth.GenerateCode(totpSecret, time.Now().Unix()/30)
+	tokBody, _ := json.Marshal(models.TokenExchangeRequest{Password: password, TOTPCode: code})
+	wTok := httptest.NewRecorder()
+	reqTok := newTestRequest(http.MethodPost, "/api/v1/users/"+username+"/token", bytes.NewReader(tokBody))
+	reqTok.Header.Set("Content-Type", "application/json")
+	r.ServeHTTP(wTok, reqTok)
+	var tokRes models.TokenResponse
+	_ = json.Unmarshal(wTok.Body.Bytes(), &tokRes)
+	return tokRes.AccessToken
+}
+
+func TestAccountRecoveryAndRotationEndpoints(t *testing.T) {
+	r, _ := setupTestRouter()
+	uA := registerUserFull(t, r, "rec_h_a", "recha@example.com", "Password123!")
+	uB := registerUserFull(t, r, "rec_h_b", "rechb@example.com", "Password123!")
+
+	recReq, _ := json.Marshal(models.AccountRecoveryRequest{RecoveryPhrase: uA.RecoveryPhrase, NewPassword: "RecoveredPass2!"})
+	wRec := httptest.NewRecorder()
+	req := newTestRequest(http.MethodPost, "/api/v1/users/rec_h_a/recover", bytes.NewReader(recReq))
+	req.Header.Set("Content-Type", "application/json")
+	r.ServeHTTP(wRec, req)
+	if wRec.Code != http.StatusOK {
+		t.Fatalf("expected 200 recovering account, got %d: %s", wRec.Code, wRec.Body.String())
+	}
+	var recRes models.AccountRecoveryResponse
+	_ = json.Unmarshal(wRec.Body.Bytes(), &recRes)
+
+	wReplay := httptest.NewRecorder()
+	reqReplay := newTestRequest(http.MethodPost, "/api/v1/users/rec_h_a/recover", bytes.NewReader(recReq))
+	reqReplay.Header.Set("Content-Type", "application/json")
+	r.ServeHTTP(wReplay, reqReplay)
+	if wReplay.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 replaying spent phrase, got %d", wReplay.Code)
+	}
+
+	tok := exchangeTokenWithSecret(t, r, "rec_h_a", "RecoveredPass2!", recRes.TOTPSecret)
+	codeA, _ := auth.GenerateCode(recRes.TOTPSecret, time.Now().Unix()/30)
+	rotPayload := map[string]string{"password": "RecoveredPass2!", "totp_code": codeA}
+	if wCross := doAuthedJSON(t, r, http.MethodPost, "/api/v1/users/"+uB.Username+"/recovery-key/rotate", tok, rotPayload); wCross.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 rotating another user's key, got %d", wCross.Code)
+	}
+	if wRot := doAuthedJSON(t, r, http.MethodPost, "/api/v1/users/rec_h_a/recovery-key/rotate", tok, rotPayload); wRot.Code != http.StatusOK {
+		t.Fatalf("expected 200 rotating own recovery key, got %d: %s", wRot.Code, wRot.Body.String())
+	}
+}
+
 

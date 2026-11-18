@@ -50,12 +50,14 @@ type CaptchaResponse struct {
 
 // UserResponse represents the public user info returned after registration.
 type UserResponse struct {
-	ID         string    `json:"id"`
-	Username   string    `json:"username"`
-	Email      string    `json:"email"`
-	TOTPSecret string    `json:"totp_secret,omitempty"`
-	TOTPURL    string    `json:"totp_url,omitempty"`
-	CreatedAt  time.Time `json:"created_at"`
+	ID              string    `json:"id"`
+	Username        string    `json:"username"`
+	Email           string    `json:"email"`
+	TOTPSecret      string    `json:"totp_secret,omitempty"`
+	TOTPURL         string    `json:"totp_url,omitempty"`
+	RecoveryPhrase  string    `json:"recovery_phrase,omitempty"`
+	RecoveryKeyHint string    `json:"recovery_key_hint,omitempty"`
+	CreatedAt       time.Time `json:"created_at"`
 }
 
 // TokenExchangeRequest represents the body when exchanging credentials for a JWT.
@@ -696,6 +698,48 @@ type PolicyAgreementResponse struct {
 	Active          bool      `json:"active"`
 	ClientIP        string    `json:"client_ip"`
 	AgreedAt        time.Time `json:"agreed_at"`
+}
+
+// UserRecoveryKey represents a ledger entry for a single-use hashed 12-word recovery phrase.
+type UserRecoveryKey struct {
+	ID        string     `json:"id"`
+	UserID    string     `json:"user_id"`
+	KeyHash   string     `json:"-"`
+	KeyHint   string     `json:"key_hint"`
+	Active    bool       `json:"active"`
+	CreatedAt time.Time  `json:"created_at"`
+	UsedAt    *time.Time `json:"used_at,omitempty"`
+	UsedIP    string     `json:"used_ip,omitempty"`
+}
+
+// AccountRecoveryRequest represents the unauthenticated payload to reset password and MFA via a recovery phrase.
+type AccountRecoveryRequest struct {
+	RecoveryPhrase  string `json:"recovery_phrase" binding:"required"`
+	NewPassword     string `json:"new_password" binding:"required,min=10"`
+	CaptchaID       string `json:"captcha_id,omitempty"`
+	CaptchaSolution string `json:"captcha_solution,omitempty"`
+}
+
+// AccountRecoveryResponse returns newly provisioned MFA and single-use rotated recovery credentials.
+type AccountRecoveryResponse struct {
+	Username        string `json:"username"`
+	TOTPSecret      string `json:"totp_secret"`
+	TOTPURL         string `json:"totp_url"`
+	RecoveryPhrase  string `json:"recovery_phrase"`
+	RecoveryKeyHint string `json:"recovery_key_hint"`
+}
+
+// RotateRecoveryKeyRequest authenticates a signed-in user before rotating their active recovery phrase.
+type RotateRecoveryKeyRequest struct {
+	Password string `json:"password" binding:"required"`
+	TOTPCode string `json:"totp_code" binding:"required"`
+}
+
+// RotateRecoveryKeyResponse returns the newly issued recovery phrase and masked hint once.
+type RotateRecoveryKeyResponse struct {
+	RecoveryPhrase  string    `json:"recovery_phrase"`
+	RecoveryKeyHint string    `json:"recovery_key_hint"`
+	CreatedAt       time.Time `json:"created_at"`
 }
 
 

@@ -512,6 +512,7 @@ func (h *Handler) RegisterRoutes(r *gin.Engine) {
 	protected.POST("/users/:username/token/refresh", h.RefreshToken)
 	protected.POST("/users/:username/policy-agreements", h.RecordPolicyAgreement)
 	protected.GET("/users/:username/policy-agreements", h.ListPolicyAgreements)
+	protected.POST("/users/:username/recovery-key/rotate", h.RotateRecoveryKey)
 	protected.DELETE("/users/:username", h.DeleteUser)
 	h.registerAccountRoutes(protected)
 	h.registerStoreAndSnapshotRoutes(protected)
@@ -530,6 +531,7 @@ func (h *Handler) registerPublicRoutes(api *gin.RouterGroup) {
 	api.GET("/captcha/:captchaId", h.GetCaptchaImage)
 	api.POST("/users", h.RegisterUser)
 	api.POST("/users/:username/token", h.ExchangePasswordForToken)
+	api.POST("/users/:username/recover", h.RecoverAccount)
 }
 
 func (h *Handler) registerAccountRoutes(p *gin.RouterGroup) {

@@ -84,7 +84,8 @@ flowchart LR
 
 ### Security & Access Control
 - **User Authentication & MFA**: Self-registration (`POST /api/v1/users`) with BCrypt password hashing and mandatory **RFC 6238 TOTP** secret provisioning, plus credential exchange (`POST /api/v1/users/{username}/token`) issuing signed JWT bearer tokens.
-- **CAPTCHA & Edge Protections**: Visual PNG CAPTCHA verification during registration (`REQUIRE_CAPTCHA`), strict host/origin validation middleware (`cors`), required `X-Client-ID` headers, and optional Azure Front Door ID (`EXPECTED_FDID`) validation in production.
+- **12-Word Account Recovery & Key Rotation (`user_recovery_keys`)**: Registration issues a one-time 12-word recovery phrase hashed with salted **Argon2id** (`m=19456,t=2,p=1`) and verified during onboarding with a **2-word anti-skip spot check**. Lost credentials (`POST /api/v1/users/{username}/recover`) verify CAPTCHA and the active phrase to reset both password and TOTP secret while enforcing single-use rotation, and signed-in users can rotate their phrase (`POST /api/v1/users/{username}/recovery-key/rotate`).
+- **CAPTCHA & Edge Protections**: Visual PNG CAPTCHA verification during registration and recovery (`REQUIRE_CAPTCHA`), strict host/origin validation middleware (`cors`), required `X-Client-ID` headers, and optional Azure Front Door ID (`EXPECTED_FDID`) validation in production.
 - **Multi-User Account & Perspective Sharing**: Role-based collaboration (`admin`, `edit`, `read`) enforced server-side. Unauthorized users receive `404 Not Found` (`ACCOUNT_NOT_FOUND`) to prevent private resource enumeration.
 
 ### Financial Account Types

@@ -1032,4 +1032,47 @@ func TestPolicyAgreementLifecycleAndEnforcement(t *testing.T) {
 	}
 }
 
+func TestAccountRecoveryAndSingleUseRotation(t *testing.T) {
+	ctrl, repo := setupController()
+	ctx := context.Background()
+	u, err := ctrl.RegisterUser(ctx, models.UserRegistrationRequest{Username: "rec_alice", Email: "rec@test.com", Password: "InitialPass1!"})
+	if err != nil || len(strings.Fields(u.RecoveryPhrase)) != 12 || u.RecoveryKeyHint == "" {
+		t.Fatalf("expected 12-word recovery phrase at registration, got %+v err=%v", u, err)
+	}
+	prof, _ := ctrl.GetUser(ctx, u.ID, "rec_alice")
+	if prof.RecoveryPhrase != "" || prof.RecoveryKeyHint != u.RecoveryKeyHint {
+		t.Fatalf("expected GetUser to return hint only without phrase, got %+v", prof)
+	}
+	_, errBad := ctrl.RecoverAccount(ctx, "rec_alice", "203.0.113.9", models.AccountRecoveryRequest{
+		RecoveryPhrase: "wrong phrase words one two three four five six seven eight nine", NewPassword: "RotatedPass2!",
+	})
+	assertAppErrorStatus(t, errBad, http.StatusUnauthorized)
+
+	rec, err := ctrl.RecoverAccount(ctx, "rec_alice", "203.0.113.9", models.AccountRecoveryRequest{
+		RecoveryPhrase: u.RecoveryPhrase, NewPassword: "RotatedPass2!",
+	})
+	if err != nil || rec.TOTPSecret == u.TOTPSecret || rec.RecoveryPhrase == u.RecoveryPhrase {
+		t.Fatalf("expected new TOTP and rotated phrase on recovery, got %+v err=%v", rec, err)
+	}
+	// Old phrase & old TOTP/password must fail; new TOTP/password must succeed
+	_, errReplay := ctrl.RecoverAccount(ctx, "rec_alice", "203.0.113.9", models.AccountRecoveryRequest{
+		RecoveryPhrase: u.RecoveryPhrase, NewPassword: "ReplayPass3!",
+	})
+	assertAppErrorStatus(t, errReplay, http.StatusUnauthorized)
+	newCode, _ := auth.GenerateCode(rec.TOTPSecret, time.Now().Unix()/30)
+	if _, err := ctrl.ExchangePasswordForToken(ctx, "rec_alice", "InitialPass1!", newCode); err == nil {
+		t.Fatal("expected old password to be rejected after recovery")
+	}
+	if _, err := ctrl.ExchangePasswordForToken(ctx, "rec_alice", "RotatedPass2!", newCode); err != nil {
+		t.Fatalf("expected new password + TOTP to succeed after recovery, got %v", err)
+	}
+	rot, err := ctrl.RotateRecoveryKey(ctx, u.ID, "rec_alice", models.RotateRecoveryKeyRequest{Password: "RotatedPass2!", TOTPCode: newCode})
+	if err != nil || rot.RecoveryPhrase == rec.RecoveryPhrase {
+		t.Fatalf("expected rotated recovery phrase, got %+v err=%v", rot, err)
+	}
+	if entries, _ := repo.ListRecoveryKeysByUserID(ctx, u.ID); len(entries) != 3 {
+		t.Fatalf("expected 3 ledger entries (register, recover, rotate), got %d", len(entries))
+	}
+}
+
 

@@ -147,4 +147,11 @@ type Repository interface {
 	GetActivePolicyAgreement(ctx context.Context, userID string) (*models.PolicyAgreement, error)
 	ListPolicyAgreementsByUserID(ctx context.Context, userID string) ([]*models.PolicyAgreement, error)
 	DeactivateAllPolicyAgreements(ctx context.Context) error
+
+	// Account Recovery Key Ledger operations
+	CreateUserWithRecoveryKey(ctx context.Context, user *models.User, key *models.UserRecoveryKey) error
+	GetActiveRecoveryKeyByUserID(ctx context.Context, userID string) (*models.UserRecoveryKey, error)
+	ListRecoveryKeysByUserID(ctx context.Context, userID string) ([]*models.UserRecoveryKey, error)
+	CompleteAccountRecovery(ctx context.Context, userID, newPasswordHash, newTOTPSecret, consumedKeyID, usedIP string, usedAt time.Time, replacementKey *models.UserRecoveryKey) error
+	RotateRecoveryKey(ctx context.Context, userID string, newKey *models.UserRecoveryKey) error
 }

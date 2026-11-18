@@ -64,8 +64,8 @@ func (c *Controller) validateUserUniqueness(ctx context.Context, username, email
 	return nil
 }
 
-func (c *Controller) persistNewUser(ctx context.Context, user *models.User) error {
-	if err := c.repo.CreateUser(ctx, user); err != nil {
+func (c *Controller) persistNewUserWithRecovery(ctx context.Context, user *models.User, key *models.UserRecoveryKey) error {
+	if err := c.repo.CreateUserWithRecoveryKey(ctx, user, key); err != nil {
 		if errors.Is(err, repository.ErrConflict) {
 			return ErrUserAlreadyExists
 		}
@@ -118,18 +118,20 @@ func (c *Controller) validateRegistrationInput(ctx context.Context, req models.U
 	return c.validateUserUniqueness(ctx, strings.TrimSpace(req.Username), strings.TrimSpace(req.Email))
 }
 
-func buildUserResponse(user *models.User) *models.UserResponse {
+func buildUserResponse(user *models.User, recoveryPhrase, recoveryHint string) *models.UserResponse {
 	return &models.UserResponse{
-		ID:         user.ID,
-		Username:   user.Username,
-		Email:      user.Email,
-		TOTPSecret: user.TOTPSecret,
-		TOTPURL:    auth.BuildTOTPURL("PlannedWallet", user.Username, user.TOTPSecret),
-		CreatedAt:  user.CreatedAt,
+		ID:              user.ID,
+		Username:        user.Username,
+		Email:           user.Email,
+		TOTPSecret:      user.TOTPSecret,
+		TOTPURL:         auth.BuildTOTPURL("PlannedWallet", user.Username, user.TOTPSecret),
+		RecoveryPhrase:  recoveryPhrase,
+		RecoveryKeyHint: recoveryHint,
+		CreatedAt:       user.CreatedAt,
 	}
 }
 
-// RegisterUser validates user existence, verifies password rules, generates TOTP secret, and persists user.
+// RegisterUser validates user existence, verifies password rules, generates TOTP & recovery credentials, and persists user.
 func (c *Controller) RegisterUser(ctx context.Context, req models.UserRegistrationRequest) (*models.UserResponse, error) {
 	username, email := strings.TrimSpace(req.Username), strings.TrimSpace(req.Email)
 	trace.LogInfo(ctx, "Registering user: %s (email: %s)", username, email)
@@ -142,25 +144,35 @@ func (c *Controller) RegisterUser(ctx context.Context, req models.UserRegistrati
 		trace.LogError(ctx, err, "Failed to build user %s", username)
 		return nil, err
 	}
-	if err := c.persistNewUser(ctx, user); err != nil {
+	phrase, recoveryKey, err := generateHashedRecoveryKey(user.ID, user.CreatedAt)
+	if err != nil {
+		trace.LogError(ctx, err, "Failed to generate recovery key for %s", username)
+		return nil, err
+	}
+	if err := c.persistNewUserWithRecovery(ctx, user, recoveryKey); err != nil {
 		trace.LogError(ctx, err, "Failed to persist user %s", username)
 		return nil, err
 	}
 	trace.LogInfo(ctx, "User registered successfully: %s (id: %s)", user.Username, user.ID)
-	return buildUserResponse(user), nil
+	return buildUserResponse(user, phrase, recoveryKey.KeyHint), nil
 }
 
-// GetUser returns the signed-in user's profile details without TOTP secrets.
+// GetUser returns the signed-in user's profile details without sensitive secrets.
 func (c *Controller) GetUser(ctx context.Context, userID, targetUsername string) (*models.UserResponse, error) {
 	user, err := c.verifyAuthenticatedTargetUser(ctx, userID, targetUsername, "Users can only view their own profile.")
 	if err != nil {
 		return nil, err
 	}
+	hint := ""
+	if rk, rkErr := c.repo.GetActiveRecoveryKeyByUserID(ctx, user.ID); rkErr == nil && rk != nil {
+		hint = rk.KeyHint
+	}
 	return &models.UserResponse{
-		ID:        user.ID,
-		Username:  user.Username,
-		Email:     user.Email,
-		CreatedAt: user.CreatedAt,
+		ID:              user.ID,
+		Username:        user.Username,
+		Email:           user.Email,
+		RecoveryKeyHint: hint,
+		CreatedAt:       user.CreatedAt,
 	}, nil
 }
 

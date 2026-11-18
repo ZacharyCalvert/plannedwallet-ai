@@ -616,6 +616,102 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
+  /api/v1/users/{username}/recover:
+    parameters:
+      - $ref: '#/components/parameters/XClientId'
+    post:
+      tags:
+        - Authentication
+      summary: Recover account credentials using a single-use 12-word recovery phrase
+      description: |
+        Verifies CAPTCHA (when enabled) and the user's active Argon2id-hashed 12-word recovery phrase.
+        Atomically updates the user's password, issues a new TOTP authenticator secret, marks the
+        consumed recovery key inactive (recording `used_at` and `used_ip`), and generates a fresh
+        single-use replacement recovery phrase.
+      operationId: recoverAccount
+      parameters:
+        - name: username
+          in: path
+          required: true
+          description: Username of the account to recover.
+          schema:
+            type: string
+            example: "johndoe"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AccountRecoveryRequest'
+      responses:
+        '200':
+          summary: Credentials reset and rotated recovery credentials returned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountRecoveryResponse'
+        '400':
+          summary: Invalid CAPTCHA or weak password
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          summary: Invalid recovery credentials
+          description: Returned uniformly if the user or active recovery phrase does not match.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/users/{username}/recovery-key/rotate:
+    parameters:
+      - $ref: '#/components/parameters/XClientId'
+    post:
+      tags:
+        - Authentication
+      summary: Rotate active 12-word recovery phrase while signed in
+      description: |
+        Requires authenticated Bearer JWT plus current password and valid 6-digit TOTP code.
+        Marks existing active recovery phrases inactive and generates a fresh Argon2id-hashed phrase.
+      operationId: rotateRecoveryKey
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: username
+          in: path
+          required: true
+          description: Username of the signed-in user rotating their recovery phrase.
+          schema:
+            type: string
+            example: "johndoe"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RotateRecoveryKeyRequest'
+      responses:
+        '200':
+          summary: New recovery phrase issued
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RotateRecoveryKeyResponse'
+        '401':
+          summary: Unauthorized or invalid password/TOTP
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          summary: Forbidden
+          description: Authenticated user attempted to rotate another user's recovery phrase.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
   /api/v1/accounts:
     parameters:
       - $ref: '#/components/parameters/XClientId'
@@ -4228,6 +4324,81 @@ components:
           type: string
           description: Standard otpauth URL for generating authenticator QR codes.
           example: "otpauth://totp/PlannedWallet:johndoe?secret=JBSWY3DPEHPK3PXP&issuer=PlannedWallet"
+        recovery_phrase:
+          type: string
+          description: One-time 12-word mnemonic recovery phrase returned strictly at account creation.
+          example: "abject beacon canyon domain emblem harbor ivory lantern meadow quartz summit timber"
+        recovery_key_hint:
+          type: string
+          description: Masked trailing hint for recognizing the active recovery phrase without revealing it.
+          example: "••••mber"
+
+    AccountRecoveryRequest:
+      type: object
+      required:
+        - recovery_phrase
+        - new_password
+      properties:
+        recovery_phrase:
+          type: string
+          description: User's 12-word recovery phrase.
+        new_password:
+          type: string
+          format: password
+          minLength: 10
+          description: New account password satisfying complexity rules.
+        captcha_id:
+          type: string
+        captcha_solution:
+          type: string
+
+    AccountRecoveryResponse:
+      type: object
+      required:
+        - username
+        - totp_secret
+        - totp_url
+        - recovery_phrase
+        - recovery_key_hint
+      properties:
+        username:
+          type: string
+        totp_secret:
+          type: string
+        totp_url:
+          type: string
+        recovery_phrase:
+          type: string
+        recovery_key_hint:
+          type: string
+
+    RotateRecoveryKeyRequest:
+      type: object
+      required:
+        - password
+        - totp_code
+      properties:
+        password:
+          type: string
+          format: password
+        totp_code:
+          type: string
+          pattern: '^[0-9]{6}$'
+
+    RotateRecoveryKeyResponse:
+      type: object
+      required:
+        - recovery_phrase
+        - recovery_key_hint
+        - created_at
+      properties:
+        recovery_phrase:
+          type: string
+        recovery_key_hint:
+          type: string
+        created_at:
+          type: string
+          format: date-time
 
     TokenExchangeRequest:
       type: object

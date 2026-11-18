@@ -203,6 +203,20 @@ CREATE TABLE IF NOT EXISTS policy_agreements (
 CREATE INDEX IF NOT EXISTS idx_policy_agreements_user_active ON policy_agreements(user_id, active);
 CREATE INDEX IF NOT EXISTS idx_policy_agreements_user_agreed_at ON policy_agreements(user_id, agreed_at DESC);
 
+CREATE TABLE IF NOT EXISTS user_recovery_keys (
+    id UUID PRIMARY KEY,
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    key_hash VARCHAR(255) NOT NULL,
+    key_hint VARCHAR(32) NOT NULL DEFAULT '',
+    active BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    used_at TIMESTAMPTZ,
+    used_ip VARCHAR(64) NOT NULL DEFAULT ''
+);
+
+CREATE INDEX IF NOT EXISTS idx_user_recovery_keys_user_active ON user_recovery_keys(user_id, active);
+CREATE INDEX IF NOT EXISTS idx_user_recovery_keys_user_created ON user_recovery_keys(user_id, created_at DESC);
+
 CREATE TABLE IF NOT EXISTS perspectives (
     id UUID PRIMARY KEY,
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,

@@ -215,6 +215,18 @@ Immutable-style ledger recording when users accepted the Privacy Policy, Terms o
 - `agreed_at` (TIMESTAMPTZ, Not Null, Default NOW())
 - **Indexes**: `idx_policy_agreements_user_active (user_id, active)`, `idx_policy_agreements_user_agreed_at (user_id, agreed_at DESC)`
 
+### 1.18 `user_recovery_keys`
+Single-use ledger storing Argon2id-hashed 12-word recovery phrases and rotation/consumption audit history.
+- `id` (UUID, Primary Key)
+- `user_id` (UUID, Not Null, FK -> `users(id)` ON DELETE CASCADE)
+- `key_hash` (VARCHAR(255), Not Null) - PHC-encoded Argon2id digest (`m=19456,t=2,p=1`) of the normalized 12-word phrase
+- `key_hint` (VARCHAR(32), Not Null, Default `''`) - Masked trailing hint (e.g., `••••mber`)
+- `active` (BOOLEAN, Not Null, Default TRUE) - Enforces single-use consumption (`FALSE` once recovered or rotated)
+- `created_at` (TIMESTAMPTZ, Not Null, Default NOW())
+- `used_at` (TIMESTAMPTZ, Nullable) - UTC timestamp when consumed during account recovery
+- `used_ip` (VARCHAR(64), Not Null, Default `''`) - Client IP resolved via `resolveClientIP` at recovery time
+- **Indexes**: `idx_user_recovery_keys_user_active (user_id, active)`, `idx_user_recovery_keys_user_created (user_id, created_at DESC)`
+
 ---
 
 ## 2. Account Types & Behavior
@@ -238,11 +250,13 @@ All HTTP requests require the `X-Client-ID` header. Protected endpoints require 
 ### 3.2 Authentication, Security & Users
 - `GET /api/v1/captcha`: Generate a new visual CAPTCHA challenge (returns unique ID and base64 PNG data URI) to prevent automated bot account creations.
 - `GET /api/v1/captcha/{captchaId}`: Stream raw PNG image bytes for a CAPTCHA challenge.
-- `POST /api/v1/users`: User self-registration with password complexity, uniqueness checks, and CAPTCHA challenge verification (`captcha_id`, `captcha_solution`).
-- `GET /api/v1/users/{username}`: Retrieve the signed-in user's profile details (`id`, `username`, `email`, `created_at`).
-- `DELETE /api/v1/users/{username}`: Permanently delete the signed-in user and cascade all owned accounts, transaction records, reconcile reports, categories, assets, snapshots, subscriptions, perspectives, recurring transactions, and access grants.
+- `POST /api/v1/users`: User self-registration with password complexity, uniqueness checks, CAPTCHA verification, TOTP enrollment secret generation, and initial single-use 12-word recovery phrase issuance (`recovery_phrase`, `recovery_key_hint`).
+- `GET /api/v1/users/{username}`: Retrieve the signed-in user's profile details (`id`, `username`, `email`, `recovery_key_hint`, `created_at`).
+- `DELETE /api/v1/users/{username}`: Permanently delete the signed-in user and cascade all owned accounts, transaction records, reconcile reports, categories, assets, snapshots, subscriptions, perspectives, recurring transactions, recovery keys, policy agreements, and access grants.
 - `POST /api/v1/users/{username}/token`: TOTP-authenticated JWT token exchange (issues a 15-minute / 900s JWT by default).
 - `POST /api/v1/users/{username}/token/refresh`: Exchanges an existing, valid Bearer JWT for a freshly signed 15-minute JWT without re-entering credentials (including upgrading `terms_approved` to `true` after recording policy acceptance).
+- `POST /api/v1/users/{username}/recover`: Unauthenticated credential recovery (`recovery_phrase`, `new_password`, `captcha_id`, `captcha_solution`). Verifies CAPTCHA and the active Argon2id-hashed 12-word recovery phrase, atomically resets password and TOTP secret, marks the used key inactive (`used_at`, `used_ip`), and issues a new rotated recovery phrase.
+- `POST /api/v1/users/{username}/recovery-key/rotate`: Authenticated recovery phrase rotation (`password`, `totp_code`), deactivating prior active phrases and returning a fresh 12-word phrase.
 - `GET /api/v1/users/{username}/policy-agreements`: List policy agreement ledger entries for the signed-in user (permitted when `terms_approved: false`).
 - `POST /api/v1/users/{username}/policy-agreements`: Append a policy agreement ledger entry confirming Terms of Use, Privacy Policy, US consumer status, and matching Terms PDF SHA-256 (`PW_TERMS`), capturing client IP and timestamp (permitted when `terms_approved: false`).
 

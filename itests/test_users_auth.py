@@ -511,3 +511,96 @@ def test_policy_agreement_ledger_lifecycle_and_validation(
     b_ledger = api_context.get(f"/api/v1/users/{user_b['username']}/policy-agreements", headers=hdr_b)
     assert b_ledger.status == 200 and b_ledger.json() == []
     assert api_context.delete(f"/api/v1/users/{user_a['username']}", headers=hdr_a).status == 204
+
+
+def test_account_recovery_resets_password_totp_and_rotates_single_use_phrase(
+    api_context: APIRequestContext,
+):
+    """Verify 12-word Argon2id recovery phrase issuance, single-use password+TOTP reset, replay denial, and rotation."""
+    user = generate_user_data(prefix="rec_it")
+    reg_res = api_context.post("/api/v1/users", data=user)
+    assert reg_res.status == 201, f"Registration failed: {reg_res.text()}"
+    reg = reg_res.json()
+    phrase1 = reg.get("recovery_phrase", "")
+    hint1 = reg.get("recovery_key_hint", "")
+    assert len(phrase1.split()) == 12
+    assert hint1.startswith("••••")
+
+    # Signed-in profile exposes recovery_key_hint only (never recovery_phrase)
+    tok1 = api_context.post(
+        f"/api/v1/users/{user['username']}/token",
+        data={"password": user["password"], "totp_code": compute_totp_code(reg["totp_secret"])},
+    ).json()["access_token"]
+    prof1 = api_context.get(
+        f"/api/v1/users/{user['username']}", headers={"Authorization": f"Bearer {tok1}"}
+    ).json()
+    assert prof1.get("recovery_key_hint") == hint1
+    assert "recovery_phrase" not in prof1
+
+    # Invalid recovery phrase must return 401 INVALID_RECOVERY_CREDENTIAL
+    bad_rec = api_context.post(
+        f"/api/v1/users/{user['username']}/recover",
+        data={
+            "recovery_phrase": "wrong one two three four five six seven eight nine ten eleven",
+            "new_password": "NewStrongPassword123!",
+        },
+    )
+    assert bad_rec.status == 401
+    assert bad_rec.json().get("error") == "INVALID_RECOVERY_CREDENTIAL"
+
+    # Valid recovery phrase (even with noisy casing/spacing) resets password & TOTP and rotates phrase
+    noisy_phrase = f"  {phrase1.upper().replace(' ', '   ')}  "
+    new_password = "NewStrongPassword123!"
+    rec_res = api_context.post(
+        f"/api/v1/users/{user['username']}/recover",
+        data={"recovery_phrase": noisy_phrase, "new_password": new_password},
+    )
+    assert rec_res.status == 200, f"Recovery failed: {rec_res.text()}"
+    rec = rec_res.json()
+    assert rec["username"] == user["username"]
+    assert rec["totp_secret"] != reg["totp_secret"]
+    assert len(rec["recovery_phrase"].split()) == 12
+    assert rec["recovery_phrase"] != phrase1
+    assert rec["recovery_key_hint"] != hint1
+
+    # Consumed phrase is strictly single-use: replaying it must fail with 401
+    replay = api_context.post(
+        f"/api/v1/users/{user['username']}/recover",
+        data={"recovery_phrase": phrase1, "new_password": "AnotherPassword123!"},
+    )
+    assert replay.status == 401
+
+    # Old password + new TOTP fails; new password + old TOTP fails; new password + new TOTP succeeds
+    new_totp = compute_totp_code(rec["totp_secret"])
+    assert api_context.post(
+        f"/api/v1/users/{user['username']}/token",
+        data={"password": user["password"], "totp_code": new_totp},
+    ).status == 401
+
+    tok2_res = api_context.post(
+        f"/api/v1/users/{user['username']}/token",
+        data={"password": new_password, "totp_code": new_totp},
+    )
+    assert tok2_res.status == 200
+    hdr2 = {"Authorization": f"Bearer {tok2_res.json()['access_token']}"}
+    prof2 = api_context.get(f"/api/v1/users/{user['username']}", headers=hdr2).json()
+    assert prof2.get("recovery_key_hint") == rec["recovery_key_hint"]
+
+    # Signed-in user can rotate their active recovery phrase cleanly
+    rot_res = api_context.post(
+        f"/api/v1/users/{user['username']}/recovery-key/rotate",
+        data={"password": new_password, "totp_code": new_totp},
+        headers=hdr2,
+    )
+    assert rot_res.status == 200
+    rot = rot_res.json()
+    assert len(rot["recovery_phrase"].split()) == 12
+    assert rot["recovery_phrase"] != rec["recovery_phrase"]
+
+    # Previous rotated-out phrase can no longer recover the account
+    assert api_context.post(
+        f"/api/v1/users/{user['username']}/recover",
+        data={"recovery_phrase": rec["recovery_phrase"], "new_password": "ThirdPassword123!"},
+    ).status == 401
+
+    assert api_context.delete(f"/api/v1/users/{user['username']}", headers=hdr2).status == 204

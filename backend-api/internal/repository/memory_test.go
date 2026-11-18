@@ -819,5 +819,32 @@ func TestMemoryRepo_PolicyAgreementLedger(t *testing.T) {
 	}
 }
 
+func TestMemoryRepo_RecoveryKeyLedgerAndRotation(t *testing.T) {
+	repo := repository.NewMemoryRepository()
+	ctx := context.Background()
+	now := time.Now().UTC()
+	u := &models.User{ID: "rk-u1", Username: "recuser", Email: "rk@test.com", PasswordHash: "h1", TOTPSecret: "S1", CreatedAt: now}
+	k1 := &models.UserRecoveryKey{ID: "rk-1", UserID: "rk-u1", KeyHash: "$argon2id$h1", KeyHint: "••••1111", Active: true, CreatedAt: now}
+	if err := repo.CreateUserWithRecoveryKey(ctx, u, k1); err != nil {
+		t.Fatalf("CreateUserWithRecoveryKey failed: %v", err)
+	}
+	k2 := &models.UserRecoveryKey{ID: "rk-2", UserID: "rk-u1", KeyHash: "$argon2id$h2", KeyHint: "••••2222", Active: true, CreatedAt: now.Add(time.Second)}
+	if err := repo.CompleteAccountRecovery(ctx, "rk-u1", "h2", "S2", "rk-1", "198.51.100.5", now.Add(time.Second), k2); err != nil {
+		t.Fatalf("CompleteAccountRecovery failed: %v", err)
+	}
+	if err := repo.CompleteAccountRecovery(ctx, "rk-u1", "h3", "S3", "rk-1", "198.51.100.6", now.Add(2*time.Second), k2); !errors.Is(err, repository.ErrConflict) {
+		t.Fatalf("expected ErrConflict re-using spent key, got %v", err)
+	}
+	active, _ := repo.GetActiveRecoveryKeyByUserID(ctx, "rk-u1")
+	updatedUser, _ := repo.GetUserByID(ctx, "rk-u1")
+	if active.ID != "rk-2" || updatedUser.PasswordHash != "h2" || updatedUser.TOTPSecret != "S2" {
+		t.Fatalf("unexpected recovery state: key=%+v user=%+v", active, updatedUser)
+	}
+	_ = repo.DeleteUser(ctx, "rk-u1")
+	if all, _ := repo.ListRecoveryKeysByUserID(ctx, "rk-u1"); len(all) != 0 {
+		t.Fatalf("expected 0 recovery keys after user delete, got %d", len(all))
+	}
+}
+
 
 

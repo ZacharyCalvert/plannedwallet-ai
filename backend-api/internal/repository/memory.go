@@ -34,6 +34,7 @@ type MemoryRepository struct {
 	perspectiveAccess     map[string]*models.PerspectiveAccess
 	recurringTransactions map[string]*models.RecurringTransaction
 	policyAgreements      map[string]*models.PolicyAgreement
+	recoveryKeys          map[string]*models.UserRecoveryKey
 }
 
 type memoryCaptcha struct {
@@ -92,6 +93,7 @@ func NewMemoryRepository() *MemoryRepository {
 		perspectiveAccess:     make(map[string]*models.PerspectiveAccess),
 		recurringTransactions: make(map[string]*models.RecurringTransaction),
 		policyAgreements:      make(map[string]*models.PolicyAgreement),
+		recoveryKeys:          make(map[string]*models.UserRecoveryKey),
 	}
 }
 
@@ -276,6 +278,11 @@ func (m *MemoryRepository) deleteUserAccessAndRecords(userID string) {
 	for k, pa := range m.policyAgreements {
 		if pa.UserID == userID {
 			delete(m.policyAgreements, k)
+		}
+	}
+	for k, rk := range m.recoveryKeys {
+		if rk.UserID == userID {
+			delete(m.recoveryKeys, k)
 		}
 	}
 }

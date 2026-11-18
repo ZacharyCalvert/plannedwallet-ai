@@ -165,3 +165,23 @@ func TestInitSQLEmbedded_PolicyAgreements(t *testing.T) {
 		}
 	}
 }
+
+func TestInitSQLEmbedded_UserRecoveryKeys(t *testing.T) {
+	expectedSnippets := []string{
+		"CREATE TABLE IF NOT EXISTS user_recovery_keys",
+		"user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE",
+		"key_hash VARCHAR(255) NOT NULL",
+		"key_hint VARCHAR(32) NOT NULL DEFAULT ''",
+		"active BOOLEAN NOT NULL DEFAULT TRUE",
+		"created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()",
+		"used_at TIMESTAMPTZ",
+		"used_ip VARCHAR(64) NOT NULL DEFAULT ''",
+		"idx_user_recovery_keys_user_active",
+		"idx_user_recovery_keys_user_created",
+	}
+	for _, snippet := range expectedSnippets {
+		if !strings.Contains(initSQL, snippet) {
+			t.Errorf("expected initSQL to contain %q", snippet)
+		}
+	}
+}
