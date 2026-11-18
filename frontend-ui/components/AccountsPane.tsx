@@ -13,6 +13,11 @@ interface AccountsPaneProps {
   billsCount?: number;
   onSelectBills?: () => void;
   onAddBillsClick?: () => void;
+  showIncomes?: boolean;
+  incomesSelected?: boolean;
+  incomesCount?: number;
+  onSelectIncomes?: () => void;
+  onAddIncomesClick?: () => void;
 }
 
 export function AccountsPane({
@@ -25,17 +30,26 @@ export function AccountsPane({
   billsCount = 0,
   onSelectBills,
   onAddBillsClick,
+  showIncomes = false,
+  incomesSelected = false,
+  incomesCount = 0,
+  onSelectIncomes,
+  onAddIncomesClick,
 }: AccountsPaneProps) {
   const [collapsed, setCollapsed] = useState(false);
   const [addMenuOpen, setAddMenuOpen] = useState(false);
   const expandedMenuRef = useRef<HTMLDivElement>(null);
   const railMenuRef = useRef<HTMLDivElement>(null);
 
+  const canOfferBills = !showBills && Boolean(onAddBillsClick);
+  const canOfferIncomes = !showIncomes && Boolean(onAddIncomesClick);
+  const hasMenuChoices = canOfferBills || canOfferIncomes;
+
   useEffect(() => {
-    if (showBills) {
+    if (!hasMenuChoices) {
       setAddMenuOpen(false);
     }
-  }, [showBills]);
+  }, [hasMenuChoices]);
 
   useEffect(() => {
     if (!addMenuOpen) return;
@@ -61,7 +75,7 @@ export function AccountsPane({
   }, [addMenuOpen]);
 
   const handlePlusClick = () => {
-    if (!showBills && onAddBillsClick) {
+    if (hasMenuChoices) {
       setAddMenuOpen((prev) => !prev);
       return;
     }
@@ -79,10 +93,15 @@ export function AccountsPane({
     onAddBillsClick?.();
   };
 
-  const plusTitle = !showBills && onAddBillsClick ? 'Add Account or Bills' : 'Create New Account';
+  const handleChooseIncomes = () => {
+    setAddMenuOpen(false);
+    onAddIncomesClick?.();
+  };
+
+  const plusTitle = hasMenuChoices ? 'Add Account, Bills, or Income' : 'Create New Account';
 
   const renderAddPopup = (rail = false) =>
-    addMenuOpen && !showBills && onAddBillsClick ? (
+    addMenuOpen && hasMenuChoices ? (
       <div
         className={`add-choice-popup ${rail ? 'add-choice-popup-rail' : ''}`}
         role="menu"
@@ -96,14 +115,26 @@ export function AccountsPane({
         >
           Account
         </button>
-        <button
-          type="button"
-          className="add-choice-item"
-          role="menuitem"
-          onClick={handleChooseBills}
-        >
-          Bills
-        </button>
+        {canOfferBills && (
+          <button
+            type="button"
+            className="add-choice-item"
+            role="menuitem"
+            onClick={handleChooseBills}
+          >
+            Bills
+          </button>
+        )}
+        {canOfferIncomes && (
+          <button
+            type="button"
+            className="add-choice-item"
+            role="menuitem"
+            onClick={handleChooseIncomes}
+          >
+            Income
+          </button>
+        )}
       </div>
     ) : null;
 
@@ -151,8 +182,8 @@ export function AccountsPane({
                 onClick={handlePlusClick}
                 title={plusTitle}
                 aria-label={plusTitle}
-                aria-haspopup={!showBills && onAddBillsClick ? 'menu' : undefined}
-                aria-expanded={!showBills && onAddBillsClick ? addMenuOpen : undefined}
+                aria-haspopup={hasMenuChoices ? 'menu' : undefined}
+                aria-expanded={hasMenuChoices ? addMenuOpen : undefined}
               >
                 +
               </button>
@@ -189,7 +220,7 @@ export function AccountsPane({
         </div>
       ) : (
         <div className="accounts-list">
-          {accounts.length === 0 && !showBills ? (
+          {accounts.length === 0 && !showBills && !showIncomes ? (
             <p className="accounts-empty">No accounts yet. Click + to add one.</p>
           ) : (
             accounts.map((acc) => {
@@ -223,6 +254,21 @@ export function AccountsPane({
                 </span>
               </div>
               <p className="account-card-desc">Recurring bills &amp; reminders</p>
+            </button>
+          )}
+          {showIncomes && onSelectIncomes && (
+            <button
+              type="button"
+              className={`account-card account-card-incomes ${incomesSelected ? 'selected' : ''}`}
+              onClick={onSelectIncomes}
+            >
+              <div className="account-card-header">
+                <span className="account-card-name">Income</span>
+                <span className="badge-account-type badge-incomes">
+                  {incomesCount} {incomesCount === 1 ? 'entry' : 'entries'}
+                </span>
+              </div>
+              <p className="account-card-desc">Recurring income &amp; reminders</p>
             </button>
           )}
         </div>

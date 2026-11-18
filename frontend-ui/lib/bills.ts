@@ -1,4 +1,4 @@
-import type { Bill } from './types.ts';
+import type { RecurringFrequency, RecurringTransaction } from './types.ts';
 
 const MONTH_NAMES = [
   '',
@@ -60,26 +60,44 @@ export function getBillDaysUntilDue(nextDueDateIso: string | null | undefined, t
 }
 
 /**
- * Determines whether a reminder banner should appear for a bill on todayIso:
+ * Determines whether a reminder banner should appear for a recurring bill or income on todayIso:
  * - Overdue (today > next_due_date, i.e. daysUntil < 0)
- * - Weekly bill scheduled within the next 48 hours (0..2 days)
- * - Monthly bill scheduled within the next 1 week (0..7 days)
- * - Yearly bill scheduled within the next 30 days (0..30 days)
+ * - Weekly item scheduled within the next 48 hours (0..2 days)
+ * - Monthly item scheduled within the next 1 week (0..7 days)
+ * - Yearly item scheduled within the next 30 days (0..30 days)
  */
-export function shouldShowBillReminder(bill: Bill, todayIso?: string): boolean {
-  if (!bill.reminder || !bill.next_due_date) {
+export type RecurringScheduleLike = Pick<
+  RecurringTransaction,
+  'frequency' | 'interval' | 'schedule'
+>;
+
+export type RecurringReminderLike = Pick<
+  RecurringTransaction,
+  'reminder' | 'next_due_date' | 'frequency'
+>;
+
+export type RecurringDisplayLike = {
+  next_due_date: string | null;
+  name?: string;
+  entity?: string;
+};
+
+export function shouldShowBillReminder(rt: RecurringReminderLike, todayIso?: string): boolean {
+  if (!rt.reminder || !rt.next_due_date) {
     return false;
   }
-  const days = getBillDaysUntilDue(bill.next_due_date, todayIso);
+  const days = getBillDaysUntilDue(rt.next_due_date, todayIso);
   if (days === null) {
     return false;
   }
   if (days < 0) {
     return true;
   }
-  switch (bill.frequency) {
+  switch (rt.frequency) {
     case 'weekly':
       return days <= 2;
+    case 'bi-monthly':
+      return days <= 3;
     case 'monthly':
       return days <= 7;
     case 'yearly':
@@ -112,6 +130,16 @@ export function normalizeNegativeBillAmountInput(raw: string): string {
   return withoutPlus.startsWith('-') ? withoutPlus : `-${withoutPlus}`;
 }
 
+export function normalizePositiveIncomeAmountInput(raw: string): string {
+  const trimmed = raw.trim();
+  if (!trimmed) return raw;
+  const parsed = parseBillAmount(trimmed);
+  if (isNaN(parsed) || parsed >= 0) {
+    return trimmed.startsWith('+') ? trimmed.slice(1).trim() : raw;
+  }
+  return trimmed.startsWith('-') ? trimmed.slice(1).trim() : trimmed;
+}
+
 export function isValidBillIntervalInput(raw: string): boolean {
   return raw === '' || /^[1-9]\d*$/.test(raw);
 }
@@ -123,18 +151,51 @@ export function normalizePositiveBillIntervalInput(raw: string): string {
   return raw.trim();
 }
 
-function formatCadencePrefix(frequency: Bill['frequency'], interval: number): string {
+export function formatRecurringIntervalLabel(
+  frequency: RecurringFrequency,
+  intervalRaw: string
+): string {
+  const parsed = parseInt(intervalRaw, 10);
+  const n = Number.isFinite(parsed) && parsed >= 1 ? parsed : 1;
+  switch (frequency) {
+    case 'weekly':
+      return `Every ${n} ${n === 1 ? 'week' : 'weeks'}`;
+    case 'bi-monthly':
+      return n === 1 ? 'Twice a month' : `Every ${n} half-months`;
+    case 'monthly':
+      return `Every ${n} ${n === 1 ? 'month' : 'months'}`;
+    case 'yearly':
+      return `Every ${n} ${n === 1 ? 'year' : 'years'}`;
+    default:
+      return `Every ${n} ${n === 1 ? 'period' : 'periods'}`;
+  }
+}
+
+function formatCadencePrefix(frequency: RecurringFrequency, interval: number): string {
   const step = interval > 1 ? interval : 1;
+  if (frequency === 'bi-monthly') {
+    return step === 1 ? 'Bi-monthly' : `Bi-monthly (every ${step})`;
+  }
   const unit = frequency === 'weekly' ? 'week' : frequency === 'monthly' ? 'month' : 'year';
   return step === 1 ? `Every ${unit}` : `Every ${step} ${unit}s`;
 }
 
-export function formatBillScheduleLabel(bill: Bill): string {
+export function formatBillScheduleLabel(bill: RecurringScheduleLike): string {
   const step = bill.interval > 1 ? bill.interval : 1;
   const cadence = formatCadencePrefix(bill.frequency, step);
   const s = bill.schedule;
   if (!s) {
-    return `${cadence} (from last paid)`;
+    return bill.frequency === 'bi-monthly'
+      ? `${cadence} (1st and 15th)`
+      : `${cadence} (from last paid)`;
+  }
+  if (s.type === 'first_fifteenth') {
+    return step === 1 ? '1st and 15th of the month' : `1st and 15th (${cadence.toLowerCase()})`;
+  }
+  if (s.type === 'fifteenth_last') {
+    return step === 1
+      ? '15th and last day of the month'
+      : `15th and last day (${cadence.toLowerCase()})`;
   }
   if (s.type === 'weekday' && s.weekday) {
     return `${cadence} on ${capitalize(s.weekday)}`;
@@ -161,9 +222,9 @@ export function formatBillScheduleLabel(bill: Bill): string {
   return cadence;
 }
 
-export function getBillDisplayName(bill: Pick<Bill, 'name' | 'recipient'>): string {
+export function getBillDisplayName(bill: Pick<RecurringDisplayLike, 'name' | 'entity'>): string {
   const shortName = (bill.name || '').trim();
-  return shortName || bill.recipient;
+  return shortName || bill.entity || '';
 }
 
 export function getAmountColorClass(amtStr: string): string {
@@ -178,7 +239,7 @@ export function getAmountColorClass(amtStr: string): string {
   return num > 0 ? 'amount-text-positive' : 'amount-text-negative';
 }
 
-export function sortBillsForDisplay(bills: Bill[]): Bill[] {
+export function sortBillsForDisplay<T extends RecurringDisplayLike>(bills: T[]): T[] {
   return [...bills].sort((a, b) => {
     const aDue = a.next_due_date || '9999-12-31';
     const bDue = b.next_due_date || '9999-12-31';

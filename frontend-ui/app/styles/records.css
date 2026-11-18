@@ -769,6 +769,12 @@
   color: #78350f;
 }
 
+.bill-reminder-income-upcoming {
+  border-color: #bbf7d0;
+  background-color: #f0fdf4;
+  color: #14532d;
+}
+
 .bill-reminder-content {
   display: flex;
   align-items: center;
@@ -806,7 +812,7 @@
 
 .bill-form-primary {
   display: grid;
-  grid-template-columns: 135px 155px minmax(150px, 1.4fr) 110px 90px 145px;
+  grid-template-columns: 135px 145px minmax(140px, 1.4fr) 115px 130px 145px;
   gap: 0.85rem;
   align-items: end;
   width: 100%;
@@ -913,7 +919,19 @@
   flex-wrap: wrap;
 }
 
-@media (max-width: 1400px) {
+.bill-row-actions button {
+  min-width: 72px;
+  height: 30px;
+  padding: 0.35rem 0.75rem;
+  font-size: 0.85rem;
+  line-height: 1.2;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+}
+
+@media (max-width: 1440px) {
   .bill-form-primary {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }

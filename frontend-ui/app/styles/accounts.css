@@ -438,6 +438,29 @@
   text-transform: none;
 }
 
+.account-card-incomes {
+  border-color: #bbf7d0;
+  background-color: #f0fdf4;
+}
+
+.account-card-incomes:hover {
+  border-color: #86efac;
+  background-color: #dcfce7;
+}
+
+.account-card-incomes.selected {
+  border-color: #16a34a;
+  background-color: #dcfce7;
+  box-shadow: 0 0 0 1px #16a34a;
+}
+
+.badge-incomes {
+  background-color: #dcfce7;
+  color: #15803d;
+  border: 1px solid #86efac;
+  text-transform: none;
+}
+
 .plus-menu-anchor {
   position: relative;
   display: inline-flex;

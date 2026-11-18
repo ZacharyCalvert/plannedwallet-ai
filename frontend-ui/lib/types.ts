@@ -240,62 +240,75 @@ export interface FeaturesResponse {
   features: string[];
 }
 
-export type BillFrequency = 'weekly' | 'monthly' | 'yearly';
-export type BillScheduleType = 'weekday' | 'day_of_period' | 'nth_weekday' | 'month_day';
-export type BillScheduleScope = 'week' | 'month' | 'year';
-export type BillDueStatus = 'overdue' | 'upcoming' | 'scheduled' | 'unscheduled';
+export type RecurringFrequency = 'weekly' | 'bi-monthly' | 'monthly' | 'yearly';
+export type RecurringScheduleType =
+  | 'weekday'
+  | 'day_of_period'
+  | 'nth_weekday'
+  | 'month_day'
+  | 'first_fifteenth'
+  | 'fifteenth_last';
+export type RecurringScheduleScope = 'week' | 'bi-monthly' | 'month' | 'year';
+export type RecurringDueStatus = 'overdue' | 'upcoming' | 'scheduled' | 'unscheduled';
 
-export interface BillSchedule {
-  type: BillScheduleType;
-  scope: BillScheduleScope;
+export type BillFrequency = RecurringFrequency;
+export type BillScheduleType = RecurringScheduleType;
+export type BillScheduleScope = RecurringScheduleScope;
+export type BillDueStatus = RecurringDueStatus;
+
+export interface RecurringSchedule {
+  type: RecurringScheduleType;
+  scope: RecurringScheduleScope;
   nth?: number | null;
   weekday?: string;
   day?: number | null;
   month?: number | null;
 }
 
-export interface Bill {
+export type BillSchedule = RecurringSchedule;
+
+export interface RecurringTransaction {
   id: string;
   user_id: string;
   account_id: string | null;
   category_id: string | null;
   amount: number;
-  last_date_paid: string | null;
-  frequency: BillFrequency;
+  last_date_applied: string | null;
+  frequency: RecurringFrequency;
   interval: number;
-  schedule: BillSchedule | null;
+  schedule: RecurringSchedule | null;
   name: string;
-  recipient: string;
+  entity: string;
   description: string;
   reminder: boolean;
   next_due_date: string | null;
-  due_status: BillDueStatus;
+  due_status: RecurringDueStatus;
   days_until_due: number | null;
   created_at: string;
   updated_at: string;
 }
 
-export interface BillCreateRequest {
+export interface RecurringTransactionRequest {
   account_id?: string | null;
   category_id?: string | null;
   amount: number;
-  last_date_paid?: string | null;
-  frequency: BillFrequency;
+  last_date_applied?: string | null;
+  frequency: RecurringFrequency;
   interval?: number;
-  schedule?: BillSchedule | null;
+  schedule?: RecurringSchedule | null;
   name?: string;
-  recipient: string;
+  entity: string;
   description?: string;
   reminder?: boolean;
 }
 
-export interface BillApplyRequest {
+export interface RecurringTransactionApplyRequest {
   account_id?: string | null;
   date?: string | null;
   date_cleared?: string | null;
 }
 
-export interface BillApplyResponse {
-  bill: Bill;
+export interface RecurringTransactionApplyResponse {
+  recurring_transaction: RecurringTransaction;
   record: AccountRecord;
 }

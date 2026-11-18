@@ -2,15 +2,21 @@
 
 import { useState, useEffect } from 'react';
 import { Routes, Route, Navigate, useNavigate, useParams, useMatch } from 'react-router-dom';
-import { Account, Bill, BillCreateRequest, Category, UserSession } from '../lib/types';
 import {
-  applyBillToAccount,
-  createBill,
-  deleteBill,
+  Account,
+  Category,
+  RecurringTransaction,
+  RecurringTransactionRequest,
+  UserSession,
+} from '../lib/types';
+import {
+  applyRecurringTransactionToAccount,
+  createRecurringTransaction,
+  deleteRecurringTransaction,
   fetchAccounts,
-  fetchBills,
   fetchCategories,
-  updateBill,
+  fetchRecurringTransactions,
+  updateRecurringTransaction,
 } from '../lib/api';
 import { getLocalTodayIso } from '../lib/bills';
 import { AccountsPane } from './AccountsPane';
@@ -19,6 +25,7 @@ import { AccountDetail } from './AccountDetail';
 import { SnapshotAccountDetail } from './SnapshotAccountDetail';
 import { AssetAccountDetail } from './AssetAccountDetail';
 import { BillsPane } from './BillsPane';
+import { IncomesPane } from './IncomesPane';
 import { BillReminderBanners } from './BillReminderBanners';
 
 interface DashboardProps {
@@ -119,23 +126,29 @@ function DashboardIndex({ accounts, accountsLoaded }: { accounts: Account[]; acc
 export function Dashboard({ session }: DashboardProps) {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [accountsLoaded, setAccountsLoaded] = useState(false);
-  const [bills, setBills] = useState<Bill[]>([]);
+  const [recurringTransactions, setRecurringTransactions] = useState<RecurringTransaction[]>([]);
   const [billsActivated, setBillsActivated] = useState(false);
+  const [incomesActivated, setIncomesActivated] = useState(false);
   const [categories, setCategories] = useState<Category[]>([]);
   const [hiddenReminderIds, setHiddenReminderIds] = useState<Record<string, boolean>>({});
-  const [applyingBillId, setApplyingBillId] = useState<string | null>(null);
+  const [applyingRecurringId, setApplyingRecurringId] = useState<string | null>(null);
   const [reminderError, setReminderError] = useState('');
   const [accountRefreshVersions, setAccountRefreshVersions] = useState<Record<string, number>>({});
   const navigate = useNavigate();
   const accountMatch = useMatch('/accounts/:accountId/*');
   const billsMatch = useMatch('/bills');
+  const incomesMatch = useMatch('/incomes');
   const matchedId = accountMatch?.params.accountId;
   const selectedId = matchedId && matchedId !== 'new' ? matchedId : null;
+  const bills = recurringTransactions.filter((tx) => tx.amount < 0);
+  const incomes = recurringTransactions.filter((tx) => tx.amount > 0);
   const showBills = bills.length > 0 || billsActivated || Boolean(billsMatch);
+  const showIncomes = incomes.length > 0 || incomesActivated || Boolean(incomesMatch);
 
   useEffect(() => {
     let cancelled = false;
     setBillsActivated(false);
+    setIncomesActivated(false);
     setHiddenReminderIds({});
     setReminderError('');
 
@@ -150,12 +163,12 @@ export function Dashboard({ session }: DashboardProps) {
         if (!cancelled) setAccountsLoaded(true);
       });
 
-    fetchBills(session.token)
+    fetchRecurringTransactions(session.token)
       .then((list) => {
-        if (!cancelled) setBills(list);
+        if (!cancelled) setRecurringTransactions(list);
       })
       .catch(() => {
-        // Bills load failure handled gracefully
+        // Recurring transactions load failure handled gracefully
       });
 
     fetchCategories(session.token)
@@ -172,8 +185,9 @@ export function Dashboard({ session }: DashboardProps) {
   }, [session.token]);
 
   useEffect(() => {
-    if (!billsMatch) return;
-    setBillsActivated(true);
+    if (billsMatch) setBillsActivated(true);
+    if (incomesMatch) setIncomesActivated(true);
+    if (!billsMatch && !incomesMatch) return;
     let cancelled = false;
     fetchCategories(session.token)
       .then((list) => {
@@ -183,7 +197,7 @@ export function Dashboard({ session }: DashboardProps) {
     return () => {
       cancelled = true;
     };
-  }, [billsMatch, session.token]);
+  }, [billsMatch, incomesMatch, session.token]);
 
   const handleCreated = (newAcc: Account) => {
     setAccounts((prev) => [newAcc, ...prev]);
@@ -195,53 +209,68 @@ export function Dashboard({ session }: DashboardProps) {
     navigate('/bills');
   };
 
+  const handleActivateIncomes = () => {
+    setIncomesActivated(true);
+    navigate('/incomes');
+  };
+
   const handleAccountDeleted = (deletedId: string) => {
     const remaining = accounts.filter((a) => a.id !== deletedId);
     setAccounts(remaining);
-    setBills((prev) =>
-      prev.map((b) =>
-        b.account_id === deletedId ? { ...b, account_id: null, category_id: null } : b
+    setRecurringTransactions((prev) =>
+      prev.map((tx) =>
+        tx.account_id === deletedId ? { ...tx, account_id: null, category_id: null } : tx
       )
     );
     navigate(remaining.length > 0 ? `/accounts/${remaining[0].id}` : '/', { replace: true });
   };
 
-  const handleCreateBill = async (payload: BillCreateRequest) => {
-    const created = await createBill(session.token, payload);
-    setBills((prev) => [...prev, created]);
-    setBillsActivated(true);
+  const handleCreateRecurring = async (payload: RecurringTransactionRequest) => {
+    const created = await createRecurringTransaction(session.token, payload);
+    setRecurringTransactions((prev) => [...prev, created]);
+    if (created.amount < 0) {
+      setBillsActivated(true);
+    } else {
+      setIncomesActivated(true);
+    }
   };
 
-  const handleUpdateBill = async (billId: string, payload: BillCreateRequest) => {
-    const updated = await updateBill(session.token, billId, payload);
-    setBills((prev) => prev.map((b) => (b.id === billId ? updated : b)));
+  const handleUpdateRecurring = async (id: string, payload: RecurringTransactionRequest) => {
+    const updated = await updateRecurringTransaction(session.token, id, payload);
+    setRecurringTransactions((prev) => prev.map((tx) => (tx.id === id ? updated : tx)));
   };
 
-  const handleDeleteBill = async (billId: string) => {
-    await deleteBill(session.token, billId);
-    setBills((prev) => prev.filter((b) => b.id !== billId));
+  const handleDeleteRecurring = async (id: string) => {
+    await deleteRecurringTransaction(session.token, id);
+    setRecurringTransactions((prev) => prev.filter((tx) => tx.id !== id));
   };
 
-  const handleApplyBill = async (bill: Bill) => {
+  const handleApplyRecurring = async (tx: RecurringTransaction) => {
     setReminderError('');
-    setApplyingBillId(bill.id);
+    setApplyingRecurringId(tx.id);
     try {
-      const targetDate = bill.next_due_date || getLocalTodayIso();
-      const res = await applyBillToAccount(session.token, bill.id, { date: targetDate });
-      setBills((prev) => prev.map((b) => (b.id === bill.id ? res.bill : b)));
+      const targetDate = tx.next_due_date || getLocalTodayIso();
+      const res = await applyRecurringTransactionToAccount(session.token, tx.id, {
+        date: targetDate,
+      });
+      setRecurringTransactions((prev) =>
+        prev.map((item) => (item.id === tx.id ? res.recurring_transaction : item))
+      );
       setAccountRefreshVersions((prev) => ({
         ...prev,
         [res.record.account_id]: (prev[res.record.account_id] || 0) + 1,
       }));
     } catch (err: unknown) {
-      setReminderError(err instanceof Error ? err.message : 'Failed to apply bill to account');
+      setReminderError(
+        err instanceof Error ? err.message : 'Failed to apply recurring transaction'
+      );
     } finally {
-      setApplyingBillId(null);
+      setApplyingRecurringId(null);
     }
   };
 
-  const handleHideReminder = (billId: string) => {
-    setHiddenReminderIds((prev) => ({ ...prev, [billId]: true }));
+  const handleHideReminder = (id: string) => {
+    setHiddenReminderIds((prev) => ({ ...prev, [id]: true }));
   };
 
   const handleCancelCreate = () => {
@@ -249,6 +278,8 @@ export function Dashboard({ session }: DashboardProps) {
       navigate(`/accounts/${accounts[0].id}`);
     } else if (showBills) {
       navigate('/bills');
+    } else if (showIncomes) {
+      navigate('/incomes');
     } else {
       navigate('/');
     }
@@ -266,15 +297,20 @@ export function Dashboard({ session }: DashboardProps) {
         billsCount={bills.length}
         onSelectBills={() => navigate('/bills')}
         onAddBillsClick={handleActivateBills}
+        showIncomes={showIncomes}
+        incomesSelected={Boolean(incomesMatch)}
+        incomesCount={incomes.length}
+        onSelectIncomes={() => navigate('/incomes')}
+        onAddIncomesClick={handleActivateIncomes}
       />
       <main className="dashboard-content">
         {reminderError && <div className="alert-error">{reminderError}</div>}
         <BillReminderBanners
-          bills={bills}
+          transactions={recurringTransactions}
           accounts={accounts}
           hiddenIds={hiddenReminderIds}
-          applyingId={applyingBillId}
-          onApply={handleApplyBill}
+          applyingId={applyingRecurringId}
+          onApply={handleApplyRecurring}
           onHide={handleHideReminder}
         />
         <Routes>
@@ -296,11 +332,26 @@ export function Dashboard({ session }: DashboardProps) {
                 bills={bills}
                 accounts={accounts}
                 categories={categories}
-                applyingId={applyingBillId}
-                onCreateBill={handleCreateBill}
-                onUpdateBill={handleUpdateBill}
-                onDeleteBill={handleDeleteBill}
-                onApplyBill={handleApplyBill}
+                applyingId={applyingRecurringId}
+                onCreateBill={handleCreateRecurring}
+                onUpdateBill={handleUpdateRecurring}
+                onDeleteBill={handleDeleteRecurring}
+                onApplyBill={handleApplyRecurring}
+              />
+            }
+          />
+          <Route
+            path="/incomes"
+            element={
+              <IncomesPane
+                incomes={incomes}
+                accounts={accounts}
+                categories={categories}
+                applyingId={applyingRecurringId}
+                onCreateIncome={handleCreateRecurring}
+                onUpdateIncome={handleUpdateRecurring}
+                onDeleteIncome={handleDeleteRecurring}
+                onApplyIncome={handleApplyRecurring}
               />
             }
           />

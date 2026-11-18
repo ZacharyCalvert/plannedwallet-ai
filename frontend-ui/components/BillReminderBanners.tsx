@@ -1,6 +1,6 @@
 'use client';
 
-import { Account, Bill } from '../lib/types';
+import { Account, RecurringTransaction } from '../lib/types';
 import {
   getBillDaysUntilDue,
   getBillDisplayName,
@@ -10,12 +10,12 @@ import {
 import { isoToDisplayDate } from './DateInput';
 
 interface BillReminderBannersProps {
-  bills: Bill[];
+  transactions: RecurringTransaction[];
   accounts: Account[];
   hiddenIds: Record<string, boolean>;
   applyingId: string | null;
-  onApply: (bill: Bill) => void;
-  onHide: (billId: string) => void;
+  onApply: (tx: RecurringTransaction) => void;
+  onHide: (id: string) => void;
 }
 
 function formatCurrency(val: number): string {
@@ -37,7 +37,7 @@ function getDueBadgeText(days: number): string {
 }
 
 export function BillReminderBanners({
-  bills,
+  transactions,
   accounts,
   hiddenIds,
   applyingId,
@@ -45,7 +45,9 @@ export function BillReminderBanners({
   onHide,
 }: BillReminderBannersProps) {
   const todayIso = getLocalTodayIso();
-  const visible = bills.filter((b) => !hiddenIds[b.id] && shouldShowBillReminder(b, todayIso));
+  const visible = transactions.filter(
+    (tx) => !hiddenIds[tx.id] && shouldShowBillReminder(tx, todayIso)
+  );
   if (visible.length === 0) {
     return null;
   }
@@ -56,30 +58,38 @@ export function BillReminderBanners({
   }
 
   return (
-    <div className="bill-reminders-stack" role="region" aria-label="Bill Reminders">
-      {visible.map((bill) => {
-        const days = getBillDaysUntilDue(bill.next_due_date, todayIso) ?? 0;
+    <div className="bill-reminders-stack" role="region" aria-label="Recurring Reminders">
+      {visible.map((tx) => {
+        const days = getBillDaysUntilDue(tx.next_due_date, todayIso) ?? 0;
         const isOverdue = days < 0;
-        const isApplying = applyingId === bill.id;
-        const linkedName = bill.account_id ? accountNames.get(bill.account_id) : null;
+        const isIncome = tx.amount > 0;
+        const isApplying = applyingId === tx.id;
+        const linkedName = tx.account_id ? accountNames.get(tx.account_id) : null;
+        const displayName = getBillDisplayName(tx);
         return (
           <div
-            key={bill.id}
-            className={`bill-reminder-banner ${isOverdue ? 'bill-reminder-overdue' : 'bill-reminder-upcoming'}`}
+            key={tx.id}
+            className={`bill-reminder-banner ${
+              isOverdue
+                ? 'bill-reminder-overdue'
+                : isIncome
+                ? 'bill-reminder-income-upcoming'
+                : 'bill-reminder-upcoming'
+            }`}
             role="status"
           >
             <div className="bill-reminder-content">
               <span className={`bill-reminder-pill ${isOverdue ? 'overdue' : 'upcoming'}`}>
                 {getDueBadgeText(days)}
               </span>
-              <strong>{getBillDisplayName(bill)}</strong>
-              {bill.name && bill.name.trim() !== '' && bill.name.trim() !== bill.recipient && (
-                <span className="bill-reminder-date">({bill.recipient})</span>
+              <strong>{displayName}</strong>
+              {displayName !== tx.entity && (
+                <span className="bill-reminder-date">({tx.entity})</span>
               )}
-              <span className="bill-reminder-amount">{formatCurrency(bill.amount)}</span>
-              {bill.next_due_date && (
+              <span className="bill-reminder-amount">{formatCurrency(tx.amount)}</span>
+              {tx.next_due_date && (
                 <span className="bill-reminder-date">
-                  Due {isoToDisplayDate(bill.next_due_date)}
+                  Due {isoToDisplayDate(tx.next_due_date)}
                 </span>
               )}
               {linkedName && (
@@ -87,12 +97,12 @@ export function BillReminderBanners({
               )}
             </div>
             <div className="bill-reminder-actions">
-              {bill.account_id && (
+              {tx.account_id && (
                 <button
                   type="button"
                   className="btn-primary btn-sm"
                   disabled={isApplying}
-                  onClick={() => onApply(bill)}
+                  onClick={() => onApply(tx)}
                 >
                   {isApplying ? 'Applying...' : 'Apply'}
                 </button>
@@ -101,7 +111,7 @@ export function BillReminderBanners({
                 type="button"
                 className="btn-secondary btn-sm"
                 disabled={isApplying}
-                onClick={() => onHide(bill.id)}
+                onClick={() => onHide(tx.id)}
               >
                 Hide
               </button>

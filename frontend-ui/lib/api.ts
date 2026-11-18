@@ -12,10 +12,6 @@ import {
   AssetStoreRecord,
   AssetStoreTrendPoint,
   AssetValue,
-  Bill,
-  BillApplyRequest,
-  BillApplyResponse,
-  BillCreateRequest,
   CaptchaResponse,
   Category,
   CreateAssetRequest,
@@ -26,6 +22,10 @@ import {
   CreateSnapshotRequest,
   CreateStoreRecordRequest,
   ReconcileReport,
+  RecurringTransaction,
+  RecurringTransactionApplyRequest,
+  RecurringTransactionApplyResponse,
+  RecurringTransactionRequest,
   UpdateAccountAssetRequest,
   UpdateAssetStoreRequest,
   UpdateSnapshotRequest,
@@ -953,68 +953,26 @@ export async function fetchAssetStoreTrend(
   return Array.isArray(data) ? data : [];
 }
 
-// ---------- Recurring Bills API ----------
+// ---------- Recurring Transactions API ----------
 
-export async function fetchBills(token: string): Promise<Bill[]> {
-  const res = await tracedFetch('/api/v1/bills', {
+export async function fetchRecurringTransactions(
+  token: string
+): Promise<RecurringTransaction[]> {
+  const res = await tracedFetch('/api/v1/recurring-transactions', {
     headers: { Authorization: `Bearer ${token}` },
   });
   if (!res.ok) {
-    throw new Error('Failed to load bills');
+    throw new Error('Failed to load recurring transactions');
   }
   const data = await res.json();
   return Array.isArray(data) ? data : [];
 }
 
-export async function createBill(token: string, data: BillCreateRequest): Promise<Bill> {
-  const res = await tracedFetch('/api/v1/bills', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
-    },
-    body: JSON.stringify(data),
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.message || 'Failed to create bill');
-  }
-  return res.json();
-}
-
-export async function updateBill(token: string, billId: string, data: BillCreateRequest): Promise<Bill> {
-  const res = await tracedFetch(`/api/v1/bills/${encodeURIComponent(billId)}`, {
-    method: 'PUT',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
-    },
-    body: JSON.stringify(data),
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.message || 'Failed to update bill');
-  }
-  return res.json();
-}
-
-export async function deleteBill(token: string, billId: string): Promise<void> {
-  const res = await tracedFetch(`/api/v1/bills/${encodeURIComponent(billId)}`, {
-    method: 'DELETE',
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.message || 'Failed to delete bill');
-  }
-}
-
-export async function applyBillToAccount(
+export async function createRecurringTransaction(
   token: string,
-  billId: string,
-  data: BillApplyRequest = {}
-): Promise<BillApplyResponse> {
-  const res = await tracedFetch(`/api/v1/bills/${encodeURIComponent(billId)}/apply`, {
+  data: RecurringTransactionRequest
+): Promise<RecurringTransaction> {
+  const res = await tracedFetch('/api/v1/recurring-transactions', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -1024,7 +982,70 @@ export async function applyBillToAccount(
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
-    throw new Error(err.message || 'Failed to apply bill to account');
+    throw new Error(err.message || 'Failed to create recurring transaction');
+  }
+  return res.json();
+}
+
+export async function updateRecurringTransaction(
+  token: string,
+  recurringId: string,
+  data: RecurringTransactionRequest
+): Promise<RecurringTransaction> {
+  const res = await tracedFetch(
+    `/api/v1/recurring-transactions/${encodeURIComponent(recurringId)}`,
+    {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(data),
+    }
+  );
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || 'Failed to update recurring transaction');
+  }
+  return res.json();
+}
+
+export async function deleteRecurringTransaction(
+  token: string,
+  recurringId: string
+): Promise<void> {
+  const res = await tracedFetch(
+    `/api/v1/recurring-transactions/${encodeURIComponent(recurringId)}`,
+    {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${token}` },
+    }
+  );
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || 'Failed to delete recurring transaction');
+  }
+}
+
+export async function applyRecurringTransactionToAccount(
+  token: string,
+  recurringId: string,
+  data: RecurringTransactionApplyRequest = {}
+): Promise<RecurringTransactionApplyResponse> {
+  const res = await tracedFetch(
+    `/api/v1/recurring-transactions/${encodeURIComponent(recurringId)}/apply`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(data),
+    }
+  );
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || 'Failed to apply recurring transaction to account');
   }
   return res.json();
 }

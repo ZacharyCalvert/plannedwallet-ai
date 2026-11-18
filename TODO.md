@@ -30,9 +30,10 @@ Medium priority:
 - [x] Reconcile calculations - locked records for edits + snapshot of net worth?
 - [x] rollup data (monthly)
 - [x] Review labels on credit card such that outgoing (negative) implies spend and positive implies you paid off CC
-Bill reminders
+- [x] Bill reminders
 unit and integration tests from pull request
 validation including UI tests, unit tests for UI loading, docker standup, local itests
+Add income / schedule income
 safeguards against "too new" dependencies from dependabot
 Add Money-in / Money-out features (trending) for asset and snapshot accounts to track growth/change
 create batch job for data grabs (indexes/prices, captcha cleanup)
