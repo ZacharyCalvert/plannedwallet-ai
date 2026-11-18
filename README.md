@@ -110,6 +110,10 @@ flowchart LR
 - **Backend Enforcement**: Setting `PW_READONLY=true` activates the `read_only` flag in `GET /api/v1/features` and blocks write operations (`POST`, `PUT`, `PATCH`, `DELETE`) with `503 Service Unavailable` (`READ_ONLY_MODE`), while continuing to serve all `GET` reads and existing-user login (`POST /api/v1/users/{username}/token`).
 - **Frontend Maintenance UX**: On startup, the UI checks `/api/v1/features`; when `read_only` is active, it renders a top banner (`"Planned Wallet is under maintenance."`), hides the account creation tab while keeping Sign In available, and pops up a graceful maintenance warning dialog if any write action is attempted.
 
+### Policy & U.S. Consumer Compliance (`ENFORCE_POLICY`, `PW_TERMS`)
+- **Terms Checksum & Ledger (`policy_agreements`)**: `PW_TERMS` sets the required 64-character SHA-256 hex digest of `frontend-ui/public/terms-of-use.pdf` (configured automatically in `docker-compose.yml`). When `ENFORCE_POLICY=true` or `PRODUCTION_ENV=true`, the backend requires a valid `PW_TERMS` at startup and gates data access behind an active ledger row confirming Terms of Use (`terms_sha256 == PW_TERMS`), Privacy Policy, and `"I am a consumer in the United States"` alongside client IP (`X-Azure-ClientIP` when AFD-verified, otherwise `c.ClientIP()`) and timestamp.
+- **Token Promotion Flow**: Users without an active matching approval receive JWTs with `terms_approved: false`, can access only `POST/GET /api/v1/users/{username}/policy-agreements` and `POST /api/v1/users/{username}/token/refresh`, and upgrade to a `terms_approved: true` token once accepted in the UI.
+
 ---
 
 ## Data Relationships (`1 User -> Many Accounts -> Many Records`)
@@ -156,11 +160,13 @@ erDiagram
 | `POSTGRES_DB` | `plannedwallet` | PostgreSQL database name. |
 | `POSTGRES_SSLMODE` | `disable` | PostgreSQL SSL mode (`disable`, `require`, etc.). |
 | `JWT_SECRET` | `super-secret-jwt-key-replace-in-production` | HMAC secret for signing JWTs. Must be ≥ 32 bytes when set; non-default required when `PRODUCTION_ENV=true`. |
-| `JWT_EXPIRATION_SECONDS` | `3600` | JWT token lifetime in seconds. |
-| `PRODUCTION_ENV` | `false` | Enables Gin release mode, skips startup `init.sql` execution, enforces PostgreSQL availability, secure `JWT_SECRET`, `EXPECTED_FDID`, and CAPTCHA. |
-| `EXPECTED_FDID` | `""` | Expected Azure Front Door ID (`X-Azure-FDID` / `X-FDID`). Required when `PRODUCTION_ENV=true`. |
+| `JWT_EXPIRATION_SECONDS` | `900` | JWT token lifetime in seconds (defaults to 15 minutes / 900s). |
+| `PRODUCTION_ENV` | `false` | Enables Gin release mode, skips startup `init.sql` execution, enforces PostgreSQL availability, secure `JWT_SECRET`, `EXPECTED_FDID`, CAPTCHA, `ENFORCE_POLICY=true`, and `PW_TERMS`. |
+| `EXPECTED_FDID` | `""` | Expected Azure Front Door ID (`X-Azure-FDID` / `X-FDID`). Required when `PRODUCTION_ENV=true`; also authorizes trusting `X-Azure-ClientIP`. |
 | `REQUIRE_CAPTCHA` | `false` | Forces CAPTCHA challenge validation on registration (always `true` when `PRODUCTION_ENV=true`). |
-| `PW_READONLY` | `false` | Set `"true"` to enable read-only maintenance mode (`read_only` feature flag + `503 READ_ONLY_MODE` on edits). |
+| `ENFORCE_POLICY` | `false` | **Must be `"true"` when `PRODUCTION_ENV=true`** (process exits at startup otherwise). Enforces active `policy_agreements` acceptance matching `PW_TERMS` and U.S. consumer confirmation. |
+| `PW_TERMS` | `""` (`docker-compose.yml` sets Terms PDF SHA-256) | 64-character hex SHA-256 digest of `frontend-ui/public/terms-of-use.pdf`. Required on startup whenever `ENFORCE_POLICY=true` or `PRODUCTION_ENV=true`. |
+| `PW_READONLY` | `false` | Set `"true"` to enable read-only maintenance mode (`read_only` feature flag + `503 READ_ONLY_MODE` on edits while allowing login & token refresh). |
 | `CORS_ALLOWED_CLIENTS` | Built-in `plannedwallet.com` dev/stage/prod hosts | Comma-separated allowed client hosts (also checks `ALLOWED_CLIENTS`, `CORS_ALLOWED_ORIGINS`, `CORS_ALLOWED_HOSTS`). |
 
 ### Orchestration & Integration Testing

@@ -6,10 +6,22 @@ Scale Consideration: Must be injected identically into all backend instances via
 Code Fallback Warning: In main.go, the code falls back to "super-secret-jwt-key-replace-in-production" if unset. In production, ensure deployment manifests mandate this variable and fail fast if missing.
   
 JWT_EXPIRATION_SECONDS:
-Configure token TTL (default is 3600 seconds / 1 hour in main.go). For sensitive financial applications, shorter-lived tokens (e.g., 900–1800 seconds) combined with client re-authentication minimize the exposure window.
-  
+Configure token TTL (default is 900 seconds / 15 minutes in auth.go). Combined with client activity-based token refresh, this limits exposure on inactive sessions.
+
+PRODUCTION_ENV:
+Set PRODUCTION_ENV=true in production. Enforces Gin release mode, PostgreSQL connectivity on startup (no MemoryRepository fallback), non-default 256-bit+ JWT_SECRET, EXPECTED_FDID header validation, REQUIRE_CAPTCHA=true, skipping startup init.sql, and policy/terms enforcement.
+
+EXPECTED_FDID:
+Azure Front Door profile ID required when PRODUCTION_ENV=true. Requests missing or mismatching X-Azure-FDID / X-FDID fail with 403 INVALID_PROXY_HEADER, and verified AFD requests allow X-Azure-ClientIP capture.
+
+ENFORCE_POLICY & PW_TERMS:
+ENFORCE_POLICY (default false) MUST be explicitly set to "true" whenever PRODUCTION_ENV=true (otherwise startup fails fatally). Requires an active policy_agreements row matching PW_TERMS (64-char SHA-256 hex of frontend-ui/public/terms-of-use.pdf) and U.S. consumer confirmation. PW_TERMS is mandatory at startup whenever policy enforcement is active.
+
+PW_READONLY:
+Set PW_READONLY=true during maintenance windows to publish the read_only feature flag and block mutating requests (503 READ_ONLY_MODE) while keeping GET endpoints, login, and token refresh active.
+
 REQUIRE_CAPTCHA:
-Set REQUIRE_CAPTCHA=true in production (defaults to "false" in main.go). This protects user registration endpoints against automated credential stuffing and bot account creation.
+Set REQUIRE_CAPTCHA=true in production (auto-enabled when PRODUCTION_ENV=true, defaults to "false"). Protects user registration endpoints against automated bot account creation.
   
 GIN_MODE:
 Set GIN_MODE=release. This disables verbose debug logging, internal route dumping, and enables Gin's optimized production router.

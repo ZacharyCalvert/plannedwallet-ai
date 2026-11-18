@@ -323,6 +323,7 @@ All HTTP requests require the `X-Client-ID` header. Protected endpoints require 
 ### 3.10 System & Feature Flags
 - `GET /api/v1/features`: Returns enabled backend feature flags (e.g., `{"features": ["read_only"]}` when `PW_READONLY=true`, otherwise `{"features": []}`).
   - When `PW_READONLY=true`, write operations (`POST`, `PUT`, `PATCH`, `DELETE`) return `503 Service Unavailable` (`READ_ONLY_MODE`) while retaining read (`GET`) routes, user login (`POST /api/v1/users/{username}/token`), and JWT refresh (`POST /api/v1/users/{username}/token/refresh`).
+- `GET /api/v1/version`: Returns compile-time stamped binary provenance (`github_run`, `build_date`, `git_sha`) with `Cache-Control: no-store`.
 
 ### 3.11 Recurring Transactions & Reminders (`recurring_transactions`)
 - Recurring transactions are strictly user-scoped (`recurring_transactions.user_id`) and represent both bills (`amount < 0`) and income (`amount > 0`) through a unified table and API.
