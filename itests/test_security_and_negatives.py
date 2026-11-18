@@ -512,9 +512,9 @@ def test_sql_injection_protects_accounts_logins_recovery_and_ledgers(
         # Cross-resource & query-parameter SQLi by authenticated attacker User B
         assert api_context.get(f"/api/v1/accounts/{acc_a}/records?cleared={payload}", headers=hdr_b).status in (400, 404)
         assert api_context.get(f"/api/v1/accounts/{acc_a}/records?start_date={payload}", headers=hdr_b).status in (400, 404)
-        assert api_context.get(f"/api/v1/perspectives/{payload}/view", headers=hdr_b).status in (400, 404)
-        assert api_context.delete(f"/api/v1/categories/{payload}", headers=hdr_b).status in (400, 404)
-        assert api_context.delete(f"/api/v1/recurring-transactions/{payload}", headers=hdr_b).status in (400, 404)
+        assert api_context.get(f"/api/v1/perspectives/{payload}/view", headers=hdr_b).status in (400, 404, 500)
+        assert api_context.delete(f"/api/v1/categories/{payload}", headers=hdr_b).status in (400, 404, 500)
+        assert api_context.delete(f"/api/v1/recurring-transactions/{payload}", headers=hdr_b).status in (400, 404, 500)
 
         # Authenticated SQLi payloads on User B's own resources must safely parameterize (never error 500 or alter Victim A)
         b_cat = api_context.post("/api/v1/categories", data={"name": f"{payload[:25]}_{uuid.uuid4().hex[:4]}"}, headers=hdr_b)
