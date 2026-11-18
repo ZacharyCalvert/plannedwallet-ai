@@ -657,4 +657,38 @@ type FeaturesResponse struct {
 	Features []string `json:"features"`
 }
 
+// PolicyAgreement represents a ledger entry capturing user acceptance of Terms, Privacy Policy, and US residency.
+type PolicyAgreement struct {
+	ID              string    `json:"id"`
+	UserID          string    `json:"user_id"`
+	TermsSHA256     string    `json:"terms_sha256"`
+	TermsApproved   bool      `json:"terms_approved"`
+	PrivacyApproved bool      `json:"privacy_approved"`
+	USCustomer      bool      `json:"us_customer"`
+	Active          bool      `json:"active"`
+	ClientIP        string    `json:"client_ip"`
+	AgreedAt        time.Time `json:"agreed_at"`
+}
+
+// PolicyAgreementRequest represents the payload submitted by a user approving Terms, Privacy Policy, and US consumer status.
+type PolicyAgreementRequest struct {
+	TermsApproved   *bool  `json:"terms_approved" binding:"required"`
+	PrivacyApproved *bool  `json:"privacy_approved" binding:"required"`
+	USCustomer      *bool  `json:"us_customer" binding:"required"`
+	TermsSHA256     string `json:"terms_sha256" binding:"required"`
+}
+
+// PolicyAgreementResponse represents a recorded policy agreement returned by the API.
+type PolicyAgreementResponse struct {
+	ID              string    `json:"id"`
+	UserID          string    `json:"user_id"`
+	TermsSHA256     string    `json:"terms_sha256"`
+	TermsApproved   bool      `json:"terms_approved"`
+	PrivacyApproved bool      `json:"privacy_approved"`
+	USCustomer      bool      `json:"us_customer"`
+	Active          bool      `json:"active"`
+	ClientIP        string    `json:"client_ip"`
+	AgreedAt        time.Time `json:"agreed_at"`
+}
+
 

@@ -202,6 +202,19 @@ Multi-user sharing and role-based permissions (`read`, `edit`, `admin`) for pers
 - **Constraint**: `CONSTRAINT uq_perspective_access_perspective_user UNIQUE (perspective_id, user_id)`
 - **Indexes**: `idx_perspective_access_perspective_id`, `idx_perspective_access_user_id`
 
+### 1.17 `policy_agreements`
+Immutable-style ledger recording when users accepted the Privacy Policy, Terms of Use, and US customer confirmation.
+- `id` (UUID, Primary Key)
+- `user_id` (UUID, Not Null, FK -> `users(id)` ON DELETE CASCADE)
+- `terms_sha256` (VARCHAR(64), Not Null) - SHA-256 hex digest of the Terms of Use PDF presented to the user (must match `PW_TERMS` when policy enforcement is active)
+- `terms_approved` (BOOLEAN, Not Null)
+- `privacy_approved` (BOOLEAN, Not Null)
+- `us_customer` (BOOLEAN, Not Null) - Confirmation of `"I am a customer in the United States"`
+- `active` (BOOLEAN, Not Null, Default TRUE) - Can be flagged `FALSE` across existing rows when policies change to require re-approval
+- `client_ip` (VARCHAR(45), Not Null) - Client IP captured at agreement time
+- `agreed_at` (TIMESTAMPTZ, Not Null, Default NOW())
+- **Indexes**: `idx_policy_agreements_user_active (user_id, active)`, `idx_policy_agreements_user_agreed_at (user_id, agreed_at DESC)`
+
 ---
 
 ## 2. Account Types & Behavior
@@ -216,7 +229,7 @@ Multi-user sharing and role-based permissions (`read`, `edit`, `admin`) for pers
 
 ## 3. API Specification
 
-All HTTP requests require the `X-Client-ID` header. Protected endpoints require the `Authorization: Bearer <JWT>` header. The JWT payload includes `user_id`, `username`, and `subscriber` (boolean flag denoting active paid subscription status).
+All HTTP requests require the `X-Client-ID` header. Protected endpoints require the `Authorization: Bearer <JWT>` header. The JWT payload includes `user_id`, `username`, `subscriber` (boolean flag denoting active paid subscription status), and `terms_approved` (boolean flag denoting active policy acceptance matching `PW_TERMS` when `ENFORCE_POLICY=true` or `PRODUCTION_ENV=true`).
 
 ### 3.1 Health
 - `GET /api/health`: Database-confirmed health check endpoint (`{"status": "up"}`).
@@ -229,7 +242,9 @@ All HTTP requests require the `X-Client-ID` header. Protected endpoints require 
 - `GET /api/v1/users/{username}`: Retrieve the signed-in user's profile details (`id`, `username`, `email`, `created_at`).
 - `DELETE /api/v1/users/{username}`: Permanently delete the signed-in user and cascade all owned accounts, transaction records, reconcile reports, categories, assets, snapshots, subscriptions, perspectives, recurring transactions, and access grants.
 - `POST /api/v1/users/{username}/token`: TOTP-authenticated JWT token exchange (issues a 15-minute / 900s JWT by default).
-- `POST /api/v1/users/{username}/token/refresh`: Exchanges an existing, valid Bearer JWT for a freshly signed 15-minute JWT without re-entering credentials.
+- `POST /api/v1/users/{username}/token/refresh`: Exchanges an existing, valid Bearer JWT for a freshly signed 15-minute JWT without re-entering credentials (including upgrading `terms_approved` to `true` after recording policy acceptance).
+- `GET /api/v1/users/{username}/policy-agreements`: List policy agreement ledger entries for the signed-in user (permitted when `terms_approved: false`).
+- `POST /api/v1/users/{username}/policy-agreements`: Append a policy agreement ledger entry confirming Terms of Use, Privacy Policy, US consumer status, and matching Terms PDF SHA-256 (`PW_TERMS`), capturing client IP and timestamp (permitted when `terms_approved: false`).
 
 ### 3.3 Accounts
 - `POST /api/v1/accounts`: Create account (`checking`, `savings`, `credit card`, `asset`, `snapshot`).

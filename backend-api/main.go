@@ -47,6 +47,21 @@ func isReadOnlyMode() bool {
 	return strings.EqualFold(strings.TrimSpace(os.Getenv("PW_READONLY")), "true")
 }
 
+func isPolicyEnforced(isProd bool) bool {
+	return isProd || strings.EqualFold(strings.TrimSpace(os.Getenv("ENFORCE_POLICY")), "true")
+}
+
+func validateTermsHash(rawTerms string, enforcePolicy bool) string {
+	clean := strings.ToLower(strings.TrimSpace(rawTerms))
+	if enforcePolicy && !controller.IsValidSHA256Hex(clean) {
+		log.Fatalf("Fatal: Policy enforcement is active (PRODUCTION_ENV or ENFORCE_POLICY) but PW_TERMS is missing or invalid SHA-256 hex.")
+	}
+	if clean != "" && !controller.IsValidSHA256Hex(clean) {
+		log.Fatalf("Fatal: PW_TERMS is set but is not a valid 64-character hex SHA-256 digest.")
+	}
+	return clean
+}
+
 func isDefaultJWTSecret(secret string) bool {
 	clean := strings.ToLower(strings.TrimSpace(secret))
 	if clean == "" || clean == defaultJWTSecret || clean == "dev-super-secret-jwt-key" {
@@ -88,6 +103,7 @@ func fdidMiddleware(expectedFDID string, isProd bool) gin.HandlerFunc {
 			})
 			return
 		}
+		c.Set("azureFDIDVerified", true)
 		c.Next()
 	}
 }
@@ -173,6 +189,10 @@ func addHandlers(r *gin.Engine, repo repository.Repository, authService *auth.Se
 	if isProd || getEnv("REQUIRE_CAPTCHA", "false") == "true" {
 		ctrl.SetRequireCaptcha(true)
 	}
+	ctrl.SetEnforcePolicy(isPolicyEnforced(isProd))
+	if rawTerms := strings.TrimSpace(os.Getenv("PW_TERMS")); rawTerms != "" {
+		ctrl.SetTermsHash(rawTerms)
+	}
 	handler := handlers.NewHandler(ctrl, authService)
 	handler.SetReadOnly(isReadOnlyMode())
 	handler.RegisterRoutes(r)
@@ -238,6 +258,7 @@ func main() {
 	port := getEnv("PORT", "8080")
 	expectedFDID := getEnv("EXPECTED_FDID", "")
 	validateExpectedFDID(expectedFDID, isProd)
+	validateTermsHash(os.Getenv("PW_TERMS"), isPolicyEnforced(isProd))
 
 	authService := initJWTService(isProd)
 	repo := initDatabase(isProd)

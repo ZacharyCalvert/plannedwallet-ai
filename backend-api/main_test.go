@@ -250,11 +250,40 @@ func TestFDIDMiddleware(t *testing.T) {
 	}
 
 	// 3. Case-insensitive matching header -> 200
-	reqUpper := httptest.NewRequest("GET", "/test", nil)
+	var verified bool
+	rProd.GET("/verified", func(c *gin.Context) {
+		verified = c.GetBool("azureFDIDVerified")
+		c.String(http.StatusOK, "ok")
+	})
+	reqUpper := httptest.NewRequest("GET", "/verified", nil)
 	reqUpper.Header.Set("X-Azure-FDID", strings.ToUpper(expected))
 	wProd3 := httptest.NewRecorder()
 	rProd.ServeHTTP(wProd3, reqUpper)
-	if wProd3.Code != http.StatusOK {
-		t.Errorf("Expected 200 for uppercase FDID, got %d", wProd3.Code)
+	if wProd3.Code != http.StatusOK || !verified {
+		t.Errorf("Expected 200 and azureFDIDVerified=true for uppercase FDID, got %d verified=%v", wProd3.Code, verified)
+	}
+}
+
+func TestIsPolicyEnforcedAndValidateTermsHash(t *testing.T) {
+	origEnf := os.Getenv("ENFORCE_POLICY")
+	defer func() { _ = os.Setenv("ENFORCE_POLICY", origEnf) }()
+
+	_ = os.Setenv("ENFORCE_POLICY", "false")
+	if isPolicyEnforced(false) {
+		t.Fatal("expected policy enforcement off when both flags false")
+	}
+	if !isPolicyEnforced(true) {
+		t.Fatal("expected policy enforcement on when PRODUCTION_ENV=true")
+	}
+	_ = os.Setenv("ENFORCE_POLICY", "true")
+	if !isPolicyEnforced(false) {
+		t.Fatal("expected policy enforcement on when ENFORCE_POLICY=true")
+	}
+	valid := "B08F3D8B1CD44544888A78ED13316C0910725944BC46808AB542E36D9B2FD84C"
+	if got := validateTermsHash(valid, true); got != strings.ToLower(valid) {
+		t.Fatalf("expected lowercased valid PW_TERMS, got %q", got)
+	}
+	if got := validateTermsHash("", false); got != "" {
+		t.Fatalf("expected empty PW_TERMS allowed when unenforced, got %q", got)
 	}
 }

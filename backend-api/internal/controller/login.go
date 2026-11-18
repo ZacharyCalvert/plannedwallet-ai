@@ -44,12 +44,17 @@ func (c *Controller) issueTokenForUser(ctx context.Context, user *models.User, a
 		trace.LogError(ctx, err, "Error checking subscriber status for: %s", user.Username)
 		return nil, NewAppError(http.StatusInternalServerError, "INTERNAL_ERROR", "Error checking subscriber status.")
 	}
-	token, err := c.auth.GenerateToken(user.ID, user.Username, isSubscriber)
+	termsApproved, err := c.resolveTokenTermsApproved(ctx, user.ID)
+	if err != nil {
+		trace.LogError(ctx, err, "Error checking policy agreement status for: %s", user.Username)
+		return nil, NewAppError(http.StatusInternalServerError, "INTERNAL_ERROR", "Error checking policy agreement status.")
+	}
+	token, err := c.auth.GenerateToken(user.ID, user.Username, isSubscriber, termsApproved)
 	if err != nil {
 		trace.LogError(ctx, err, "Token generation failed for user: %s", user.Username)
 		return nil, NewAppError(http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to generate token.")
 	}
-	trace.LogInfo(ctx, "%s succeeded for user: %s (subscriber=%t)", action, user.Username, isSubscriber)
+	trace.LogInfo(ctx, "%s succeeded for user: %s (subscriber=%t, terms_approved=%t)", action, user.Username, isSubscriber, termsApproved)
 	return &models.TokenResponse{
 		AccessToken: token,
 		TokenType:   "Bearer",

@@ -21,9 +21,10 @@ var (
 )
 
 type Claims struct {
-	UserID     string `json:"user_id"`
-	Username   string `json:"username"`
-	Subscriber bool   `json:"subscriber"`
+	UserID        string `json:"user_id"`
+	Username      string `json:"username"`
+	Subscriber    bool   `json:"subscriber"`
+	TermsApproved bool   `json:"terms_approved"`
 	jwt.RegisteredClaims
 }
 
@@ -59,12 +60,13 @@ func (s *Service) CheckPassword(hash, password string) bool {
 	return err == nil
 }
 
-func (s *Service) GenerateToken(userID, username string, isSubscriber bool) (string, error) {
+func (s *Service) GenerateToken(userID, username string, isSubscriber, termsApproved bool) (string, error) {
 	now := time.Now()
 	claims := Claims{
-		UserID:     userID,
-		Username:   username,
-		Subscriber: isSubscriber,
+		UserID:        userID,
+		Username:      username,
+		Subscriber:    isSubscriber,
+		TermsApproved: termsApproved,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ID:        uuid.New().String(),
 			Subject:   userID,
@@ -128,6 +130,7 @@ func (s *Service) Middleware() gin.HandlerFunc {
 		c.Set("userID", claims.UserID)
 		c.Set("username", claims.Username)
 		c.Set("subscriber", claims.Subscriber)
+		c.Set("termsApproved", claims.TermsApproved)
 		c.Next()
 	}
 }

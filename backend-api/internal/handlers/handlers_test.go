@@ -2,6 +2,7 @@ package handlers_test
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -1138,6 +1139,116 @@ func TestGetAndDeleteUserEndpoint(t *testing.T) {
 	}
 	if wAcc := doAuthedJSON(t, r, http.MethodGet, "/api/v1/accounts/"+accA, tokB, nil); wAcc.Code != http.StatusNotFound {
 		t.Fatalf("expected 404 for cascaded account, got %d", wAcc.Code)
+	}
+}
+
+func setupPolicyTestRouter(termsHash string) (*gin.Engine, repository.Repository, *auth.Service) {
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	r.Use(trace.Middleware(), cors.Middleware(), gin.Recovery())
+	repo := repository.NewMemoryRepository()
+	captcha.SetCustomStore(captcha.NewRepoStore(repo))
+	authService := auth.NewService("test-secret-key-12345", auth.DefaultExpirationSeconds)
+	ctrl := controller.NewController(repo, authService)
+	ctrl.SetEnforcePolicy(true)
+	ctrl.SetTermsHash(termsHash)
+	handlers.NewHandler(ctrl, authService).RegisterRoutes(r)
+	return r, repo, authService
+}
+
+func assertTokenTermsClaim(t *testing.T, svc *auth.Service, token string, expected bool) {
+	t.Helper()
+	claims, err := svc.ValidateToken(token)
+	if err != nil {
+		t.Fatalf("ValidateToken failed: %v", err)
+	}
+	if claims.TermsApproved != expected {
+		t.Fatalf("expected token terms_approved=%v, got %v", expected, claims.TermsApproved)
+	}
+}
+
+func TestPolicyAgreementAndEnforcementEndpoints(t *testing.T) {
+	hash := "b08f3d8b1cd44544888a78ed13316c0910725944bc46808ab542e36d9b2fd84c"
+	r, repo, svc := setupPolicyTestRouter(hash)
+	tok := registerAndGetToken(t, r, "pol_u", "polu@example.com", "Password123!")
+	assertTokenTermsClaim(t, svc, tok, false)
+
+	wBlocked := doAuthedJSON(t, r, http.MethodGet, "/api/v1/accounts", tok, nil)
+	if wBlocked.Code != http.StatusForbidden || !strings.Contains(wBlocked.Body.String(), "POLICY_APPROVAL_REQUIRED") {
+		t.Fatalf("expected 403 POLICY_APPROVAL_REQUIRED, got %d: %s", wBlocked.Code, wBlocked.Body.String())
+	}
+	badBody := map[string]any{"terms_approved": true, "privacy_approved": true, "us_customer": true, "terms_sha256": strings.Repeat("0", 64)}
+	if wBad := doAuthedJSON(t, r, http.MethodPost, "/api/v1/users/pol_u/policy-agreements", tok, badBody); wBad.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 on mismatched SHA-256, got %d: %s", wBad.Code, wBad.Body.String())
+	}
+	goodBody := map[string]any{"terms_approved": true, "privacy_approved": true, "us_customer": true, "terms_sha256": hash}
+	if wOK := doAuthedJSON(t, r, http.MethodPost, "/api/v1/users/pol_u/policy-agreements", tok, goodBody); wOK.Code != http.StatusCreated {
+		t.Fatalf("expected 201 recording policy agreement, got %d: %s", wOK.Code, wOK.Body.String())
+	}
+	wRef := doAuthedJSON(t, r, http.MethodPost, "/api/v1/users/pol_u/token/refresh", tok, nil)
+	if wRef.Code != http.StatusOK {
+		t.Fatalf("expected 200 refreshing token after policy approval, got %d: %s", wRef.Code, wRef.Body.String())
+	}
+	var refreshed models.TokenResponse
+	_ = json.Unmarshal(wRef.Body.Bytes(), &refreshed)
+	assertTokenTermsClaim(t, svc, refreshed.AccessToken, true)
+
+	if wAllowed := doAuthedJSON(t, r, http.MethodGet, "/api/v1/accounts", refreshed.AccessToken, nil); wAllowed.Code != http.StatusOK {
+		t.Fatalf("expected 200 accessing accounts after approval, got %d: %s", wAllowed.Code, wAllowed.Body.String())
+	}
+	_ = repo.DeactivateAllPolicyAgreements(context.Background())
+	if wDeact := doAuthedJSON(t, r, http.MethodGet, "/api/v1/accounts", refreshed.AccessToken, nil); wDeact.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 after ledger deactivation, got %d", wDeact.Code)
+	}
+}
+
+func postPolicyWithAzureIP(r *gin.Engine, tok, username, hash, headerVal string) models.PolicyAgreementResponse {
+	payload, _ := json.Marshal(map[string]any{
+		"terms_approved": true, "privacy_approved": true, "us_customer": true, "terms_sha256": hash,
+	})
+	req := newTestRequest(http.MethodPost, "/api/v1/users/"+username+"/policy-agreements", bytes.NewReader(payload))
+	req.RemoteAddr = "10.0.0.12:443"
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+tok)
+	req.Header.Set("X-Azure-ClientIP", headerVal)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	var out models.PolicyAgreementResponse
+	_ = json.Unmarshal(w.Body.Bytes(), &out)
+	return out
+}
+
+func TestRecordPolicyAgreement_ResolvesAzureClientIP(t *testing.T) {
+	hash := "b08f3d8b1cd44544888a78ed13316c0910725944bc46808ab542e36d9b2fd84c"
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	var verifiedAFD bool
+	r.Use(trace.Middleware(), func(c *gin.Context) {
+		if verifiedAFD {
+			c.Set("azureFDIDVerified", true)
+		}
+		c.Next()
+	})
+	repo := repository.NewMemoryRepository()
+	captcha.SetCustomStore(captcha.NewRepoStore(repo))
+	svc := auth.NewService("test-secret-key-12345", auth.DefaultExpirationSeconds)
+	ctrl := controller.NewController(repo, svc)
+	ctrl.SetTermsHash(hash)
+	handlers.NewHandler(ctrl, svc).RegisterRoutes(r)
+
+	tok := registerAndGetToken(t, r, "ip_user", "ip@example.com", "Password123!")
+	if got := postPolicyWithAzureIP(r, tok, "ip_user", hash, "198.51.100.99"); got.ClientIP != "10.0.0.12" {
+		t.Fatalf("expected spoofed X-Azure-ClientIP ignored when AFD unverified, got %q", got.ClientIP)
+	}
+	verifiedAFD = true
+	if got := postPolicyWithAzureIP(r, tok, "ip_user", hash, "198.51.100.99:54321"); got.ClientIP != "198.51.100.99" {
+		t.Fatalf("expected X-Azure-ClientIP IPv4 used when AFD verified, got %q", got.ClientIP)
+	}
+	if got := postPolicyWithAzureIP(r, tok, "ip_user", hash, "2001:db8::42"); got.ClientIP != "2001:db8::42" {
+		t.Fatalf("expected X-Azure-ClientIP IPv6 used when AFD verified, got %q", got.ClientIP)
+	}
+	if got := postPolicyWithAzureIP(r, tok, "ip_user", hash, "not-an-ip"); got.ClientIP != "10.0.0.12" {
+		t.Fatalf("expected fallback to RemoteAddr on malformed X-Azure-ClientIP, got %q", got.ClientIP)
 	}
 }
 

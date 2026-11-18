@@ -1,3 +1,4 @@
+import hashlib
 import uuid
 import pytest
 from playwright.sync_api import APIRequestContext
@@ -394,3 +395,121 @@ def test_user_a_cannot_delete_user_b(api_context: APIRequestContext):
 
     recs_b = api_context.get(f"/api/v1/accounts/{acc_b_id}/records", headers=hdr_b)
     assert recs_b.status == 200 and len(recs_b.json()) == 1
+
+
+def test_policy_agreement_ledger_lifecycle_and_validation(
+    api_context: APIRequestContext, raw_context: APIRequestContext
+):
+    """Verify policy_agreements ledger captures client IP, timestamp, SHA-256 validation, and cascade cleanup."""
+    pdf_res = raw_context.get("/terms-of-use.pdf")
+    assert pdf_res.status == 200
+    terms_sha256 = hashlib.sha256(pdf_res.body()).hexdigest()
+
+    user_a = generate_user_data(prefix="pol_a")
+    user_b = generate_user_data(prefix="pol_b")
+    res_a = api_context.post("/api/v1/users", data=user_a)
+    res_b = api_context.post("/api/v1/users", data=user_b)
+    assert res_a.status == 201 and res_b.status == 201
+
+    tok_a = api_context.post(
+        f"/api/v1/users/{user_a['username']}/token",
+        data={"password": user_a["password"], "totp_code": compute_totp_code(res_a.json()["totp_secret"])},
+    ).json()["access_token"]
+    tok_b = api_context.post(
+        f"/api/v1/users/{user_b['username']}/token",
+        data={"password": user_b["password"], "totp_code": compute_totp_code(res_b.json()["totp_secret"])},
+    ).json()["access_token"]
+    hdr_a = {"Authorization": f"Bearer {tok_a}"}
+    hdr_b = {"Authorization": f"Bearer {tok_b}"}
+
+    # Mismatched terms_sha256 and missing US residency must fail cleanly with 400
+    bad_hash = api_context.post(
+        f"/api/v1/users/{user_a['username']}/policy-agreements",
+        data={
+            "terms_approved": True,
+            "privacy_approved": True,
+            "us_customer": True,
+            "terms_sha256": "0" * 64,
+        },
+        headers=hdr_a,
+    )
+    assert bad_hash.status == 400
+    assert bad_hash.json().get("error") == "TERMS_HASH_MISMATCH"
+
+    no_us = api_context.post(
+        f"/api/v1/users/{user_a['username']}/policy-agreements",
+        data={
+            "terms_approved": True,
+            "privacy_approved": True,
+            "us_customer": False,
+            "terms_sha256": terms_sha256,
+        },
+        headers=hdr_a,
+    )
+    assert no_us.status == 400
+    assert no_us.json().get("error") == "POLICY_US_CUSTOMER_REQUIRED"
+
+    # Cross-user submission must return 403 FORBIDDEN
+    cross_user = api_context.post(
+        f"/api/v1/users/{user_b['username']}/policy-agreements",
+        data={
+            "terms_approved": True,
+            "privacy_approved": True,
+            "us_customer": True,
+            "terms_sha256": terms_sha256,
+        },
+        headers=hdr_a,
+    )
+    assert cross_user.status == 403
+
+    # Valid submission creates an active ledger entry capturing IP and timestamp
+    first = api_context.post(
+        f"/api/v1/users/{user_a['username']}/policy-agreements",
+        data={
+            "terms_approved": True,
+            "privacy_approved": True,
+            "us_customer": True,
+            "terms_sha256": terms_sha256,
+        },
+        headers=hdr_a,
+    )
+    assert first.status == 201, f"Expected 201, got {first.status}: {first.text()}"
+    rec1 = first.json()
+    assert rec1["terms_sha256"] == terms_sha256
+    assert rec1["terms_approved"] is True
+    assert rec1["privacy_approved"] is True
+    assert rec1["us_customer"] is True
+    assert rec1["active"] is True
+    assert rec1.get("client_ip")
+    assert rec1.get("agreed_at")
+
+    # Submitting again supersedes previous row active=False and preserves ledger ordering
+    second = api_context.post(
+        f"/api/v1/users/{user_a['username']}/policy-agreements",
+        data={
+            "terms_approved": True,
+            "privacy_approved": True,
+            "us_customer": True,
+            "terms_sha256": terms_sha256,
+        },
+        headers=hdr_a,
+    )
+    assert second.status == 201
+
+    ledger = api_context.get(f"/api/v1/users/{user_a['username']}/policy-agreements", headers=hdr_a)
+    assert ledger.status == 200
+    entries = ledger.json()
+    assert len(entries) == 2
+    assert entries[0]["id"] == second.json()["id"] and entries[0]["active"] is True
+    assert entries[1]["id"] == rec1["id"] and entries[1]["active"] is False
+
+    # Refresh token issues JWT with terms_approved=True
+    ref = api_context.post(f"/api/v1/users/{user_a['username']}/token/refresh", headers=hdr_a)
+    assert ref.status == 200
+    claims = decode_jwt_unverified(ref.json()["access_token"])
+    assert claims.get("terms_approved") is True
+
+    # User B ledger stays empty and deleting User A cleans up cleanly
+    b_ledger = api_context.get(f"/api/v1/users/{user_b['username']}/policy-agreements", headers=hdr_b)
+    assert b_ledger.status == 200 and b_ledger.json() == []
+    assert api_context.delete(f"/api/v1/users/{user_a['username']}", headers=hdr_a).status == 204

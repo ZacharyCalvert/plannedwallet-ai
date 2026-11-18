@@ -1,3 +1,5 @@
+import hashlib
+
 from playwright.sync_api import APIRequestContext
 
 
@@ -22,3 +24,15 @@ def test_privacy_and_security_policy_pdf_served(raw_context: APIRequestContext):
     assert "application/pdf" in content_type.lower(), f"Expected application/pdf, got {content_type}"
     body = res.body()
     assert body.startswith(b"%PDF-"), "Expected valid PDF signature"
+
+
+def test_terms_of_use_pdf_served_and_matches_pw_terms(raw_context: APIRequestContext):
+    """Verify /terms-of-use.pdf is served as a valid PDF matching docker-compose PW_TERMS SHA-256."""
+    res = raw_context.get("/terms-of-use.pdf")
+    assert res.status == 200, f"Expected 200 for Terms PDF, got {res.status}"
+    content_type = res.headers.get("content-type", "")
+    assert "application/pdf" in content_type.lower(), f"Expected application/pdf, got {content_type}"
+    body = res.body()
+    assert body.startswith(b"%PDF-"), "Expected valid PDF signature"
+    digest = hashlib.sha256(body).hexdigest()
+    assert digest == "b08f3d8b1cd44544888a78ed13316c0910725944bc46808ab542e36d9b2fd84c"

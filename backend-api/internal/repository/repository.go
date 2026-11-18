@@ -141,4 +141,10 @@ type Repository interface {
 	UpdateRecurringTransaction(ctx context.Context, rt *models.RecurringTransaction) error
 	DeleteRecurringTransaction(ctx context.Context, userID, recurringID string) error
 	ApplyRecurringTransactionToAccount(ctx context.Context, rt *models.RecurringTransaction, record *models.CheckingRecord) error
+
+	// Policy Agreement Ledger operations
+	CreatePolicyAgreement(ctx context.Context, agreement *models.PolicyAgreement) error
+	GetActivePolicyAgreement(ctx context.Context, userID string) (*models.PolicyAgreement, error)
+	ListPolicyAgreementsByUserID(ctx context.Context, userID string) ([]*models.PolicyAgreement, error)
+	DeactivateAllPolicyAgreements(ctx context.Context) error
 }

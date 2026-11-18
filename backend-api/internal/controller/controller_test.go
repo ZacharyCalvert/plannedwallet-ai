@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"strings"
 	"testing"
 	"time"
 
@@ -987,6 +988,47 @@ func TestDeleteUser_CascadesAndAuthorization(t *testing.T) {
 	_, err = ctrl.RegisterUser(ctx, models.UserRegistrationRequest{Username: "gone_user", Email: "gone@test.com", Password: "ValidPass123!"})
 	if err != nil {
 		t.Fatalf("re-registering deleted username/email failed: %v", err)
+	}
+}
+
+func TestPolicyAgreementLifecycleAndEnforcement(t *testing.T) {
+	ctrl, repo := setupController()
+	ctx := context.Background()
+	termsHash := strings.Repeat("c", 64)
+	ctrl.SetEnforcePolicy(true)
+	ctrl.SetTermsHash(termsHash)
+	bTrue, bFalse := true, false
+
+	u, _ := ctrl.RegisterUser(ctx, models.UserRegistrationRequest{Username: "policy_alice", Email: "pa@test.com", Password: "ValidPass123!"})
+	code, _ := auth.GenerateCode(u.TOTPSecret, time.Now().Unix()/30)
+	tok, err := ctrl.ExchangePasswordForToken(ctx, "policy_alice", "ValidPass123!", code)
+	if err != nil || tok.ExpiresIn <= 0 {
+		t.Fatalf("ExchangePasswordForToken failed: %v", err)
+	}
+	if ok, _ := ctrl.IsUserPolicyApproved(ctx, u.ID); ok {
+		t.Fatal("expected IsUserPolicyApproved=false before agreement")
+	}
+
+	_, err = ctrl.RecordPolicyAgreement(ctx, u.ID, "policy_alice", "203.0.113.42", models.PolicyAgreementRequest{
+		TermsApproved: &bTrue, PrivacyApproved: &bTrue, USCustomer: &bFalse, TermsSHA256: termsHash,
+	})
+	assertAppErrorStatus(t, err, http.StatusBadRequest)
+
+	_, err = ctrl.RecordPolicyAgreement(ctx, u.ID, "policy_alice", "203.0.113.42", models.PolicyAgreementRequest{
+		TermsApproved: &bTrue, PrivacyApproved: &bTrue, USCustomer: &bTrue, TermsSHA256: strings.Repeat("d", 64),
+	})
+	assertAppErrorStatus(t, err, http.StatusBadRequest)
+
+	agreed, err := ctrl.RecordPolicyAgreement(ctx, u.ID, "policy_alice", "203.0.113.42", models.PolicyAgreementRequest{
+		TermsApproved: &bTrue, PrivacyApproved: &bTrue, USCustomer: &bTrue, TermsSHA256: strings.ToUpper(termsHash),
+	})
+	ok, _ := ctrl.IsUserPolicyApproved(ctx, u.ID)
+	if err != nil || !agreed.Active || agreed.ClientIP != "203.0.113.42" || !ok {
+		t.Fatalf("expected active agreement recorded, got %+v err=%v", agreed, err)
+	}
+	_ = repo.DeactivateAllPolicyAgreements(ctx)
+	if okAfter, _ := ctrl.IsUserPolicyApproved(ctx, u.ID); okAfter {
+		t.Fatal("expected IsUserPolicyApproved=false after ledger deactivation")
 	}
 }
 

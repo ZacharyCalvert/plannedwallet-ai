@@ -144,3 +144,24 @@ func TestInitSQLEmbedded_UserDeleteCascades(t *testing.T) {
 		}
 	}
 }
+
+func TestInitSQLEmbedded_PolicyAgreements(t *testing.T) {
+	expectedSnippets := []string{
+		"CREATE TABLE IF NOT EXISTS policy_agreements",
+		"user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE",
+		"terms_sha256 VARCHAR(64) NOT NULL",
+		"terms_approved BOOLEAN NOT NULL",
+		"privacy_approved BOOLEAN NOT NULL",
+		"us_customer BOOLEAN NOT NULL",
+		"active BOOLEAN NOT NULL DEFAULT TRUE",
+		"client_ip VARCHAR(64) NOT NULL",
+		"agreed_at TIMESTAMPTZ NOT NULL DEFAULT NOW()",
+		"idx_policy_agreements_user_active",
+		"idx_policy_agreements_user_agreed_at",
+	}
+	for _, snippet := range expectedSnippets {
+		if !strings.Contains(initSQL, snippet) {
+			t.Errorf("expected initSQL to contain %q", snippet)
+		}
+	}
+}

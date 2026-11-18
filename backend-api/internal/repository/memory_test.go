@@ -3,6 +3,7 @@ package repository_test
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -778,6 +779,43 @@ func TestMemoryRepo_DeleteUserCascadesAllData(t *testing.T) {
 	}
 	if err := repo.DeleteUser(ctx, u1); !errors.Is(err, repository.ErrNotFound) {
 		t.Fatalf("expected ErrNotFound deleting already-deleted user, got %v", err)
+	}
+}
+
+func TestMemoryRepo_PolicyAgreementLedger(t *testing.T) {
+	repo := repository.NewMemoryRepository()
+	ctx := context.Background()
+	now := time.Now().UTC()
+	_ = repo.CreateUser(ctx, &models.User{ID: "pa-u1", Username: "policyuser", Email: "p@test.com", CreatedAt: now})
+	hash1, hash2 := strings.Repeat("a", 64), strings.Repeat("b", 64)
+
+	if _, err := repo.GetActivePolicyAgreement(ctx, "pa-u1"); !errors.Is(err, repository.ErrNotFound) {
+		t.Fatalf("expected ErrNotFound before any agreement, got %v", err)
+	}
+	_ = repo.CreatePolicyAgreement(ctx, &models.PolicyAgreement{
+		ID: "pa-1", UserID: "pa-u1", TermsSHA256: hash1, TermsApproved: true,
+		PrivacyApproved: true, USCustomer: true, Active: true, ClientIP: "198.51.100.7", AgreedAt: now,
+	})
+	_ = repo.CreatePolicyAgreement(ctx, &models.PolicyAgreement{
+		ID: "pa-2", UserID: "pa-u1", TermsSHA256: hash2, TermsApproved: true,
+		PrivacyApproved: true, USCustomer: true, Active: true, ClientIP: "198.51.100.8", AgreedAt: now.Add(time.Second),
+	})
+	active, err := repo.GetActivePolicyAgreement(ctx, "pa-u1")
+	if err != nil || active.ID != "pa-2" || active.ClientIP != "198.51.100.8" {
+		t.Fatalf("expected active agreement pa-2 with client IP, got %+v err=%v", active, err)
+	}
+	if all, _ := repo.ListPolicyAgreementsByUserID(ctx, "pa-u1"); len(all) != 2 || all[1].Active {
+		t.Fatalf("expected 2 agreements with pa-1 deactivated, got %+v", all)
+	}
+	if err := repo.DeactivateAllPolicyAgreements(ctx); err != nil {
+		t.Fatalf("DeactivateAllPolicyAgreements failed: %v", err)
+	}
+	if _, err := repo.GetActivePolicyAgreement(ctx, "pa-u1"); !errors.Is(err, repository.ErrNotFound) {
+		t.Fatalf("expected ErrNotFound after deactivation, got %v", err)
+	}
+	_ = repo.DeleteUser(ctx, "pa-u1")
+	if items, _ := repo.ListPolicyAgreementsByUserID(ctx, "pa-u1"); len(items) != 0 {
+		t.Fatalf("expected 0 policy agreements after user delete, got %d", len(items))
 	}
 }
 

@@ -188,6 +188,21 @@ CREATE TABLE IF NOT EXISTS subscriptions (
 CREATE INDEX IF NOT EXISTS idx_subscriptions_user_id ON subscriptions(user_id);
 CREATE INDEX IF NOT EXISTS idx_subscriptions_user_ends ON subscriptions(user_id, subscriber_ends DESC);
 
+CREATE TABLE IF NOT EXISTS policy_agreements (
+    id UUID PRIMARY KEY,
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    terms_sha256 VARCHAR(64) NOT NULL,
+    terms_approved BOOLEAN NOT NULL DEFAULT FALSE,
+    privacy_approved BOOLEAN NOT NULL DEFAULT FALSE,
+    us_customer BOOLEAN NOT NULL DEFAULT FALSE,
+    active BOOLEAN NOT NULL DEFAULT TRUE,
+    client_ip VARCHAR(64) NOT NULL,
+    agreed_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_policy_agreements_user_active ON policy_agreements(user_id, active);
+CREATE INDEX IF NOT EXISTS idx_policy_agreements_user_agreed_at ON policy_agreements(user_id, agreed_at DESC);
+
 CREATE TABLE IF NOT EXISTS perspectives (
     id UUID PRIMARY KEY,
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,

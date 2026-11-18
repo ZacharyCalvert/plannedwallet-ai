@@ -3,6 +3,7 @@ package auth_test
 import (
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -16,11 +17,11 @@ func TestDefaultExpiration_FifteenMinutesAndUniqueJTI(t *testing.T) {
 		t.Fatalf("expected default expiration 900s (15m), got %d", svc.ExpirationSeconds())
 	}
 
-	tok1, err := svc.GenerateToken("user-1", "alice", false)
+	tok1, err := svc.GenerateToken("user-1", "alice", false, true)
 	if err != nil {
 		t.Fatalf("GenerateToken 1 failed: %v", err)
 	}
-	tok2, err := svc.GenerateToken("user-1", "alice", false)
+	tok2, err := svc.GenerateToken("user-1", "alice", false, true)
 	if err != nil {
 		t.Fatalf("GenerateToken 2 failed: %v", err)
 	}
@@ -39,7 +40,7 @@ func TestDefaultExpiration_FifteenMinutesAndUniqueJTI(t *testing.T) {
 
 func TestGenerateAndValidateToken_SubscriberTrue(t *testing.T) {
 	svc := auth.NewService("test-secret", 3600)
-	token, err := svc.GenerateToken("user-123", "alice", true)
+	token, err := svc.GenerateToken("user-123", "alice", true, true)
 	if err != nil {
 		t.Fatalf("GenerateToken failed: %v", err)
 	}
@@ -48,14 +49,14 @@ func TestGenerateAndValidateToken_SubscriberTrue(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ValidateToken failed: %v", err)
 	}
-	if claims.UserID != "user-123" || claims.Username != "alice" || !claims.Subscriber {
+	if claims.UserID != "user-123" || claims.Username != "alice" || !claims.Subscriber || !claims.TermsApproved {
 		t.Errorf("unexpected claims: %+v", claims)
 	}
 }
 
 func TestGenerateAndValidateToken_SubscriberFalse(t *testing.T) {
 	svc := auth.NewService("test-secret", 3600)
-	token, err := svc.GenerateToken("user-456", "bob", false)
+	token, err := svc.GenerateToken("user-456", "bob", false, false)
 	if err != nil {
 		t.Fatalf("GenerateToken failed: %v", err)
 	}
@@ -64,7 +65,7 @@ func TestGenerateAndValidateToken_SubscriberFalse(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ValidateToken failed: %v", err)
 	}
-	if claims.UserID != "user-456" || claims.Username != "bob" || claims.Subscriber {
+	if claims.UserID != "user-456" || claims.Username != "bob" || claims.Subscriber || claims.TermsApproved {
 		t.Errorf("unexpected claims: %+v", claims)
 	}
 }
@@ -72,7 +73,7 @@ func TestGenerateAndValidateToken_SubscriberFalse(t *testing.T) {
 func TestAuthMiddlewareSetsContext(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	svc := auth.NewService("test-secret", 3600)
-	token, _ := svc.GenerateToken("user-789", "carol", true)
+	token, _ := svc.GenerateToken("user-789", "carol", true, false)
 
 	r := gin.New()
 	r.Use(svc.Middleware())
@@ -80,7 +81,8 @@ func TestAuthMiddlewareSetsContext(t *testing.T) {
 		uid, _ := c.Get("userID")
 		uname, _ := c.Get("username")
 		sub, _ := c.Get("subscriber")
-		c.JSON(http.StatusOK, gin.H{"uid": uid, "uname": uname, "sub": sub})
+		terms, _ := c.Get("termsApproved")
+		c.JSON(http.StatusOK, gin.H{"uid": uid, "uname": uname, "sub": sub, "terms": terms})
 	})
 
 	req := httptest.NewRequest(http.MethodGet, "/protected", nil)
@@ -90,5 +92,8 @@ func TestAuthMiddlewareSetsContext(t *testing.T) {
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", w.Code)
+	}
+	if got := w.Body.String(); !strings.Contains(got, `"terms":false`) {
+		t.Fatalf("expected termsApproved false in context response, got %s", got)
 	}
 }

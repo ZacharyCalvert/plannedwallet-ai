@@ -507,8 +507,11 @@ func (h *Handler) RegisterRoutes(r *gin.Engine) {
 
 	protected := api.Group("")
 	protected.Use(h.auth.Middleware())
+	protected.Use(h.PolicyEnforcementMiddleware())
 	protected.GET("/users/:username", h.GetUser)
 	protected.POST("/users/:username/token/refresh", h.RefreshToken)
+	protected.POST("/users/:username/policy-agreements", h.RecordPolicyAgreement)
+	protected.GET("/users/:username/policy-agreements", h.ListPolicyAgreements)
 	protected.DELETE("/users/:username", h.DeleteUser)
 	h.registerAccountRoutes(protected)
 	h.registerStoreAndSnapshotRoutes(protected)

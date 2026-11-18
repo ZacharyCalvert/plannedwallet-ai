@@ -467,6 +467,128 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
+  /api/v1/users/{username}/policy-agreements:
+    parameters:
+      - $ref: '#/components/parameters/XClientId'
+    get:
+      tags:
+        - Authentication
+      summary: List policy agreement ledger entries for the authenticated user
+      description: |
+        Returns all recorded policy agreement ledger entries for the authenticated user ordered
+        newest-first (`agreed_at DESC`). Permitted even when the caller's JWT carries
+        `terms_approved: false` so the client can inspect approval state.
+      operationId: listPolicyAgreements
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: username
+          in: path
+          required: true
+          description: The username of the authenticated user.
+          schema:
+            type: string
+            example: "johndoe"
+      responses:
+        '200':
+          summary: Policy agreement history retrieved
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PolicyAgreementResponse'
+        '400':
+          summary: Bad request
+          description: Missing username path parameter or X-Client-ID header.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          summary: Unauthorized
+          description: Missing, invalid, or expired Bearer JWT.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          summary: Forbidden
+          description: Authenticated user attempted to inspect another user's policy ledger.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          summary: User not found
+          description: Authenticated user record no longer exists.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    post:
+      tags:
+        - Authentication
+      summary: Record user acceptance of Privacy Policy, Terms of Use, and US consumer confirmation
+      description: |
+        Appends an active entry to the `policy_agreements` ledger recording client IP (`client_ip`),
+        timestamp (`agreed_at`), and the SHA-256 digest of the Terms of Use PDF (`terms_sha256`).
+        Requires `terms_approved`, `privacy_approved`, and `us_customer` to all be `true`, and requires
+        `terms_sha256` to match the server's configured `PW_TERMS` SHA-256 digest when policy enforcement
+        or `PW_TERMS` is configured. Permitted with a valid Bearer JWT whose `terms_approved` claim is `false`.
+      operationId: recordPolicyAgreement
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: username
+          in: path
+          required: true
+          description: The username of the authenticated user recording policy acceptance.
+          schema:
+            type: string
+            example: "johndoe"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PolicyAgreementRequest'
+      responses:
+        '201':
+          summary: Policy agreement recorded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PolicyAgreementResponse'
+        '400':
+          summary: Validation or terms hash mismatch error
+          description: Missing checkbox confirmation (`POLICY_TERMS_NOT_APPROVED`, `POLICY_PRIVACY_NOT_APPROVED`, `POLICY_US_CUSTOMER_REQUIRED`) or Terms PDF SHA-256 mismatch (`INVALID_TERMS_HASH`, `TERMS_HASH_MISMATCH`).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          summary: Unauthorized
+          description: Missing, invalid, or expired Bearer JWT.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          summary: Forbidden
+          description: Authenticated user attempted to record policy acceptance for another user.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          summary: User not found
+          description: Authenticated user record no longer exists.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
   /api/v1/accounts:
     parameters:
       - $ref: '#/components/parameters/XClientId'
@@ -3965,7 +4087,9 @@ components:
       bearerFormat: JWT
       description: |
         Authenticate using a JWT issued by POST `/api/v1/users/{username}/token`.
-        The JWT contains `user_id`, `username`, and `subscriber` (boolean flag) claims.
+        The JWT contains `user_id`, `username`, `subscriber`, and `terms_approved` (boolean flag) claims.
+        When `ENFORCE_POLICY=true` or `PRODUCTION_ENV=true`, protected routes require `terms_approved: true`
+        and an active matching `policy_agreements` ledger entry (otherwise returning `403 POLICY_APPROVAL_REQUIRED`).
         Provide the token in the HTTP `Authorization` header with the format: `Bearer <token>`.
 
   parameters:
@@ -4104,7 +4228,7 @@ components:
       properties:
         access_token:
           type: string
-          description: The signed JWT access token containing user_id, username, and subscriber claims.
+          description: The signed JWT access token containing user_id, username, subscriber, and terms_approved claims.
           example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
         token_type:
           type: string
@@ -4114,6 +4238,82 @@ components:
           type: integer
           description: Token validity duration in seconds (default 900 seconds / 15 minutes).
           example: 900
+
+    PolicyAgreementRequest:
+      type: object
+      required:
+        - terms_approved
+        - privacy_approved
+        - us_customer
+        - terms_sha256
+      properties:
+        terms_approved:
+          type: boolean
+          description: Confirmation that the user accepted the Terms of Use.
+          example: true
+        privacy_approved:
+          type: boolean
+          description: Confirmation that the user accepted the Privacy & Security Policy.
+          example: true
+        us_customer:
+          type: boolean
+          description: Confirmation that the user is a customer in the United States.
+          example: true
+        terms_sha256:
+          type: string
+          pattern: '^[0-9a-f]{64}$'
+          description: Lowercase hexadecimal SHA-256 checksum of the static `/terms-of-use.pdf` document presented to the user.
+          example: "b08f3d8b1cd44544888a78ed13316c0910725944bc46808ab542e36d9b2fd84c"
+
+    PolicyAgreementResponse:
+      type: object
+      required:
+        - id
+        - user_id
+        - terms_sha256
+        - terms_approved
+        - privacy_approved
+        - us_customer
+        - active
+        - client_ip
+        - agreed_at
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique identifier for the ledger entry.
+          example: "6f8a0b2c-1d3e-4f5a-9b7c-8d9e0f1a2b3c"
+        user_id:
+          type: string
+          format: uuid
+          description: User identifier associated with this ledger entry.
+          example: "d3b07384-d113-4e00-9922-b06f9d453b34"
+        terms_sha256:
+          type: string
+          description: SHA-256 digest of the Terms of Use PDF approved by the user.
+          example: "b08f3d8b1cd44544888a78ed13316c0910725944bc46808ab542e36d9b2fd84c"
+        terms_approved:
+          type: boolean
+          example: true
+        privacy_approved:
+          type: boolean
+          example: true
+        us_customer:
+          type: boolean
+          example: true
+        active:
+          type: boolean
+          description: Whether this approval remains active (false when superseded by policy updates).
+          example: true
+        client_ip:
+          type: string
+          description: Client IP address captured at the time of approval.
+          example: "203.0.113.10"
+        agreed_at:
+          type: string
+          format: date-time
+          description: UTC timestamp recording when the agreement was accepted.
+          example: "2026-11-18T10:00:00Z"
 
     AccountCreationRequest:
       type: object

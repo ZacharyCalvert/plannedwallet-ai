@@ -48,6 +48,8 @@ type Controller struct {
 	repo           repository.Repository
 	auth           *auth.Service
 	requireCaptcha bool
+	enforcePolicy  bool
+	termsHash      string
 }
 
 func NewController(repo repository.Repository, authService *auth.Service) *Controller {
@@ -55,12 +57,33 @@ func NewController(repo repository.Repository, authService *auth.Service) *Contr
 		repo:           repo,
 		auth:           authService,
 		requireCaptcha: false,
+		enforcePolicy:  false,
 	}
 }
 
 // SetRequireCaptcha configures whether CAPTCHA verification is required for user registration.
 func (c *Controller) SetRequireCaptcha(require bool) {
 	c.requireCaptcha = require
+}
+
+// SetEnforcePolicy configures whether policy & US-customer ledger verification is enforced.
+func (c *Controller) SetEnforcePolicy(enforce bool) {
+	c.enforcePolicy = enforce
+}
+
+// IsEnforcePolicy reports whether policy & US-customer ledger verification is active.
+func (c *Controller) IsEnforcePolicy() bool {
+	return c.enforcePolicy
+}
+
+// SetTermsHash sets the active SHA-256 hex digest of the Terms of Use PDF (PW_TERMS).
+func (c *Controller) SetTermsHash(sha string) {
+	c.termsHash = strings.ToLower(strings.TrimSpace(sha))
+}
+
+// TermsHash returns the configured SHA-256 hex digest of the Terms of Use PDF.
+func (c *Controller) TermsHash() string {
+	return c.termsHash
 }
 
 // HealthCheck verifies that the backing repository/database connection is active and responsive.
