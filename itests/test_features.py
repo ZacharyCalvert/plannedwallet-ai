@@ -1,4 +1,5 @@
 import hashlib
+import os
 
 from conftest import load_frontend_pdf_bytes
 from playwright.sync_api import APIRequestContext
@@ -29,3 +30,19 @@ def test_terms_of_use_pdf_served_and_matches_pw_terms(raw_context: APIRequestCon
     assert body.startswith(b"%PDF-"), "Expected valid PDF signature"
     digest = hashlib.sha256(body).hexdigest()
     assert digest == "b08f3d8b1cd44544888a78ed13316c0910725944bc46808ab542e36d9b2fd84c"
+
+
+def test_get_version_endpoint(raw_context: APIRequestContext):
+    """Verify GET /api/v1/version returns stamped build provenance metadata without caching."""
+    res = raw_context.get(
+        "/api/v1/version",
+        headers={"X-Client-ID": "itest-version"},
+    )
+    assert res.status == 200, f"Unexpected status: {res.status} {res.text()}"
+    assert res.headers.get("cache-control") == "no-store"
+    body = res.json()
+    for field in ("github_run", "build_date", "git_sha"):
+        assert isinstance(body.get(field), str) and body[field].strip() != "", f"Missing {field} in {body}"
+    expected_sha = os.getenv("GITHUB_SHA", "").strip()
+    if expected_sha:
+        assert body["git_sha"] == expected_sha

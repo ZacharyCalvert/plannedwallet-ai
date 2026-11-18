@@ -134,6 +134,33 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
+  /api/v1/version:
+    parameters:
+      - $ref: '#/components/parameters/XClientId'
+    get:
+      tags:
+        - Health
+      summary: Retrieve stamped binary build version metadata
+      description: |
+        Returns the GitHub Actions run identifier (`github_run`), UTC build timestamp
+        (`build_date`), and git commit SHA (`git_sha`) embedded into the Go binary at link time.
+        Sets `Cache-Control: no-store` so edge CDNs do not cache stale deployment versions.
+      operationId: getVersion
+      responses:
+        '200':
+          description: Binary build provenance metadata.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VersionResponse'
+        '400':
+          summary: Missing or invalid client ID
+          description: Missing or invalid required X-Client-ID header.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
   /api/v1/captcha:
     parameters:
       - $ref: '#/components/parameters/XClientId'
@@ -5643,6 +5670,26 @@ components:
           type: array
           items:
             type: string
+
+    VersionResponse:
+      type: object
+      required:
+        - github_run
+        - build_date
+        - git_sha
+      properties:
+        github_run:
+          type: string
+          description: GitHub Actions run identifier or "local" when built outside CI.
+          example: "42-1234567890"
+        build_date:
+          type: string
+          description: UTC ISO-8601 build timestamp stamped at compile time.
+          example: "2026-11-18T19:00:00Z"
+        git_sha:
+          type: string
+          description: Full Git commit SHA stamped at compile time.
+          example: "0123456789abcdef0123456789abcdef01234567"
           example: ["read_only"]
 
     RecurringSchedule:

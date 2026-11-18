@@ -9,7 +9,12 @@ RUN go mod download
 
 # Copy source code and compile statically linked binary
 COPY . .
-RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o /app/server .
+ARG GITHUB_RUN=local
+ARG BUILD_DATE=unknown
+ARG GIT_SHA=unknown
+RUN CGO_ENABLED=0 GOOS=linux go build \
+    -ldflags="-w -s -X github.com/plannedwallet/internal/version.GitHubRun=${GITHUB_RUN} -X github.com/plannedwallet/internal/version.BuildDate=${BUILD_DATE} -X github.com/plannedwallet/internal/version.GitSHA=${GIT_SHA}" \
+    -o /app/server .
 
 # Deployment stage
 FROM scratch

@@ -525,6 +525,7 @@ func (h *Handler) registerPublicRoutes(api *gin.RouterGroup) {
 	api.GET("/health", h.Health)
 	api.GET("/hello", h.Hello)
 	api.GET("/features", h.GetFeatures)
+	api.GET("/version", h.GetVersion)
 	api.GET("/captcha", h.GetCaptcha)
 	api.GET("/captcha/:captchaId", h.GetCaptchaImage)
 	api.POST("/users", h.RegisterUser)

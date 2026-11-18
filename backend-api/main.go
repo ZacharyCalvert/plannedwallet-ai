@@ -51,6 +51,20 @@ func isPolicyEnforced(isProd bool) bool {
 	return isProd || strings.EqualFold(strings.TrimSpace(os.Getenv("ENFORCE_POLICY")), "true")
 }
 
+func checkEnforcePolicyForProd(rawEnforce string, isProd bool) error {
+	if isProd && !strings.EqualFold(strings.TrimSpace(rawEnforce), "true") {
+		return fmt.Errorf("PRODUCTION_ENV is true but ENFORCE_POLICY is not set to \"true\"")
+	}
+	return nil
+}
+
+func validatePolicyConfig(rawEnforce, rawTerms string, isProd bool) string {
+	if err := checkEnforcePolicyForProd(rawEnforce, isProd); err != nil {
+		log.Fatalf("Fatal: %v", err)
+	}
+	return validateTermsHash(rawTerms, isPolicyEnforced(isProd))
+}
+
 func validateTermsHash(rawTerms string, enforcePolicy bool) string {
 	clean := strings.ToLower(strings.TrimSpace(rawTerms))
 	if enforcePolicy && !controller.IsValidSHA256Hex(clean) {
@@ -258,7 +272,7 @@ func main() {
 	port := getEnv("PORT", "8080")
 	expectedFDID := getEnv("EXPECTED_FDID", "")
 	validateExpectedFDID(expectedFDID, isProd)
-	validateTermsHash(os.Getenv("PW_TERMS"), isPolicyEnforced(isProd))
+	validatePolicyConfig(os.Getenv("ENFORCE_POLICY"), os.Getenv("PW_TERMS"), isProd)
 
 	authService := initJWTService(isProd)
 	repo := initDatabase(isProd)

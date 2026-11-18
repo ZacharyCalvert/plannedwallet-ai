@@ -286,4 +286,16 @@ func TestIsPolicyEnforcedAndValidateTermsHash(t *testing.T) {
 	if got := validateTermsHash("", false); got != "" {
 		t.Fatalf("expected empty PW_TERMS allowed when unenforced, got %q", got)
 	}
+	if err := checkEnforcePolicyForProd("", true); err == nil {
+		t.Fatal("expected error when PRODUCTION_ENV=true and ENFORCE_POLICY is empty")
+	}
+	if err := checkEnforcePolicyForProd("false", true); err == nil {
+		t.Fatal("expected error when PRODUCTION_ENV=true and ENFORCE_POLICY=false")
+	}
+	if err := checkEnforcePolicyForProd("true", true); err != nil {
+		t.Fatalf("expected nil when PRODUCTION_ENV=true and ENFORCE_POLICY=true, got %v", err)
+	}
+	if err := checkEnforcePolicyForProd("false", false); err != nil {
+		t.Fatalf("expected nil when PRODUCTION_ENV=false, got %v", err)
+	}
 }

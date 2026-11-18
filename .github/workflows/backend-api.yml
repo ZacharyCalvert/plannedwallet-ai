@@ -52,6 +52,13 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
 
+      - name: Capture Build Provenance Metadata
+        id: build_meta
+        run: |
+          echo "github_run=${{ github.run_number }}-${{ github.run_id }}" >> "$GITHUB_OUTPUT"
+          echo "build_date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
+          echo "git_sha=${{ github.sha }}" >> "$GITHUB_OUTPUT"
+
       - name: Build Docker image for testing
         uses: docker/build-push-action@v7
         with:
@@ -59,6 +66,10 @@ jobs:
           file: ./backend-api/Dockerfile
           load: true
           tags: backend-api:test
+          build-args: |
+            GITHUB_RUN=${{ steps.build_meta.outputs.github_run }}
+            BUILD_DATE=${{ steps.build_meta.outputs.build_date }}
+            GIT_SHA=${{ steps.build_meta.outputs.git_sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=min
 
@@ -155,6 +166,10 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            GITHUB_RUN=${{ steps.build_meta.outputs.github_run }}
+            BUILD_DATE=${{ steps.build_meta.outputs.build_date }}
+            GIT_SHA=${{ steps.build_meta.outputs.git_sha }}
           cache-from: type=gha
 
   deploy-backend:
@@ -260,10 +275,20 @@ jobs:
         run: |
           IMAGE_NAME="${{ steps.meta.outputs.IMAGE_NAME }}"
           LATEST_TAG="${{ steps.meta.outputs.LATEST_TAG }}"
+          GITHUB_RUN="${{ github.run_number }}-${{ github.run_id }}"
+          BUILD_DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          GIT_SHA="${{ github.sha }}"
 
-          echo "Building Docker image: $IMAGE_NAME..."
+          echo "DEPLOYED_GITHUB_RUN=${GITHUB_RUN}" >> $GITHUB_ENV
+          echo "DEPLOYED_BUILD_DATE=${BUILD_DATE}" >> $GITHUB_ENV
+          echo "DEPLOYED_GIT_SHA=${GIT_SHA}" >> $GITHUB_ENV
+
+          echo "Building Docker image: $IMAGE_NAME (run=$GITHUB_RUN, date=$BUILD_DATE, sha=$GIT_SHA)..."
           docker build \
             --file backend-api/Dockerfile \
+            --build-arg "GITHUB_RUN=${GITHUB_RUN}" \
+            --build-arg "BUILD_DATE=${BUILD_DATE}" \
+            --build-arg "GIT_SHA=${GIT_SHA}" \
             --tag "$IMAGE_NAME" \
             --tag "$LATEST_TAG" \
             ./backend-api
@@ -421,3 +446,54 @@ jobs:
             --image "$IMAGE_NAME"
 
           echo "Deployment revision successfully submitted to $APP_NAME!"
+
+      - name: Deploy Verification Gate (/api/v1/version within 2 minutes)
+        run: |
+          TARGET_ENV="${{ steps.meta.outputs.TARGET_ENV }}"
+          BASE_URL="${{ vars.BACKEND_URL || '' }}"
+          if [ -z "$BASE_URL" ]; then
+            CUSTOM_DOMAIN="${{ vars.CUSTOM_DOMAIN || '' }}"
+            if [ -z "$CUSTOM_DOMAIN" ]; then
+              if [ "$TARGET_ENV" = "prod" ]; then
+                CUSTOM_DOMAIN="www.plannedwallet.com"
+              else
+                CUSTOM_DOMAIN="stage.plannedwallet.com"
+              fi
+            fi
+            BASE_URL="https://${CUSTOM_DOMAIN}"
+          fi
+
+          BASE_URL="${BASE_URL%/}"
+          VERSION_URL="${BASE_URL}/api/v1/version"
+          TIMEOUT_SECONDS=120
+          START_TIME=$(date +%s)
+          LAST_RESPONSE="<no response>"
+
+          echo "Verifying deployed version at $VERSION_URL (timeout: ${TIMEOUT_SECONDS}s)"
+          echo "Expected: github_run='${DEPLOYED_GITHUB_RUN}', build_date='${DEPLOYED_BUILD_DATE}', git_sha='${DEPLOYED_GIT_SHA}'"
+
+          while true; do
+            BODY=$(curl -sS --max-time 5 \
+              -H "X-Client-ID: github-actions-deploy-gate" \
+              -H "Cache-Control: no-cache" \
+              "${VERSION_URL}?_ts=$(date +%s)" 2>&1 || true)
+
+            if [ -n "$BODY" ]; then
+              LAST_RESPONSE="$BODY"
+            fi
+
+            if python3 -c "import json, sys; d = json.loads(sys.argv[1]); sys.exit(0 if d.get('github_run') == sys.argv[2] and d.get('build_date') == sys.argv[3] and d.get('git_sha') == sys.argv[4] else 1)" "$BODY" "${DEPLOYED_GITHUB_RUN}" "${DEPLOYED_BUILD_DATE}" "${DEPLOYED_GIT_SHA}" 2>/dev/null; then
+              ELAPSED=$(( $(date +%s) - START_TIME ))
+              echo "Deploy verification PASSED in ${ELAPSED}s: ${LAST_RESPONSE}"
+              exit 0
+            fi
+
+            ELAPSED=$(( $(date +%s) - START_TIME ))
+            if [ "$ELAPSED" -ge "$TIMEOUT_SECONDS" ]; then
+              echo "::error::Deploy verification gate failed: expected version (run=${DEPLOYED_GITHUB_RUN}, build_date=${DEPLOYED_BUILD_DATE}, git_sha=${DEPLOYED_GIT_SHA}) was not served at ${VERSION_URL} within ${TIMEOUT_SECONDS}s. Last response: ${LAST_RESPONSE}"
+              exit 1
+            fi
+
+            echo "Waiting for new revision (${ELAPSED}/${TIMEOUT_SECONDS}s)... last response: ${LAST_RESPONSE}"
+            sleep 5
+          done

@@ -657,6 +657,13 @@ type FeaturesResponse struct {
 	Features []string `json:"features"`
 }
 
+// VersionResponse represents build provenance metadata stamped into the binary at compile time.
+type VersionResponse struct {
+	GitHubRun string `json:"github_run"`
+	BuildDate string `json:"build_date"`
+	GitSHA    string `json:"git_sha"`
+}
+
 // PolicyAgreement represents a ledger entry capturing user acceptance of Terms, Privacy Policy, and US residency.
 type PolicyAgreement struct {
 	ID              string    `json:"id"`

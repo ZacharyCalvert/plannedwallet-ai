@@ -8,6 +8,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/plannedwallet/internal/models"
 	"github.com/plannedwallet/internal/trace"
+	"github.com/plannedwallet/internal/version"
 )
 
 // SetReadOnly toggles read-only maintenance enforcement and the read_only feature flag.
@@ -76,4 +77,10 @@ func (h *Handler) GetFeatures(c *gin.Context) {
 		features = append(features, models.FeatureReadOnly)
 	}
 	c.JSON(http.StatusOK, models.FeaturesResponse{Features: features})
+}
+
+// GetVersion handles GET /api/v1/version and returns stamped build provenance metadata.
+func (h *Handler) GetVersion(c *gin.Context) {
+	c.Header("Cache-Control", "no-store")
+	c.JSON(http.StatusOK, version.Current())
 }

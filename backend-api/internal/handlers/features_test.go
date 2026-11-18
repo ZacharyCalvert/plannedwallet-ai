@@ -43,6 +43,26 @@ func TestFeaturesEndpoint_NormalAndReadOnly(t *testing.T) {
 	}
 }
 
+func TestVersionEndpoint(t *testing.T) {
+	r, _ := setupTestRouter()
+
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, newTestRequest(http.MethodGet, "/api/v1/version", nil))
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200 from /api/v1/version, got %d", w.Code)
+	}
+	if cc := w.Header().Get("Cache-Control"); cc != "no-store" {
+		t.Fatalf("expected Cache-Control=no-store, got %q", cc)
+	}
+	var res models.VersionResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &res); err != nil {
+		t.Fatalf("failed to decode version response: %v", err)
+	}
+	if res.GitHubRun == "" || res.BuildDate == "" || res.GitSHA == "" {
+		t.Fatalf("expected populated version fields, got %+v", res)
+	}
+}
+
 func TestReadOnlyMiddleware_BlocksMutationsAllowsReadsAndLogin(t *testing.T) {
 	r, h := setupTestRouter()
 

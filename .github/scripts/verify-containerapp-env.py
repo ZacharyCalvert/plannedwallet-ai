@@ -143,6 +143,31 @@ def main():
             if var == "PRODUCTION_ENV" and target_env in ["prod", "production"] and str(val).lower() != "true":
                 errors.append(f"PRODUCTION_ENV must be 'true' for production deployment (currently '{val}')")
 
+    prod_env_entry = env_vars.get("PRODUCTION_ENV", {})
+    prod_env_is_true = str(prod_env_entry.get("value") or "").strip().lower() == "true"
+    if prod_env_is_true or target_env in ["prod", "production"]:
+        ep_entry = env_vars.get("ENFORCE_POLICY")
+        ep_val = str((ep_entry or {}).get("value") or "").strip().lower()
+        if not ep_entry:
+            errors.append("Missing mandatory environment variable when PRODUCTION_ENV=true: 'ENFORCE_POLICY'")
+            print("[-] ENFORCE_POLICY      : MISSING (Must be 'true' in production)")
+        elif ep_val != "true":
+            errors.append(f"ENFORCE_POLICY must be 'true' when PRODUCTION_ENV is true (currently '{ep_entry.get('value')}')")
+            print(f"[-] ENFORCE_POLICY      : INVALID ('{ep_entry.get('value')}', must be 'true')")
+        else:
+            print("[+] ENFORCE_POLICY      : CONFIGURED (value: 'true')")
+
+        terms_entry = env_vars.get("PW_TERMS")
+        terms_val = str((terms_entry or {}).get("value") or "").strip()
+        if not terms_entry or (not terms_val and not terms_entry.get("secretRef")):
+            errors.append("Missing mandatory environment variable when PRODUCTION_ENV=true: 'PW_TERMS'")
+            print("[-] PW_TERMS            : MISSING (SHA-256 hex digest required in production)")
+        elif not terms_entry.get("secretRef") and (len(terms_val) != 64 or any(c not in "0123456789abcdefABCDEF" for c in terms_val)):
+            errors.append("PW_TERMS must be a valid 64-character hexadecimal SHA-256 digest")
+            print("[-] PW_TERMS            : INVALID (Must be 64-char SHA-256 hex)")
+        else:
+            print("[+] PW_TERMS            : CONFIGURED")
+
     # Informational checks for additional optional configuration
     optional_vars = [
         "POSTGRES_USER",
@@ -150,6 +175,9 @@ def main():
         "POSTGRES_PORT",
         "POSTGRES_SSLMODE",
         "CORS_ALLOWED_CLIENTS",
+        "ENFORCE_POLICY",
+        "PW_TERMS",
+        "PW_READONLY",
     ]
     print("-----------------------------------------------------------------")
     print("Additional Configuration Checks:")
