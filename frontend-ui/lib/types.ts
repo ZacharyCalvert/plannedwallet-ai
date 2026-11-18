@@ -7,6 +7,7 @@ export interface UserProfile {
   id: string;
   username: string;
   email: string;
+  recovery_key_hint?: string;
   created_at: string;
 }
 
@@ -35,6 +36,29 @@ export interface UserRegistrationResponse {
   email: string;
   totp_secret: string;
   totp_url: string;
+  recovery_phrase?: string;
+  recovery_key_hint?: string;
+  created_at: string;
+}
+
+export interface AccountRecoveryRequest {
+  recovery_phrase: string;
+  new_password: string;
+  captcha_id?: string;
+  captcha_solution?: string;
+}
+
+export interface AccountRecoveryResponse {
+  username: string;
+  totp_secret: string;
+  totp_url: string;
+  recovery_phrase: string;
+  recovery_key_hint: string;
+}
+
+export interface RotateRecoveryKeyResponse {
+  recovery_phrase: string;
+  recovery_key_hint: string;
   created_at: string;
 }
 

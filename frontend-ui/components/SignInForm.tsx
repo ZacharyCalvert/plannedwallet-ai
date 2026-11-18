@@ -2,9 +2,11 @@
 
 import { useState } from 'react';
 import { loginUser } from '../lib/api';
+import { clampPasswordToMaxBytes, MAX_PASSWORD_BYTES } from '../lib/passwordLimit';
 
 interface SignInFormProps {
   onSuccess: (username: string, token: string) => void;
+  onForgotCredentials?: () => void;
 }
 
 interface InputFieldProps {
@@ -62,9 +64,10 @@ function SignInFields(props: SignInFieldsProps) {
         id="signin-password"
         label="Password"
         type="password"
+        maxLength={MAX_PASSWORD_BYTES}
         value={props.password}
         placeholder="Enter your password"
-        onChange={props.onChangePassword}
+        onChange={(v) => props.onChangePassword(clampPasswordToMaxBytes(v))}
       />
       <InputField
         id="signin-totp"
@@ -81,7 +84,7 @@ function SignInFields(props: SignInFieldsProps) {
   );
 }
 
-export function SignInForm({ onSuccess }: SignInFormProps) {
+export function SignInForm({ onSuccess, onForgotCredentials }: SignInFormProps) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [totpCode, setTotpCode] = useState('');
@@ -116,6 +119,11 @@ export function SignInForm({ onSuccess }: SignInFormProps) {
       <button type="submit" className="btn-primary btn-block" disabled={loading}>
         {loading ? 'Signing In...' : 'Sign In'}
       </button>
+      {onForgotCredentials && (
+        <button type="button" className="auth-link-button" onClick={onForgotCredentials}>
+          Forgot password or lost authenticator?
+        </button>
+      )}
     </form>
   );
 }

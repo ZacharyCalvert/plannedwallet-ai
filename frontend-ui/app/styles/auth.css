@@ -213,3 +213,104 @@
 .policy-link:hover {
   color: var(--primary-hover);
 }
+
+/* Recovery Phrase Onboarding & Account Recovery */
+.recovery-card-wide {
+  max-width: 540px;
+}
+
+.recovery-warning-box {
+  padding: 0.75rem 0.9rem;
+  border: 1px solid #f59e0b;
+  background-color: #fffbeb;
+  color: #92400e;
+  border-radius: 0.375rem;
+  font-size: 0.85rem;
+  line-height: 1.4;
+}
+
+.recovery-word-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.5rem;
+}
+
+.recovery-word-item {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.45rem 0.6rem;
+  background-color: #f8fafc;
+  border: 1px solid var(--border);
+  border-radius: 0.375rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.82rem;
+}
+
+.recovery-word-index {
+  color: var(--muted);
+  font-size: 0.75rem;
+  min-width: 1.4rem;
+}
+
+.recovery-word-text {
+  color: #0f172a;
+  font-weight: 600;
+}
+
+.recovery-actions-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.recovery-spot-check {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 0.85rem;
+  border: 1px solid var(--border);
+  border-radius: 0.375rem;
+  background-color: #f8fafc;
+}
+
+.recovery-spot-inputs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.auth-link-button {
+  background: none;
+  border: none;
+  padding: 0.25rem 0;
+  color: var(--primary);
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: center;
+  text-decoration: underline;
+}
+
+.auth-link-button:hover {
+  color: var(--primary-hover);
+}
+
+.user-security-zone {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem;
+  margin-top: 1.25rem;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  background-color: #f8fafc;
+}
+
+.user-security-zone h3 {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #1e293b;
+  margin-bottom: 0.25rem;
+}

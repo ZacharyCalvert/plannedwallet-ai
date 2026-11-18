@@ -2,7 +2,9 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { fetchCaptcha, registerUser } from '../lib/api';
+import { clampPasswordToMaxBytes, MAX_PASSWORD_BYTES, utf8ByteLength } from '../lib/passwordLimit';
 import { UserRegistrationResponse } from '../lib/types';
+import { RecoveryPhraseSetup } from './RecoveryPhraseSetup';
 import { TOTPSetup } from './TOTPSetup';
 
 interface CreateUserFormProps {
@@ -49,11 +51,14 @@ function UserFields(p: UserFieldsProps) {
           id="signup-password"
           type="password"
           required
+          maxLength={MAX_PASSWORD_BYTES}
           value={p.password}
-          onChange={(e) => p.onChangePassword(e.target.value)}
-          placeholder="Min 10 chars, uppercase, lowercase, digit, symbol"
+          onChange={(e) => p.onChangePassword(clampPasswordToMaxBytes(e.target.value))}
+          placeholder="10-72 bytes: upper, lower, digit, symbol"
         />
-        <p className="form-hint">At least 10 chars with uppercase, lowercase, digit & symbol.</p>
+        <p className="form-hint">
+          10–{MAX_PASSWORD_BYTES} bytes ({utf8ByteLength(p.password)}/{MAX_PASSWORD_BYTES}) with uppercase, lowercase, digit &amp; symbol.
+        </p>
       </div>
     </>
   );
@@ -183,6 +188,18 @@ function useRegistration() {
 
 export function CreateUserForm({ onSuccess }: CreateUserFormProps) {
   const r = useRegistration();
+  const [recoveryConfirmed, setRecoveryConfirmed] = useState(false);
+
+  if (r.regData && r.regData.recovery_phrase && !recoveryConfirmed) {
+    return (
+      <RecoveryPhraseSetup
+        username={r.regData.username}
+        phrase={r.regData.recovery_phrase}
+        continueLabel="Continue to Two-Factor Setup"
+        onConfirmed={() => setRecoveryConfirmed(true)}
+      />
+    );
+  }
 
   if (r.regData) {
     return (
@@ -192,7 +209,7 @@ export function CreateUserForm({ onSuccess }: CreateUserFormProps) {
         totpUrl={r.regData.totp_url}
         totpSecret={r.regData.totp_secret}
         onSuccess={onSuccess}
-        onCancel={() => r.setRegData(null)}
+        onCancel={() => setRecoveryConfirmed(false)}
       />
     );
   }

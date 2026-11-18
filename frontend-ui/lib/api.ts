@@ -3,6 +3,8 @@ import {
   AccountAsset,
   AccountCategorySummary,
   AccountRecord,
+  AccountRecoveryRequest,
+  AccountRecoveryResponse,
   AccountSnapshot,
   AddAccountAssetRequest,
   Asset,
@@ -28,6 +30,7 @@ import {
   RecurringTransactionApplyRequest,
   RecurringTransactionApplyResponse,
   RecurringTransactionRequest,
+  RotateRecoveryKeyResponse,
   UpdateAccountAssetRequest,
   UpdateAssetStoreRequest,
   UpdateSnapshotRequest,
@@ -209,6 +212,45 @@ export async function registerUser(
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
     throw new Error(err.message || 'Registration failed');
+  }
+  return res.json();
+}
+
+export async function recoverAccount(
+  username: string,
+  payload: AccountRecoveryRequest
+): Promise<AccountRecoveryResponse> {
+  const url = `/api/v1/users/${encodeURIComponent(username)}/recover`;
+  const res = await tracedFetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || 'Account recovery failed');
+  }
+  return res.json();
+}
+
+export async function rotateRecoveryKey(
+  token: string,
+  username: string,
+  password: string,
+  totpCode: string
+): Promise<RotateRecoveryKeyResponse> {
+  const url = `/api/v1/users/${encodeURIComponent(username)}/recovery-key/rotate`;
+  const res = await tracedFetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ password, totp_code: totpCode }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || 'Failed to rotate recovery phrase');
   }
   return res.json();
 }

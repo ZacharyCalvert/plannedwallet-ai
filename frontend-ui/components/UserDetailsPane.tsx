@@ -1,8 +1,10 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { UserProfile, UserSession } from '../lib/types';
-import { deleteUserAccount, fetchUserProfile } from '../lib/api';
+import { RotateRecoveryKeyResponse, UserProfile, UserSession } from '../lib/types';
+import { deleteUserAccount, fetchUserProfile, rotateRecoveryKey } from '../lib/api';
+import { clampPasswordToMaxBytes, MAX_PASSWORD_BYTES } from '../lib/passwordLimit';
+import { RecoveryPhraseSetup } from './RecoveryPhraseSetup';
 
 interface UserDetailsPaneProps {
   session: UserSession;
@@ -21,6 +23,12 @@ export function UserDetailsPane({
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState('');
+  const [rotateOpen, setRotateOpen] = useState(false);
+  const [rotatePassword, setRotatePassword] = useState('');
+  const [rotateTotp, setRotateTotp] = useState('');
+  const [rotating, setRotating] = useState(false);
+  const [rotateError, setRotateError] = useState('');
+  const [rotatedResult, setRotatedResult] = useState<RotateRecoveryKeyResponse | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -60,6 +68,29 @@ export function UserDetailsPane({
     }
   };
 
+  const handleOpenRotate = () => {
+    setRotatePassword('');
+    setRotateTotp('');
+    setRotateError('');
+    setRotatedResult(null);
+    setRotateOpen(true);
+  };
+
+  const handleConfirmRotate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setRotating(true);
+    setRotateError('');
+    try {
+      const res = await rotateRecoveryKey(session.token, session.username, rotatePassword, rotateTotp.trim());
+      setRotatedResult(res);
+      setProfile((prev) => (prev ? { ...prev, recovery_key_hint: res.recovery_key_hint } : prev));
+    } catch (err: unknown) {
+      setRotateError(err instanceof Error ? err.message : 'Failed to rotate recovery phrase');
+    } finally {
+      setRotating(false);
+    }
+  };
+
   return (
     <div className="card account-detail-card">
       <div className="account-detail-header">
@@ -93,7 +124,27 @@ export function UserDetailsPane({
               <dt>Email Address</dt>
               <dd>{profile?.email || 'Unavailable'}</dd>
             </div>
+            <div className="user-details-item">
+              <dt>Active Recovery Phrase</dt>
+              <dd>{profile?.recovery_key_hint ? `12-word phrase (${profile.recovery_key_hint})` : 'Active'}</dd>
+            </div>
           </dl>
+
+          <div className="user-security-zone">
+            <div>
+              <h3>Recovery Phrase</h3>
+              <p className="text-muted font-sm">
+                Generate a fresh 12-word recovery phrase and retire your current recovery phrase.
+              </p>
+            </div>
+            <button
+              type="button"
+              className="btn-secondary btn-sm"
+              onClick={handleOpenRotate}
+            >
+              Rotate Recovery Phrase
+            </button>
+          </div>
 
           <div className="user-danger-zone">
             <div>
@@ -174,6 +225,94 @@ export function UserDetailsPane({
               >
                 {deleting ? 'Deleting...' : 'Yes, Delete User'}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {rotateOpen && (
+        <div
+          className="modal-backdrop"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="rotate-recovery-modal-title"
+        >
+          <div className="modal-content">
+            <div className="modal-header">
+              <h3 id="rotate-recovery-modal-title">Rotate Recovery Phrase</h3>
+              {!rotatedResult && (
+                <button
+                  type="button"
+                  className="btn-close"
+                  onClick={() => setRotateOpen(false)}
+                  disabled={rotating}
+                  aria-label="Close"
+                >
+                  ×
+                </button>
+              )}
+            </div>
+
+            <div className="modal-body">
+              {rotatedResult ? (
+                <RecoveryPhraseSetup
+                  username={profile?.username || session.username}
+                  phrase={rotatedResult.recovery_phrase}
+                  title="New 12-Word Recovery Phrase"
+                  subtitle="Your previous recovery phrase is now permanently deactivated. Store and verify this new phrase before closing."
+                  continueLabel="Done"
+                  onConfirmed={() => {
+                    setRotateOpen(false);
+                    setRotatedResult(null);
+                  }}
+                />
+              ) : (
+                <form className="auth-form" onSubmit={handleConfirmRotate}>
+                  <p className="text-sm text-muted">
+                    Confirm your current password and 6-digit authenticator code to invalidate your old recovery phrase and generate a new one.
+                  </p>
+                  {rotateError && <div className="alert-error" role="alert">{rotateError}</div>}
+                  <div className="form-group">
+                    <label htmlFor="rotate-password">Current Password</label>
+                    <input
+                      id="rotate-password"
+                      type="password"
+                      required
+                      maxLength={MAX_PASSWORD_BYTES}
+                      value={rotatePassword}
+                      onChange={(e) => setRotatePassword(clampPasswordToMaxBytes(e.target.value))}
+                      placeholder="Enter your password"
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label htmlFor="rotate-totp">Authenticator Code (TOTP)</label>
+                    <input
+                      id="rotate-totp"
+                      type="text"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      maxLength={6}
+                      required
+                      value={rotateTotp}
+                      onChange={(e) => setRotateTotp(e.target.value)}
+                      placeholder="6-digit code"
+                    />
+                  </div>
+                  <div className="form-actions">
+                    <button
+                      type="button"
+                      className="btn-secondary"
+                      onClick={() => setRotateOpen(false)}
+                      disabled={rotating}
+                    >
+                      Cancel
+                    </button>
+                    <button type="submit" className="btn-primary" disabled={rotating}>
+                      {rotating ? 'Rotating...' : 'Generate New Phrase'}
+                    </button>
+                  </div>
+                </form>
+              )}
             </div>
           </div>
         </div>

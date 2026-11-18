@@ -1,21 +1,10 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { copyTextToClipboard } from '../lib/clipboard';
 
 interface CopyLinkButtonProps {
   className?: string;
-}
-
-function fallbackCopyText(text: string): boolean {
-  const textarea = document.createElement('textarea');
-  textarea.value = text;
-  textarea.style.position = 'fixed';
-  textarea.style.opacity = '0';
-  document.body.appendChild(textarea);
-  textarea.select();
-  const ok = document.execCommand('copy');
-  document.body.removeChild(textarea);
-  return ok;
 }
 
 export function CopyLinkButton({ className = '' }: CopyLinkButtonProps) {
@@ -28,18 +17,8 @@ export function CopyLinkButton({ className = '' }: CopyLinkButtonProps) {
   }, [copied]);
 
   const handleCopy = async () => {
-    const url = window.location.href;
-    try {
-      if (navigator.clipboard?.writeText) {
-        await navigator.clipboard.writeText(url);
-      } else {
-        fallbackCopyText(url);
-      }
+    if (await copyTextToClipboard(window.location.href)) {
       setCopied(true);
-    } catch {
-      if (fallbackCopyText(url)) {
-        setCopied(true);
-      }
     }
   };
 
