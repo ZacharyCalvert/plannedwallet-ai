@@ -53,6 +53,8 @@ func TestRecurringScheduleAndFrequencyValidation(t *testing.T) {
 		{"null schedule weekly income", 500.00, models.RecurringFrequencyWeekly, nil},
 		{"null schedule yearly", -120.00, models.RecurringFrequencyYearly, nil},
 		{"weekly Friday", -40.00, models.RecurringFrequencyWeekly, &models.RecurringSchedule{Type: "weekday", Scope: "week", Weekday: "Friday"}},
+		{"bi-monthly 1st and 15th", 2500.00, models.RecurringFrequencyBiMonthly, &models.RecurringSchedule{Type: "first_fifteenth", Scope: "bi-monthly"}},
+		{"bi-monthly 15th and last", 2500.00, models.RecurringFrequencyBiMonthly, &models.RecurringSchedule{Type: "fifteenth_last", Scope: "bi-monthly"}},
 		{"monthly 3rd Thursday", -150.00, models.RecurringFrequencyMonthly, &models.RecurringSchedule{Type: "nth_weekday", Scope: "month", Nth: intPtr(3), Weekday: "thursday"}},
 		{"monthly 1st Monday", -1200.00, models.RecurringFrequencyMonthly, &models.RecurringSchedule{Type: "nth_weekday", Scope: "month", Nth: intPtr(1), Weekday: "Monday"}},
 		{"monthly 1st of month", -95.00, models.RecurringFrequencyMonthly, &models.RecurringSchedule{Type: "day_of_period", Scope: "month", Day: intPtr(1)}},
@@ -80,6 +82,8 @@ func TestRecurringScheduleAndFrequencyValidation(t *testing.T) {
 	}{
 		{"zero amount", 0, models.RecurringFrequencyMonthly, nil},
 		{"invalid frequency", -50, "daily", nil},
+		{"bi-monthly wrong scope", 2500, models.RecurringFrequencyBiMonthly, &models.RecurringSchedule{Type: "first_fifteenth", Scope: "month"}},
+		{"bi-monthly wrong type", 2500, models.RecurringFrequencyBiMonthly, &models.RecurringSchedule{Type: "day_of_period", Scope: "bi-monthly"}},
 		{"1st Sunday of month on yearly", -50, models.RecurringFrequencyYearly, &models.RecurringSchedule{Type: "nth_weekday", Scope: "month", Nth: intPtr(1), Weekday: "sunday"}},
 		{"1st of year on monthly", -50, models.RecurringFrequencyMonthly, &models.RecurringSchedule{Type: "day_of_period", Scope: "year", Day: intPtr(1)}},
 		{"monthly day 32", -50, models.RecurringFrequencyMonthly, &models.RecurringSchedule{Type: "day_of_period", Scope: "month", Day: intPtr(32)}},
@@ -179,6 +183,46 @@ func TestComputeRecurringDueInfo_SchedulesAndIntervals(t *testing.T) {
 				Schedule: &models.RecurringSchedule{Type: "month_day", Scope: "year", Month: intPtr(11), Day: intPtr(1)},
 			},
 			expectedDue: "2027-11-01", expectedStatus: models.RecurringStatusScheduled,
+		},
+		{
+			name: "bi-monthly 1st and 15th after Nov 1 yields Nov 15",
+			rt: models.RecurringTransaction{
+				Frequency: models.RecurringFrequencyBiMonthly, LastDateApplied: strPtr("2026-11-01"),
+				Schedule: &models.RecurringSchedule{Type: "first_fifteenth", Scope: "bi-monthly"},
+			},
+			expectedDue: "2026-11-15", expectedStatus: models.RecurringStatusOverdue,
+		},
+		{
+			name: "bi-monthly 1st and 15th after Nov 15 yields Dec 1",
+			rt: models.RecurringTransaction{
+				Frequency: models.RecurringFrequencyBiMonthly, LastDateApplied: strPtr("2026-11-15"),
+				Schedule: &models.RecurringSchedule{Type: "first_fifteenth", Scope: "bi-monthly"},
+			},
+			expectedDue: "2026-12-01", expectedStatus: models.RecurringStatusScheduled,
+		},
+		{
+			name: "bi-monthly 15th and last after Nov 15 yields Nov 30",
+			rt: models.RecurringTransaction{
+				Frequency: models.RecurringFrequencyBiMonthly, LastDateApplied: strPtr("2026-11-15"),
+				Schedule: &models.RecurringSchedule{Type: "fifteenth_last", Scope: "bi-monthly"},
+			},
+			expectedDue: "2026-11-30", expectedStatus: models.RecurringStatusScheduled,
+		},
+		{
+			name: "bi-monthly 15th and last in non-leap Feb yields Feb 28",
+			rt: models.RecurringTransaction{
+				Frequency: models.RecurringFrequencyBiMonthly, LastDateApplied: strPtr("2026-02-15"),
+				Schedule: &models.RecurringSchedule{Type: "fifteenth_last", Scope: "bi-monthly"},
+			},
+			expectedDue: "2026-02-28", expectedStatus: models.RecurringStatusOverdue,
+		},
+		{
+			name: "bi-monthly 15th and last after Nov 30 yields Dec 15",
+			rt: models.RecurringTransaction{
+				Frequency: models.RecurringFrequencyBiMonthly, LastDateApplied: strPtr("2026-11-30"),
+				Schedule: &models.RecurringSchedule{Type: "fifteenth_last", Scope: "bi-monthly"},
+			},
+			expectedDue: "2026-12-15", expectedStatus: models.RecurringStatusScheduled,
 		},
 	}
 

@@ -5217,11 +5217,11 @@ components:
       properties:
         type:
           type: string
-          enum: [weekday, day_of_period, nth_weekday, month_day]
+          enum: [weekday, day_of_period, nth_weekday, month_day, first_fifteenth, fifteenth_last]
           example: "nth_weekday"
         scope:
           type: string
-          enum: [week, month, year]
+          enum: [week, bi-monthly, month, year]
           example: "month"
         nth:
           type: integer
@@ -5268,7 +5268,7 @@ components:
           example: "2026-10-15"
         frequency:
           type: string
-          enum: [weekly, monthly, yearly]
+          enum: [weekly, bi-monthly, monthly, yearly]
           example: "monthly"
         interval:
           type: integer
@@ -5337,7 +5337,7 @@ components:
           nullable: true
         frequency:
           type: string
-          enum: [weekly, monthly, yearly]
+          enum: [weekly, bi-monthly, monthly, yearly]
         interval:
           type: integer
           minimum: 1

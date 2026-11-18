@@ -4,21 +4,25 @@ import "time"
 
 // Supported recurring frequencies.
 const (
-	RecurringFrequencyWeekly  = "weekly"
-	RecurringFrequencyMonthly = "monthly"
-	RecurringFrequencyYearly  = "yearly"
+	RecurringFrequencyWeekly    = "weekly"
+	RecurringFrequencyBiMonthly = "bi-monthly"
+	RecurringFrequencyMonthly   = "monthly"
+	RecurringFrequencyYearly    = "yearly"
 )
 
 // Supported recurring schedule rule types and scopes.
 const (
-	RecurringScheduleTypeWeekday     = "weekday"
-	RecurringScheduleTypeDayOfPeriod = "day_of_period"
-	RecurringScheduleTypeNthWeekday  = "nth_weekday"
-	RecurringScheduleTypeMonthDay    = "month_day"
+	RecurringScheduleTypeWeekday        = "weekday"
+	RecurringScheduleTypeDayOfPeriod    = "day_of_period"
+	RecurringScheduleTypeNthWeekday     = "nth_weekday"
+	RecurringScheduleTypeMonthDay       = "month_day"
+	RecurringScheduleTypeFirstFifteenth = "first_fifteenth"
+	RecurringScheduleTypeFifteenthLast  = "fifteenth_last"
 
-	RecurringScheduleScopeWeek  = "week"
-	RecurringScheduleScopeMonth = "month"
-	RecurringScheduleScopeYear  = "year"
+	RecurringScheduleScopeWeek      = "week"
+	RecurringScheduleScopeBiMonthly = "bi-monthly"
+	RecurringScheduleScopeMonth     = "month"
+	RecurringScheduleScopeYear      = "year"
 )
 
 // Computed recurring transaction due statuses.

@@ -150,6 +150,25 @@ func TestRecurringTransactionsHandlers_LifecycleAndCascades(t *testing.T) {
 	if wDel := doAuthedJSON(t, r, http.MethodDelete, "/api/v1/recurring-transactions/"+createdIncome.ID, token, nil); wDel.Code != http.StatusNoContent {
 		t.Fatalf("expected 204 deleting recurring transaction, got %d", wDel.Code)
 	}
+
+	// Bi-monthly payroll with 15th and last day flavor
+	biPaid := "2026-11-15"
+	wBi := doAuthedJSON(t, r, http.MethodPost, "/api/v1/recurring-transactions", token, models.RecurringTransactionRequest{
+		Amount:          &posAmt,
+		LastDateApplied: &biPaid,
+		Frequency:       models.RecurringFrequencyBiMonthly,
+		Schedule:        &models.RecurringSchedule{Type: "fifteenth_last", Scope: "bi-monthly"},
+		Name:            "BiMonthly",
+		Entity:          "Employer Payroll",
+	})
+	if wBi.Code != http.StatusCreated {
+		t.Fatalf("expected 201 creating bi-monthly recurring transaction, got %d: %s", wBi.Code, wBi.Body.String())
+	}
+	var biRes models.RecurringTransactionResponse
+	_ = json.Unmarshal(wBi.Body.Bytes(), &biRes)
+	if biRes.Frequency != "bi-monthly" || biRes.NextDueDate == nil || *biRes.NextDueDate != "2026-11-30" {
+		t.Fatalf("expected bi-monthly next_due_date=2026-11-30, got %+v", biRes)
+	}
 }
 
 func intPtrH(v int) *int { return &v }

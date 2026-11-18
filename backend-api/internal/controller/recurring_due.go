@@ -76,10 +76,64 @@ func nextDueWithoutSchedule(freq string, interval int, lastApplied time.Time) ti
 	if freq == models.RecurringFrequencyWeekly {
 		return lastApplied.AddDate(0, 0, 7*step)
 	}
+	if freq == models.RecurringFrequencyBiMonthly {
+		return nextDueBiMonthly(nil, lastApplied.AddDate(0, 0, 1), step, true)
+	}
 	if freq == models.RecurringFrequencyMonthly {
 		return addMonthsClamped(lastApplied, step)
 	}
 	return addYearsClamped(lastApplied, step)
+}
+
+func biMonthlyMonthDates(year int, month time.Month, schedType string) (time.Time, time.Time) {
+	if schedType == models.RecurringScheduleTypeFifteenthLast {
+		d15 := time.Date(year, month, 15, 0, 0, 0, 0, time.UTC)
+		dLast := time.Date(year, month, daysInMonth(year, month), 0, 0, 0, 0, time.UTC)
+		return d15, dLast
+	}
+	d1 := time.Date(year, month, 1, 0, 0, 0, 0, time.UTC)
+	d15 := time.Date(year, month, 15, 0, 0, 0, 0, time.UTC)
+	return d1, d15
+}
+
+func nextBiMonthlySlot(year int, month time.Month, slot int, schedType string) (int, time.Month, int) {
+	if slot == 0 {
+		return year, month, 1
+	}
+	nextMonth := time.Date(year, month, 1, 0, 0, 0, 0, time.UTC).AddDate(0, 1, 0)
+	_ = schedType
+	return nextMonth.Year(), nextMonth.Month(), 0
+}
+
+func firstBiMonthlyOnOrAfter(minDate time.Time, schedType string) (int, time.Month, int) {
+	y, m := minDate.Year(), minDate.Month()
+	first, second := biMonthlyMonthDates(y, m, schedType)
+	if !minDate.After(first) {
+		return y, m, 0
+	}
+	if !minDate.After(second) {
+		return y, m, 1
+	}
+	nextM := time.Date(y, m, 1, 0, 0, 0, 0, time.UTC).AddDate(0, 1, 0)
+	return nextM.Year(), nextM.Month(), 0
+}
+
+func nextDueBiMonthly(s *models.RecurringSchedule, minDate time.Time, interval int, hasLastApplied bool) time.Time {
+	schedType := models.RecurringScheduleTypeFirstFifteenth
+	if s != nil && s.Type != "" {
+		schedType = s.Type
+	}
+	y, m, slot := firstBiMonthlyOnOrAfter(minDate, schedType)
+	if hasLastApplied && interval > 1 {
+		for i := 1; i < interval; i++ {
+			y, m, slot = nextBiMonthlySlot(y, m, slot, schedType)
+		}
+	}
+	a, b := biMonthlyMonthDates(y, m, schedType)
+	if slot == 0 {
+		return a
+	}
+	return b
 }
 
 func nextDueWeekly(s *models.RecurringSchedule, minDate time.Time, interval int, hasLastApplied bool) time.Time {
@@ -196,6 +250,8 @@ func computeNextDueDate(rt *models.RecurringTransaction, today time.Time) *time.
 	switch rt.Frequency {
 	case models.RecurringFrequencyWeekly:
 		d = nextDueWeekly(rt.Schedule, minDate, step, hasLastApplied)
+	case models.RecurringFrequencyBiMonthly:
+		d = nextDueBiMonthly(rt.Schedule, minDate, step, hasLastApplied)
 	case models.RecurringFrequencyMonthly:
 		d = nextDueMonthly(rt.Schedule, minDate, step, hasLastApplied)
 	default:

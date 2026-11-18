@@ -324,6 +324,30 @@ def test_recurring_schedule_patterns_and_next_due_dates(api_context: APIRequestC
             },
             "2027-11-01",
         ),
+        (
+            "Bi-monthly 1st and 15th payroll",
+            {
+                "amount": 2500.00,
+                "frequency": "bi-monthly",
+                "last_date_applied": "2026-11-15",
+                "schedule": {"type": "first_fifteenth", "scope": "bi-monthly"},
+                "name": "Paycheck",
+                "entity": "Employer Payroll",
+            },
+            "2026-12-01",
+        ),
+        (
+            "Bi-monthly 15th and last day payroll",
+            {
+                "amount": 2500.00,
+                "frequency": "bi-monthly",
+                "last_date_applied": "2026-11-15",
+                "schedule": {"type": "fifteenth_last", "scope": "bi-monthly"},
+                "name": "Paycheck",
+                "entity": "Employer Payroll",
+            },
+            "2026-11-30",
+        ),
     ]
 
     for label, payload, expected_due in cases:

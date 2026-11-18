@@ -107,7 +107,7 @@ func TestInitSQLEmbedded_RecurringTransactions(t *testing.T) {
 		"category_id UUID REFERENCES categories(id) ON DELETE SET NULL",
 		"amount DOUBLE PRECISION NOT NULL CHECK (amount <> 0)",
 		"last_date_applied DATE",
-		"frequency VARCHAR(20) NOT NULL CHECK (frequency IN ('weekly', 'monthly', 'yearly'))",
+		"frequency VARCHAR(20) NOT NULL CONSTRAINT chk_recurring_frequency CHECK (frequency IN ('weekly', 'bi-monthly', 'monthly', 'yearly'))",
 		"interval INTEGER NOT NULL DEFAULT 1 CHECK (interval >= 1)",
 		"schedule JSONB",
 		"name VARCHAR(19) NOT NULL DEFAULT '' CHECK (char_length(name) < 20)",

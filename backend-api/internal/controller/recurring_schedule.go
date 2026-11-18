@@ -30,10 +30,10 @@ func invalidScheduleErr(msg string) error {
 func normalizeRecurringFrequency(raw string) (string, error) {
 	freq := strings.ToLower(strings.TrimSpace(raw))
 	switch freq {
-	case models.RecurringFrequencyWeekly, models.RecurringFrequencyMonthly, models.RecurringFrequencyYearly:
+	case models.RecurringFrequencyWeekly, models.RecurringFrequencyBiMonthly, models.RecurringFrequencyMonthly, models.RecurringFrequencyYearly:
 		return freq, nil
 	default:
-		return "", NewAppError(http.StatusBadRequest, "INVALID_FREQUENCY", "frequency must be one of: weekly, monthly, yearly.")
+		return "", NewAppError(http.StatusBadRequest, "INVALID_FREQUENCY", "frequency must be one of: weekly, bi-monthly, monthly, yearly.")
 	}
 }
 
@@ -181,6 +181,19 @@ func validateYearlyNthWeekday(s *models.RecurringSchedule) error {
 	return validateNthValue(s.Nth, 53)
 }
 
+func validateBiMonthlySchedule(s *models.RecurringSchedule) error {
+	if s.Scope != models.RecurringScheduleScopeBiMonthly {
+		return invalidScheduleErr("bi-monthly frequency requires schedule scope 'bi-monthly'.")
+	}
+	if s.Type != models.RecurringScheduleTypeFirstFifteenth && s.Type != models.RecurringScheduleTypeFifteenthLast {
+		return invalidScheduleErr("bi-monthly frequency only supports 'first_fifteenth' or 'fifteenth_last'.")
+	}
+	if s.Nth != nil || s.Day != nil || s.Month != nil || s.Weekday != "" {
+		return invalidScheduleErr("bi-monthly schedule cannot set nth, day, month, or weekday.")
+	}
+	return nil
+}
+
 func normalizeAndValidateRecurringSchedule(frequency string, raw *models.RecurringSchedule) (*models.RecurringSchedule, error) {
 	if raw == nil {
 		return nil, nil
@@ -191,9 +204,10 @@ func normalizeAndValidateRecurringSchedule(frequency string, raw *models.Recurri
 	s.Weekday = strings.ToLower(strings.TrimSpace(s.Weekday))
 
 	validators := map[string]func(*models.RecurringSchedule) error{
-		models.RecurringFrequencyWeekly:  validateWeeklySchedule,
-		models.RecurringFrequencyMonthly: validateMonthlySchedule,
-		models.RecurringFrequencyYearly:  validateYearlySchedule,
+		models.RecurringFrequencyWeekly:    validateWeeklySchedule,
+		models.RecurringFrequencyBiMonthly: validateBiMonthlySchedule,
+		models.RecurringFrequencyMonthly:   validateMonthlySchedule,
+		models.RecurringFrequencyYearly:    validateYearlySchedule,
 	}
 	fn, ok := validators[frequency]
 	if !ok {

@@ -245,7 +245,7 @@ CREATE TABLE IF NOT EXISTS recurring_transactions (
     category_id UUID REFERENCES categories(id) ON DELETE SET NULL,
     amount DOUBLE PRECISION NOT NULL CHECK (amount <> 0),
     last_date_applied DATE,
-    frequency VARCHAR(20) NOT NULL CHECK (frequency IN ('weekly', 'monthly', 'yearly')),
+    frequency VARCHAR(20) NOT NULL CONSTRAINT chk_recurring_frequency CHECK (frequency IN ('weekly', 'bi-monthly', 'monthly', 'yearly')),
     interval INTEGER NOT NULL DEFAULT 1 CHECK (interval >= 1),
     schedule JSONB,
     name VARCHAR(19) NOT NULL DEFAULT '' CHECK (char_length(name) < 20),
@@ -259,6 +259,10 @@ CREATE TABLE IF NOT EXISTS recurring_transactions (
 CREATE INDEX IF NOT EXISTS idx_recurring_transactions_user_id ON recurring_transactions(user_id);
 CREATE INDEX IF NOT EXISTS idx_recurring_transactions_account_id ON recurring_transactions(account_id);
 CREATE INDEX IF NOT EXISTS idx_recurring_transactions_category_id ON recurring_transactions(category_id);
+
+ALTER TABLE recurring_transactions DROP CONSTRAINT IF EXISTS recurring_transactions_frequency_check;
+ALTER TABLE recurring_transactions DROP CONSTRAINT IF EXISTS chk_recurring_frequency;
+ALTER TABLE recurring_transactions ADD CONSTRAINT chk_recurring_frequency CHECK (frequency IN ('weekly', 'bi-monthly', 'monthly', 'yearly'));
 
 DROP INDEX IF EXISTS idx_bills_category_id;
 DROP INDEX IF EXISTS idx_bills_account_id;
