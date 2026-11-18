@@ -150,6 +150,20 @@ func (c *Controller) RegisterUser(ctx context.Context, req models.UserRegistrati
 	return buildUserResponse(user), nil
 }
 
+// GetUser returns the signed-in user's profile details without TOTP secrets.
+func (c *Controller) GetUser(ctx context.Context, userID, targetUsername string) (*models.UserResponse, error) {
+	user, err := c.verifyAuthenticatedTargetUser(ctx, userID, targetUsername, "Users can only view their own profile.")
+	if err != nil {
+		return nil, err
+	}
+	return &models.UserResponse{
+		ID:        user.ID,
+		Username:  user.Username,
+		Email:     user.Email,
+		CreatedAt: user.CreatedAt,
+	}, nil
+}
+
 // DeleteUser permanently deletes a signed-in user and cascades all owned accounts and records.
 func (c *Controller) DeleteUser(ctx context.Context, userID, targetUsername string) error {
 	user, err := c.verifyAuthenticatedTargetUser(ctx, userID, targetUsername, "Users can only delete their own account.")

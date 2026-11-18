@@ -30,6 +30,7 @@ import {
   UpdateAssetStoreRequest,
   UpdateSnapshotRequest,
   UpdateStoreRecordRequest,
+  UserProfile,
   UserRegistrationResponse,
 } from './types';
 import { createTraceparent, logTraceError, logTraceInfo } from './trace';
@@ -119,6 +120,36 @@ export async function refreshToken(
   }
   const data = await res.json();
   return data.access_token;
+}
+
+export async function fetchUserProfile(
+  token: string,
+  username: string
+): Promise<UserProfile> {
+  const url = `/api/v1/users/${encodeURIComponent(username)}`;
+  const res = await tracedFetch(url, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || 'Failed to load user details');
+  }
+  return res.json();
+}
+
+export async function deleteUserAccount(
+  token: string,
+  username: string
+): Promise<void> {
+  const url = `/api/v1/users/${encodeURIComponent(username)}`;
+  const res = await tracedFetch(url, {
+    method: 'DELETE',
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || 'Failed to delete user account');
+  }
 }
 
 export async function fetchCaptcha(): Promise<CaptchaResponse> {

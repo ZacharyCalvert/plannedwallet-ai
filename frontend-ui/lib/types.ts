@@ -3,6 +3,13 @@ export interface UserSession {
   token: string;
 }
 
+export interface UserProfile {
+  id: string;
+  username: string;
+  email: string;
+  created_at: string;
+}
+
 export interface UserRegistrationResponse {
   id: string;
   username: string;

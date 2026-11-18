@@ -27,9 +27,11 @@ import { AssetAccountDetail } from './AssetAccountDetail';
 import { BillsPane } from './BillsPane';
 import { IncomesPane } from './IncomesPane';
 import { BillReminderBanners } from './BillReminderBanners';
+import { UserDetailsPane } from './UserDetailsPane';
 
 interface DashboardProps {
   session: UserSession;
+  onUserDeleted: () => void;
 }
 
 interface AccountRouteViewProps {
@@ -128,7 +130,7 @@ function DashboardIndex({ accounts, accountsLoaded }: { accounts: Account[]; acc
   );
 }
 
-export function Dashboard({ session }: DashboardProps) {
+export function Dashboard({ session, onUserDeleted }: DashboardProps) {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [accountsLoaded, setAccountsLoaded] = useState(false);
   const [recurringTransactions, setRecurringTransactions] = useState<RecurringTransaction[]>([]);
@@ -324,6 +326,16 @@ export function Dashboard({ session }: DashboardProps) {
         />
         <Routes>
           <Route path="/" element={<DashboardIndex accounts={accounts} accountsLoaded={accountsLoaded} />} />
+          <Route
+            path="/user"
+            element={
+              <UserDetailsPane
+                session={session}
+                onUserDeleted={onUserDeleted}
+                onBackToAccounts={handleCancelCreate}
+              />
+            }
+          />
           <Route
             path="/accounts/new"
             element={

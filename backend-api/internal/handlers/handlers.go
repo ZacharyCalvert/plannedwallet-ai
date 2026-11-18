@@ -152,6 +152,27 @@ func (h *Handler) RefreshToken(c *gin.Context) {
 	c.JSON(http.StatusOK, res)
 }
 
+// GetUser handles GET /api/v1/users/{username}
+func (h *Handler) GetUser(c *gin.Context) {
+	userID, ok := h.getUserID(c)
+	if !ok {
+		return
+	}
+	username := strings.TrimSpace(c.Param("username"))
+	if username == "" {
+		h.sendError(c, http.StatusBadRequest, "BAD_REQUEST", "Username path parameter is required.")
+		return
+	}
+
+	res, err := h.ctrl.GetUser(c.Request.Context(), userID, username)
+	if err != nil {
+		h.handleError(c, err)
+		return
+	}
+
+	c.JSON(http.StatusOK, res)
+}
+
 // DeleteUser handles DELETE /api/v1/users/{username}
 func (h *Handler) DeleteUser(c *gin.Context) {
 	userID, ok := h.getUserID(c)
@@ -486,6 +507,7 @@ func (h *Handler) RegisterRoutes(r *gin.Engine) {
 
 	protected := api.Group("")
 	protected.Use(h.auth.Middleware())
+	protected.GET("/users/:username", h.GetUser)
 	protected.POST("/users/:username/token/refresh", h.RefreshToken)
 	protected.DELETE("/users/:username", h.DeleteUser)
 	h.registerAccountRoutes(protected)

@@ -2,11 +2,12 @@ import { MAINTENANCE_BANNER_TEXT } from '../lib/maintenance';
 
 interface BannerProps {
   username?: string;
+  onUserClick?: () => void;
   onSignOut?: () => void;
   readOnly?: boolean;
 }
 
-export function Banner({ username, onSignOut, readOnly = false }: BannerProps) {
+export function Banner({ username, onUserClick, onSignOut, readOnly = false }: BannerProps) {
   return (
     <>
       {readOnly && (
@@ -21,7 +22,22 @@ export function Banner({ username, onSignOut, readOnly = false }: BannerProps) {
         </div>
         {username && onSignOut && (
           <div className="banner-user">
-            <span className="banner-username">Signed in as: <strong>{username}</strong></span>
+            <span className="banner-username">
+              Signed in as:{' '}
+              {onUserClick ? (
+                <button
+                  type="button"
+                  className="banner-user-button"
+                  onClick={onUserClick}
+                  title="View user details"
+                  aria-label={`View user details for ${username}`}
+                >
+                  <strong>{username}</strong>
+                </button>
+              ) : (
+                <strong>{username}</strong>
+              )}
+            </span>
             <button type="button" className="btn-secondary btn-sm" onClick={onSignOut}>
               Sign Out
             </button>

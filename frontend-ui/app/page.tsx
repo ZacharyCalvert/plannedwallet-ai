@@ -127,14 +127,25 @@ function AppShell() {
     navigate('/', { replace: true });
   };
 
+  const handleUserDeleted = () => {
+    setSessionNotice('Your user account and all associated records have been permanently deleted.');
+    setSession(null);
+    navigate('/', { replace: true });
+  };
+
   return (
     <div className="app-root">
-      <Banner username={session?.username} onSignOut={handleSignOut} readOnly={isReadOnly} />
+      <Banner
+        username={session?.username}
+        onUserClick={() => navigate('/user')}
+        onSignOut={handleSignOut}
+        readOnly={isReadOnly}
+      />
       <div className="app-content">
         {!session ? (
           <AuthCenter onSuccess={handleAuthSuccess} readOnly={isReadOnly} sessionNotice={sessionNotice} />
         ) : (
-          <Dashboard key={session.username} session={session} />
+          <Dashboard key={session.username} session={session} onUserDeleted={handleUserDeleted} />
         )}
       </div>
       <Footer />

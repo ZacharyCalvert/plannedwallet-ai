@@ -79,6 +79,77 @@ body {
   font-size: 0.875rem;
 }
 
+.banner-user-button {
+  background: transparent;
+  border: none;
+  color: #ffffff;
+  font: inherit;
+  cursor: pointer;
+  padding: 0.15rem 0.35rem;
+  border-radius: 0.25rem;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.banner-user-button:hover {
+  background-color: rgba(255, 255, 255, 0.12);
+}
+
+.user-details-section {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  margin-top: 1.25rem;
+}
+
+.user-details-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1rem;
+}
+
+.user-details-item {
+  background-color: #f8fafc;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  padding: 0.9rem 1rem;
+}
+
+.user-details-item dt {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  margin-bottom: 0.25rem;
+}
+
+.user-details-item dd {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #0f172a;
+  word-break: break-word;
+}
+
+.user-danger-zone {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 1rem;
+  border: 1px solid #fecaca;
+  background-color: #fef2f2;
+  border-radius: 0.5rem;
+  padding: 1rem 1.25rem;
+}
+
+.user-danger-zone h3 {
+  font-size: 1rem;
+  font-weight: 700;
+  color: #991b1b;
+  margin-bottom: 0.2rem;
+}
+
 /* App Content Area */
 .app-content {
   flex: 1;

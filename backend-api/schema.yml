@@ -249,6 +249,59 @@ paths:
   /api/v1/users/{username}:
     parameters:
       - $ref: '#/components/parameters/XClientId'
+    get:
+      tags:
+        - Users
+      summary: Get the authenticated user's profile details
+      description: |
+        Retrieves the signed-in user's `id`, `username`, `email`, and `created_at` metadata.
+        Sensitive enrollment fields (`totp_secret`, `totp_url`) are omitted.
+      operationId: getUser
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: username
+          in: path
+          required: true
+          description: The username of the authenticated user to retrieve.
+          schema:
+            type: string
+            example: "johndoe"
+      responses:
+        '200':
+          summary: User details retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponse'
+        '400':
+          summary: Bad request
+          description: Missing username path parameter or X-Client-ID header.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          summary: Unauthorized
+          description: Missing, invalid, or expired Bearer JWT.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          summary: Forbidden
+          description: Signed-in user attempted to inspect a different user's profile.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          summary: User not found
+          description: User account no longer exists.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
     delete:
       tags:
         - Users

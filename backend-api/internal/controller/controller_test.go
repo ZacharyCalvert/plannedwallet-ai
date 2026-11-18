@@ -972,6 +972,12 @@ func TestDeleteUser_CascadesAndAuthorization(t *testing.T) {
 	_, _ = ctrl.CreateCheckingRecord(ctx, uA.ID, accA.ID, models.CheckingRecordCreateRequest{Value: &val, DateSent: "2026-11-10", Entity: "Market"})
 
 	assertAppErrorStatus(t, ctrl.DeleteUser(ctx, uB.ID, "gone_user"), http.StatusForbidden)
+	_, errGetB := ctrl.GetUser(ctx, uB.ID, "gone_user")
+	assertAppErrorStatus(t, errGetB, http.StatusForbidden)
+	profileA, errGetA := ctrl.GetUser(ctx, uA.ID, "gone_user")
+	if errGetA != nil || profileA.Email != "gone@test.com" || profileA.TOTPSecret != "" {
+		t.Fatalf("unexpected GetUser result: %+v err=%v", profileA, errGetA)
+	}
 	if err := ctrl.DeleteUser(ctx, uA.ID, "gone_user"); err != nil {
 		t.Fatalf("DeleteUser failed: %v", err)
 	}

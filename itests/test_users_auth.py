@@ -302,7 +302,15 @@ def test_delete_signed_in_user_cascades_all_records(api_context: APIRequestConte
         headers=hdr_b,
     ).status == 201
 
-    # Unauthenticated and cross-user deletes must be rejected
+    # Unauthenticated and cross-user profile/deletes must be rejected
+    assert api_context.get(f"/api/v1/users/{user_a['username']}").status == 401
+    assert api_context.get(f"/api/v1/users/{user_a['username']}", headers=hdr_b).status == 403
+    get_a = api_context.get(f"/api/v1/users/{user_a['username']}", headers=hdr_a)
+    assert get_a.status == 200, f"Expected 200 getting own profile, got {get_a.status}: {get_a.text()}"
+    assert get_a.json().get("username") == user_a["username"]
+    assert get_a.json().get("email") == user_a["email"]
+    assert "totp_secret" not in get_a.json()
+
     assert api_context.delete(f"/api/v1/users/{user_a['username']}").status == 401
     assert api_context.delete(f"/api/v1/users/{user_a['username']}", headers=hdr_b).status == 403
 
@@ -310,7 +318,8 @@ def test_delete_signed_in_user_cascades_all_records(api_context: APIRequestConte
     del_res = api_context.delete(f"/api/v1/users/{user_a['username']}", headers=hdr_a)
     assert del_res.status == 204, f"Expected 204 deleting own user, got {del_res.status}: {del_res.text()}"
 
-    # Old JWT cannot refresh or recreate/delete again, and login fails with 404
+    # Old JWT cannot get/refresh/delete again, and login fails with 404
+    assert api_context.get(f"/api/v1/users/{user_a['username']}", headers=hdr_a).status == 404
     assert api_context.post(f"/api/v1/users/{user_a['username']}/token/refresh", headers=hdr_a).status == 404
     assert api_context.delete(f"/api/v1/users/{user_a['username']}", headers=hdr_a).status == 404
     assert api_context.post(
@@ -332,3 +341,56 @@ def test_delete_signed_in_user_cascades_all_records(api_context: APIRequestConte
     new_hdr = {"Authorization": f"Bearer {new_tok}"}
     assert api_context.get("/api/v1/accounts", headers=new_hdr).json() == []
     assert api_context.get("/api/v1/recurring-transactions", headers=new_hdr).json() == []
+
+
+def test_user_a_cannot_delete_user_b(api_context: APIRequestContext):
+    """Test: User A logged in with valid credentials cannot trigger DELETE for User B."""
+    user_a = generate_user_data(prefix="actora")
+    res_a = api_context.post("/api/v1/users", data=user_a)
+    assert res_a.status == 201
+    tok_a_res = api_context.post(
+        f"/api/v1/users/{user_a['username']}/token",
+        data={"password": user_a["password"], "totp_code": compute_totp_code(res_a.json()["totp_secret"])},
+    )
+    assert tok_a_res.status == 200
+    hdr_a = {"Authorization": f"Bearer {tok_a_res.json()['access_token']}"}
+
+    user_b = generate_user_data(prefix="targetb")
+    res_b = api_context.post("/api/v1/users", data=user_b)
+    assert res_b.status == 201
+    tok_b_res = api_context.post(
+        f"/api/v1/users/{user_b['username']}/token",
+        data={"password": user_b["password"], "totp_code": compute_totp_code(res_b.json()["totp_secret"])},
+    )
+    assert tok_b_res.status == 200
+    hdr_b = {"Authorization": f"Bearer {tok_b_res.json()['access_token']}"}
+
+    acc_b_res = api_context.post(
+        "/api/v1/accounts",
+        data={"name": "User B Protected Checking", "type": "checking", "description": "Protected account"},
+        headers=hdr_b,
+    )
+    assert acc_b_res.status == 201
+    acc_b_id = acc_b_res.json()["id"]
+    assert api_context.post(
+        f"/api/v1/accounts/{acc_b_id}/records",
+        data={"value": 250.0, "date_sent": "2026-11-15", "entity": "Employer Payroll"},
+        headers=hdr_b,
+    ).status == 201
+
+    # User A attempting to delete User B (exact or case-folded username) must fail with 403 FORBIDDEN
+    for target_name in [user_b["username"], user_b["username"].upper()]:
+        del_b = api_context.delete(f"/api/v1/users/{target_name}", headers=hdr_a)
+        assert del_b.status == 403, f"Expected 403 deleting {target_name} as User A, got {del_b.status}: {del_b.text()}"
+        assert del_b.json().get("error") == "FORBIDDEN"
+
+    # Confirm User B profile, token refresh, account, and records remain completely intact
+    prof_b = api_context.get(f"/api/v1/users/{user_b['username']}", headers=hdr_b)
+    assert prof_b.status == 200
+    assert prof_b.json()["username"] == user_b["username"]
+
+    ref_b = api_context.post(f"/api/v1/users/{user_b['username']}/token/refresh", headers=hdr_b)
+    assert ref_b.status == 200
+
+    recs_b = api_context.get(f"/api/v1/accounts/{acc_b_id}/records", headers=hdr_b)
+    assert recs_b.status == 200 and len(recs_b.json()) == 1

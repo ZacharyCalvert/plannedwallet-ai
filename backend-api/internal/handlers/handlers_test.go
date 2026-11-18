@@ -1089,8 +1089,8 @@ func TestPatchAccount_AccessControl(t *testing.T) {
 	}
 }
 
-func doDeleteUser(r *gin.Engine, token, username string) *httptest.ResponseRecorder {
-	req := newTestRequest(http.MethodDelete, "/api/v1/users/"+username, nil)
+func doUserReq(r *gin.Engine, method, token, username string) *httptest.ResponseRecorder {
+	req := newTestRequest(method, "/api/v1/users/"+username, nil)
 	if token != "" {
 		req.Header.Set("Authorization", "Bearer "+token)
 	}
@@ -1099,26 +1099,44 @@ func doDeleteUser(r *gin.Engine, token, username string) *httptest.ResponseRecor
 	return w
 }
 
-func TestDeleteUserEndpoint(t *testing.T) {
+func TestGetAndDeleteUserEndpoint(t *testing.T) {
 	r, _ := setupTestRouter()
 	tokA := registerAndGetToken(t, r, "del_a", "dela@example.com", "Password123!")
 	tokB := registerAndGetToken(t, r, "del_b", "delb@example.com", "Password123!")
 	accA := createAccount(t, r, tokA, "Checking A", "checking", "Personal checking")
 
-	if w := doDeleteUser(r, "", "del_a"); w.Code != http.StatusUnauthorized {
+	if w := doUserReq(r, http.MethodGet, "", "del_a"); w.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 getting user without JWT, got %d", w.Code)
+	}
+	if w := doUserReq(r, http.MethodGet, tokB, "del_a"); w.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 getting another user, got %d", w.Code)
+	}
+	wGet := doUserReq(r, http.MethodGet, tokA, "del_a")
+	if wGet.Code != http.StatusOK {
+		t.Fatalf("expected 200 getting own user, got %d: %s", wGet.Code, wGet.Body.String())
+	}
+	var prof models.UserResponse
+	_ = json.Unmarshal(wGet.Body.Bytes(), &prof)
+	if prof.Username != "del_a" || prof.Email != "dela@example.com" || prof.TOTPSecret != "" {
+		t.Fatalf("unexpected profile payload: %+v", prof)
+	}
+
+	if w := doUserReq(r, http.MethodDelete, "", "del_a"); w.Code != http.StatusUnauthorized {
 		t.Fatalf("expected 401 without JWT, got %d", w.Code)
 	}
-	if w := doDeleteUser(r, tokB, "del_a"); w.Code != http.StatusForbidden {
+	if w := doUserReq(r, http.MethodDelete, tokB, "del_a"); w.Code != http.StatusForbidden {
 		t.Fatalf("expected 403 deleting another user, got %d", w.Code)
 	}
-	if w := doDeleteUser(r, tokA, "del_a"); w.Code != http.StatusNoContent {
+	if w := doUserReq(r, http.MethodDelete, tokA, "del_a"); w.Code != http.StatusNoContent {
 		t.Fatalf("expected 204 deleting own user, got %d: %s", w.Code, w.Body.String())
 	}
-	if w := doDeleteUser(r, tokA, "del_a"); w.Code != http.StatusNotFound {
+	if w := doUserReq(r, http.MethodGet, tokA, "del_a"); w.Code != http.StatusNotFound {
+		t.Fatalf("expected 404 getting deleted user, got %d", w.Code)
+	}
+	if w := doUserReq(r, http.MethodDelete, tokA, "del_a"); w.Code != http.StatusNotFound {
 		t.Fatalf("expected 404 deleting already-deleted user, got %d", w.Code)
 	}
-	wAcc := doAuthedJSON(t, r, http.MethodGet, "/api/v1/accounts/"+accA, tokB, nil)
-	if wAcc.Code != http.StatusNotFound {
+	if wAcc := doAuthedJSON(t, r, http.MethodGet, "/api/v1/accounts/"+accA, tokB, nil); wAcc.Code != http.StatusNotFound {
 		t.Fatalf("expected 404 for cascaded account, got %d", wAcc.Code)
 	}
 }
