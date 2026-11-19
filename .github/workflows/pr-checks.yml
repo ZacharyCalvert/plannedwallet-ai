@@ -61,6 +61,9 @@ jobs:
       - name: Syntax-check Python integration test suites
         run: python3 -m py_compile itests/*.py
 
+      - name: Run workflow helper unit tests
+        run: python3 -m unittest discover -s .github/scripts -p "test_*.py" -v
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
 

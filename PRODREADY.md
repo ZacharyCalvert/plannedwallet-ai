@@ -1,18 +1,18 @@
 JWT_SECRET:
 Requirement: Must be a cryptographically random, high-entropy secret (e.g., 256-bit base64-encoded string: openssl rand -base64 32).
 
-Scale Consideration: Must be injected identically into all backend instances via a dedicated secret manager (e.g., HashiCorp Vault, AWS Secrets Manager, GCP Secret Manager, or Kubernetes Secrets).
+Scale Consideration: Must be injected identically into all backend ECS tasks via AWS Systems Manager (SSM) Parameter Store or AWS Secrets Manager.
   
-Code Fallback Warning: In main.go, the code falls back to "super-secret-jwt-key-replace-in-production" if unset. In production, ensure deployment manifests mandate this variable and fail fast if missing.
+Code Fallback Warning: In main.go, the code falls back to "super-secret-jwt-key-replace-in-production" if unset. In production (PRODUCTION_ENV=true), startup validation terminates immediately if JWT_SECRET is default, contains "super-secret", or is shorter than 32 bytes (256 bits).
   
 JWT_EXPIRATION_SECONDS:
 Configure token TTL (default is 900 seconds / 15 minutes in auth.go). Combined with client activity-based token refresh, this limits exposure on inactive sessions.
 
 PRODUCTION_ENV:
-Set PRODUCTION_ENV=true in production. Enforces Gin release mode, PostgreSQL connectivity on startup (no MemoryRepository fallback), non-default 256-bit+ JWT_SECRET, EXPECTED_FDID header validation, REQUIRE_CAPTCHA=true, skipping startup init.sql, and policy/terms enforcement.
+Set PRODUCTION_ENV=true in production. Enforces Gin release mode, PostgreSQL connectivity on startup (no MemoryRepository fallback), non-default 256-bit+ JWT_SECRET, EXPECTED_ORIGIN_SECRET header validation, REQUIRE_CAPTCHA=true, skipping startup init.sql, and policy/terms enforcement.
 
-EXPECTED_FDID:
-Azure Front Door profile ID required when PRODUCTION_ENV=true. Requests missing or mismatching X-Azure-FDID / X-FDID fail with 403 INVALID_PROXY_HEADER, and verified AFD requests allow X-Azure-ClientIP capture.
+EXPECTED_ORIGIN_SECRET:
+CloudFront custom origin verification secret required when PRODUCTION_ENV=true (48-character KMS-encrypted secret). Requests missing or mismatching X-Origin-Verify (compared via crypto/subtle.ConstantTimeCompare) fail with 403 INVALID_PROXY_HEADER, and verified CloudFront requests allow CloudFront-Viewer-Address capture.
 
 ENFORCE_POLICY & PW_TERMS:
 ENFORCE_POLICY (default false) MUST be explicitly set to "true" whenever PRODUCTION_ENV=true (otherwise startup fails fatally). Requires an active policy_agreements row matching PW_TERMS (64-char SHA-256 hex of frontend-ui/public/terms-of-use.pdf) and U.S. consumer confirmation. PW_TERMS is mandatory at startup whenever policy enforcement is active.
@@ -31,4 +31,4 @@ Allows orchestrators to bind the container port dynamically (defaults to 8080).
 
 Periodic CAPTCHA Cleanup:
 captcha.RunStartupCleanup() (captcha.go) runs only when a backend process starts.
-In production instances running continuously for weeks or months, schedule a periodic background task (or database cron / Kubernetes CronJob) executing DeleteExpiredCaptchas(5 * time.Minute) to prevent table bloat.
+In production instances running continuously for weeks or months, schedule a periodic background task (e.g., RDS pg_cron or an EventBridge-scheduled ECS Fargate RunTask) executing DeleteExpiredCaptchas(5 * time.Minute) to prevent table bloat.

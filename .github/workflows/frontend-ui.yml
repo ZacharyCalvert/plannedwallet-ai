@@ -143,9 +143,9 @@ jobs:
           cache-from: type=gha
 
   deploy-static:
-    name: Deploy Static to ${{ (github.event_name == 'workflow_dispatch' && inputs.environment == 'prod') && 'prod' || 'stage' }}
+    name: Deploy Static to AWS S3 & CloudFront (${{ (github.event_name == 'workflow_dispatch' && inputs.environment == 'prod') && 'prod' || 'stage' }})
     needs: test-and-build
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' && github.actor == 'ZacharyCalvert'
     runs-on: ubuntu-latest
     environment: ${{ (github.event_name == 'workflow_dispatch' && inputs.environment == 'prod') && 'prod' || 'stage' }}
     concurrency:
@@ -153,6 +153,16 @@ jobs:
       cancel-in-progress: false
 
     steps:
+      - name: Enforce operator authorization (ZacharyCalvert only)
+        env:
+          ACTOR: ${{ github.actor }}
+        run: |
+          if [ "$ACTOR" != "ZacharyCalvert" ]; then
+            echo "::error::Access Denied: Only user 'ZacharyCalvert' is authorized to deploy to AWS. Execution by '$ACTOR' rejected."
+            exit 1
+          fi
+          echo "Authorization confirmed for operator: ZacharyCalvert."
+
       - name: Validate target environment and branch
         env:
           EVENT_NAME: ${{ github.event_name }}
@@ -190,136 +200,36 @@ jobs:
           fi
           echo "Verified static export: index.html and 404.html are present."
 
-      - name: Azure Login via OIDC Federated Trust
-        uses: azure/login@v3
+      - name: Configure AWS Credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
         with:
-          client-id: ${{ secrets.AZURE_CLIENT_ID || vars.AZURE_CLIENT_ID }}
-          tenant-id: ${{ secrets.AZURE_TENANT_ID || vars.AZURE_TENANT_ID }}
-          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID || vars.AZURE_SUBSCRIPTION_ID }}
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION || 'us-east-2' }}
 
-      - name: Sync Static Assets to Azure Storage ($web)
+      - name: Sync Static Assets to S3 and Invalidate CloudFront Cache
+        env:
+          FRONTEND_S3_BUCKET: ${{ vars.FRONTEND_S3_BUCKET }}
+          CLOUDFRONT_DISTRIBUTION_ID: ${{ vars.CLOUDFRONT_DISTRIBUTION_ID }}
         run: |
-          if [ "${{ inputs.environment }}" = "prod" ]; then
-            TARGET_ENV="prod"
-            ENV_SHORT="prod"
-          else
-            TARGET_ENV="stage"
-            ENV_SHORT="stage"
-          fi
-
-          RESOURCE_GROUP="${{ vars.AZURE_RESOURCE_GROUP || '' }}"
-          if [ -z "$RESOURCE_GROUP" ]; then
-            RESOURCE_GROUP="rg-plannedwallet-$ENV_SHORT"
-          fi
-
-          STORAGE_ACCOUNT="${{ vars.FRONTEND_STORAGE_ACCOUNT_NAME || '' }}"
-          if [ -z "$STORAGE_ACCOUNT" ]; then
-            echo "FRONTEND_STORAGE_ACCOUNT_NAME not set in vars. Discovering storage account in $RESOURCE_GROUP..."
-            STORAGE_ACCOUNT=$(az storage account list --resource-group "$RESOURCE_GROUP" --query "[?contains(name, 'pw') || contains(name, 'front') || contains(name, 'web') || contains(name, 'static')].name | [0]" -o tsv 2>/dev/null || echo "")
-            if [ -z "$STORAGE_ACCOUNT" ]; then
-              STORAGE_ACCOUNT=$(az storage account list --resource-group "$RESOURCE_GROUP" --query "[0].name" -o tsv 2>/dev/null || echo "")
-            fi
-          fi
-
-          if [ -z "$STORAGE_ACCOUNT" ]; then
-            echo "Error: Target storage account could not be found in $RESOURCE_GROUP."
-            echo "Please set FRONTEND_STORAGE_ACCOUNT_NAME in GitHub Environment variables."
+          if [ -z "$FRONTEND_S3_BUCKET" ] || [ -z "$CLOUDFRONT_DISTRIBUTION_ID" ]; then
+            echo "::error::FRONTEND_S3_BUCKET and CLOUDFRONT_DISTRIBUTION_ID environment variables are required."
             exit 1
           fi
 
-          echo "Target Environment: $TARGET_ENV"
-          echo "Resource Group: $RESOURCE_GROUP"
-          echo "Storage Account: $STORAGE_ACCOUNT"
-          echo "Deploying static export from ./out to Azure Storage container '\$web'..."
+          echo "Syncing immutable static assets to s3://${FRONTEND_S3_BUCKET}/..."
+          aws s3 sync ./out/ "s3://${FRONTEND_S3_BUCKET}/" \
+            --delete \
+            --exclude "*.html" \
+            --cache-control "public, max-age=31536000, immutable"
 
-          SYNC_SUCCESS=false
-          echo "Attempting static asset sync via Azure AD RBAC (--auth-mode login)..."
-          if az storage blob sync \
-            --account-name "$STORAGE_ACCOUNT" \
-            --auth-mode login \
-            --container '$web' \
-            --source './out' \
-            --delete-destination true; then
-            SYNC_SUCCESS=true
-            echo "Static assets successfully synced via Azure AD RBAC (--auth-mode login)."
-          else
-            echo "Azure AD RBAC sync failed (likely missing 'Storage Blob Data Contributor' role)."
-            echo "Attempting fallback sync using Storage Account access key..."
-            ACCOUNT_KEY=$(az storage account keys list \
-              --account-name "$STORAGE_ACCOUNT" \
-              --resource-group "$RESOURCE_GROUP" \
-              --query "[0].value" -o tsv 2>/dev/null || echo "")
+          echo "Syncing HTML entrypoints with must-revalidate Cache-Control..."
+          aws s3 sync ./out/ "s3://${FRONTEND_S3_BUCKET}/" \
+            --exclude "*" \
+            --include "*.html" \
+            --cache-control "public, max-age=0, must-revalidate"
 
-            if [ -n "$ACCOUNT_KEY" ]; then
-              if az storage blob sync \
-                --account-name "$STORAGE_ACCOUNT" \
-                --account-key "$ACCOUNT_KEY" \
-                --container '$web' \
-                --source './out' \
-                --delete-destination true; then
-                SYNC_SUCCESS=true
-                echo "Static assets successfully synced via Storage Account access key."
-              fi
-            fi
-          fi
-
-          if [ "$SYNC_SUCCESS" != "true" ]; then
-            echo "Error: Failed to sync static assets to container '\$web'."
-            echo "If using Azure AD authentication, ensure the Service Principal has the 'Storage Blob Data Contributor' role:"
-            echo "  az role assignment create --assignee <CLIENT_ID> --role 'Storage Blob Data Contributor' --scope /subscriptions/<SUBSCRIPTION_ID>/resourceGroups/$RESOURCE_GROUP/providers/Microsoft.Storage/storageAccounts/$STORAGE_ACCOUNT"
-            exit 1
-          fi
-
-      - name: Purge Azure Front Door CDN Cache
-        run: |
-          if [ "${{ inputs.environment }}" = "prod" ]; then
-            TARGET_ENV="prod"
-            ENV_SHORT="prod"
-          else
-            TARGET_ENV="stage"
-            ENV_SHORT="stage"
-          fi
-
-          RESOURCE_GROUP="${{ vars.AZURE_RESOURCE_GROUP || '' }}"
-          if [ -z "$RESOURCE_GROUP" ]; then
-            RESOURCE_GROUP="rg-plannedwallet-$ENV_SHORT"
-          fi
-
-          AFD_PROFILE="${{ vars.AFD_PROFILE_NAME || '' }}"
-          if [ -z "$AFD_PROFILE" ]; then
-            AFD_PROFILE="afd-pw-$ENV_SHORT"
-          fi
-
-          AFD_ENDPOINT="${{ vars.AFD_ENDPOINT_NAME || '' }}"
-          if [ -z "$AFD_ENDPOINT" ]; then
-            echo "AFD_ENDPOINT_NAME not set. Discovering Azure Front Door endpoint in $AFD_PROFILE..."
-            AFD_ENDPOINT=$(az afd endpoint list --resource-group "$RESOURCE_GROUP" --profile-name "$AFD_PROFILE" --query "[0].name" -o tsv 2>/dev/null || echo "")
-          fi
-
-          CUSTOM_DOMAIN="${{ vars.CUSTOM_DOMAIN || '' }}"
-          if [ -z "$CUSTOM_DOMAIN" ]; then
-            if [ "$TARGET_ENV" = "prod" ]; then
-              CUSTOM_DOMAIN="www.plannedwallet.com"
-            else
-              CUSTOM_DOMAIN="stage.plannedwallet.com"
-            fi
-          fi
-
-          echo "Target AFD Profile: $AFD_PROFILE"
-          echo "Target AFD Endpoint: $AFD_ENDPOINT"
-          echo "Target Domains: $CUSTOM_DOMAIN"
-
-          if [ -z "$AFD_ENDPOINT" ]; then
-            echo "Warning: No Azure Front Door endpoint found for profile $AFD_PROFILE in $RESOURCE_GROUP. Skipping CDN cache purge."
-          else
-            for domain in $CUSTOM_DOMAIN; do
-              echo "Purging CDN edge cache for domain: $domain on endpoint $AFD_ENDPOINT..."
-              az afd endpoint purge \
-                --resource-group "$RESOURCE_GROUP" \
-                --profile-name "$AFD_PROFILE" \
-                --endpoint-name "$AFD_ENDPOINT" \
-                --domains "$domain" \
-                --content-paths "/*" || echo "Warning: Purge for domain $domain encountered an issue."
-            done
-            echo "Azure Front Door CDN edge cache purge completed."
-          fi
+          echo "Creating CloudFront invalidation for distribution ${CLOUDFRONT_DISTRIBUTION_ID}..."
+          aws cloudfront create-invalidation \
+            --distribution-id "${CLOUDFRONT_DISTRIBUTION_ID}" \
+            --paths "/*"
+          echo "Frontend deployment to S3 + CloudFront completed."

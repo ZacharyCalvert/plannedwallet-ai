@@ -173,9 +173,9 @@ jobs:
           cache-from: type=gha
 
   deploy-backend:
-    name: Deploy Backend to ${{ (github.event_name == 'workflow_dispatch' && inputs.environment == 'prod') && 'prod' || 'stage' }}
+    name: Deploy Backend to AWS ECS Fargate (${{ (github.event_name == 'workflow_dispatch' && inputs.environment == 'prod') && 'prod' || 'stage' }})
     needs: test-and-build
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' && github.actor == 'ZacharyCalvert'
     runs-on: ubuntu-latest
     environment: ${{ (github.event_name == 'workflow_dispatch' && inputs.environment == 'prod') && 'prod' || 'stage' }}
     concurrency:
@@ -183,6 +183,16 @@ jobs:
       cancel-in-progress: false
 
     steps:
+      - name: Enforce operator authorization (ZacharyCalvert only)
+        env:
+          ACTOR: ${{ github.actor }}
+        run: |
+          if [ "$ACTOR" != "ZacharyCalvert" ]; then
+            echo "::error::Access Denied: Only user 'ZacharyCalvert' is authorized to deploy to AWS. Execution by '$ACTOR' rejected."
+            exit 1
+          fi
+          echo "Authorization confirmed for operator: ZacharyCalvert."
+
       - name: Validate target environment and branch
         env:
           EVENT_NAME: ${{ github.event_name }}
@@ -200,256 +210,125 @@ jobs:
             echo "Error: Automated push triggers are strictly restricted to the stage environment."
             exit 1
           fi
+          TARGET_ENV="stage"
+          if [ "$INPUT_ENV" = "prod" ]; then
+            TARGET_ENV="prod"
+          fi
+          echo "TARGET_ENV=${TARGET_ENV}" >> "$GITHUB_ENV"
 
       - name: Checkout Source Code
         uses: actions/checkout@v7
 
-      - name: Azure Login via OIDC Federated Trust
-        uses: azure/login@v3
+      - name: Configure AWS Credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
         with:
-          client-id: ${{ secrets.AZURE_CLIENT_ID || vars.AZURE_CLIENT_ID }}
-          tenant-id: ${{ secrets.AZURE_TENANT_ID || vars.AZURE_TENANT_ID }}
-          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID || vars.AZURE_SUBSCRIPTION_ID }}
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION || 'us-east-2' }}
 
-      - name: Resolve Target Environment and ACR Metadata
-        id: meta
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and Push Immutable Backend Image to Amazon ECR
+        id: build_ecr
+        env:
+          AWS_REGION: ${{ vars.AWS_REGION || 'us-east-2' }}
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY }}
         run: |
-          if [ "${{ inputs.environment }}" = "prod" ]; then
-            TARGET_ENV="prod"
-            ENV_SHORT="prod"
-          else
-            TARGET_ENV="stage"
-            ENV_SHORT="stage"
-          fi
-
-          RESOURCE_GROUP="${{ vars.AZURE_RESOURCE_GROUP || '' }}"
-          if [ -z "$RESOURCE_GROUP" ]; then
-            RESOURCE_GROUP="rg-plannedwallet-$ENV_SHORT"
-          fi
-
-          ACR_NAME="${{ vars.ACR_NAME || '' }}"
-          if [ -z "$ACR_NAME" ]; then
-            echo "ACR_NAME not set in vars. Discovering ACR in $RESOURCE_GROUP..."
-            ACR_NAME=$(az acr list --resource-group "$RESOURCE_GROUP" --query "[0].name" -o tsv 2>/dev/null || echo "")
-            if [ -z "$ACR_NAME" ]; then
-              ACR_NAME=$(az acr list --query "[?contains(name, 'pw') || contains(name, 'plannedwallet')].name | [0]" -o tsv 2>/dev/null || echo "")
-            fi
-          fi
-
-          if [ -z "$ACR_NAME" ]; then
-            echo "Error: Azure Container Registry (ACR) could not be resolved."
-            echo "Please set ACR_NAME in GitHub Environment variables."
+          if [ -z "$ECR_REPOSITORY" ]; then
+            echo "::error::ECR_REPOSITORY environment variable must be set."
             exit 1
           fi
 
-          LOGIN_SERVER="${{ vars.ACR_LOGIN_SERVER || '' }}"
-          if [ -z "$LOGIN_SERVER" ]; then
-            LOGIN_SERVER=$(az acr show --name "$ACR_NAME" --query "loginServer" -o tsv 2>/dev/null || echo "${ACR_NAME}.azurecr.io")
-          fi
-
-          IMAGE_REPO="${{ vars.BACKEND_IMAGE_REPOSITORY || 'backend' }}"
-          IMAGE_TAG="${{ github.sha }}"
-          IMAGE_NAME="${LOGIN_SERVER}/${IMAGE_REPO}:${IMAGE_TAG}"
-          LATEST_TAG="${LOGIN_SERVER}/${IMAGE_REPO}:${ENV_SHORT}-latest"
-
-          echo "Target Environment: $TARGET_ENV"
-          echo "Resource Group: $RESOURCE_GROUP"
-          echo "ACR Name: $ACR_NAME"
-          echo "ACR Login Server: $LOGIN_SERVER"
-          echo "Image Name: $IMAGE_NAME"
-          echo "Latest Tag: $LATEST_TAG"
-
-          echo "TARGET_ENV=${TARGET_ENV}" >> $GITHUB_OUTPUT
-          echo "ENV_SHORT=${ENV_SHORT}" >> $GITHUB_OUTPUT
-          echo "RESOURCE_GROUP=${RESOURCE_GROUP}" >> $GITHUB_OUTPUT
-          echo "ACR_NAME=${ACR_NAME}" >> $GITHUB_OUTPUT
-          echo "IMAGE_NAME=${IMAGE_NAME}" >> $GITHUB_OUTPUT
-          echo "LATEST_TAG=${LATEST_TAG}" >> $GITHUB_OUTPUT
-
-      - name: Log in to Azure Container Registry (ACR)
-        run: |
-          echo "Logging into ACR: ${{ steps.meta.outputs.ACR_NAME }}..."
-          az acr login --name "${{ steps.meta.outputs.ACR_NAME }}"
-
-      - name: Build and Push Backend Image to ACR
-        run: |
-          IMAGE_NAME="${{ steps.meta.outputs.IMAGE_NAME }}"
-          LATEST_TAG="${{ steps.meta.outputs.LATEST_TAG }}"
           GITHUB_RUN="${{ github.run_number }}-${{ github.run_id }}"
           BUILD_DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           GIT_SHA="${{ github.sha }}"
+          IMAGE_TAG="${GIT_SHA}"
+          if aws ecr describe-images \
+            --region "${AWS_REGION}" \
+            --repository-name "${ECR_REPOSITORY}" \
+            --image-ids "imageTag=${IMAGE_TAG}" >/dev/null 2>&1; then
+            IMAGE_TAG="${GIT_SHA}-${{ github.run_number }}-${{ github.run_attempt }}"
+            echo "Immutable tag ${GIT_SHA} already exists in ECR; using unique run tag ${IMAGE_TAG}."
+          fi
+          IMAGE_URI="${ECR_REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG}"
 
-          echo "DEPLOYED_GITHUB_RUN=${GITHUB_RUN}" >> $GITHUB_ENV
-          echo "DEPLOYED_BUILD_DATE=${BUILD_DATE}" >> $GITHUB_ENV
-          echo "DEPLOYED_GIT_SHA=${GIT_SHA}" >> $GITHUB_ENV
+          echo "DEPLOYED_GITHUB_RUN=${GITHUB_RUN}" >> "$GITHUB_ENV"
+          echo "DEPLOYED_BUILD_DATE=${BUILD_DATE}" >> "$GITHUB_ENV"
+          echo "DEPLOYED_GIT_SHA=${GIT_SHA}" >> "$GITHUB_ENV"
+          echo "image_uri=${IMAGE_URI}" >> "$GITHUB_OUTPUT"
 
-          echo "Building Docker image: $IMAGE_NAME (run=$GITHUB_RUN, date=$BUILD_DATE, sha=$GIT_SHA)..."
+          echo "Building linux/amd64 image: $IMAGE_URI (run=$GITHUB_RUN, date=$BUILD_DATE, sha=$GIT_SHA)..."
           docker build \
+            --platform linux/amd64 \
             --file backend-api/Dockerfile \
             --build-arg "GITHUB_RUN=${GITHUB_RUN}" \
             --build-arg "BUILD_DATE=${BUILD_DATE}" \
             --build-arg "GIT_SHA=${GIT_SHA}" \
-            --tag "$IMAGE_NAME" \
-            --tag "$LATEST_TAG" \
+            --tag "$IMAGE_URI" \
             ./backend-api
 
-          echo "Pushing images to ACR..."
-          docker push "$IMAGE_NAME"
-          docker push "$LATEST_TAG"
-          echo "Backend container image successfully pushed to ACR."
+          echo "Pushing immutable image tag to Amazon ECR..."
+          docker push "$IMAGE_URI"
+          echo "Backend container image pushed to Amazon ECR."
 
-      - name: "Safeguard: Inspect Container App Environment Variables"
-        run: |
-          RESOURCE_GROUP="${{ steps.meta.outputs.RESOURCE_GROUP }}"
-          ENV_SHORT="${{ steps.meta.outputs.ENV_SHORT }}"
-          TARGET_ENV="${{ steps.meta.outputs.TARGET_ENV }}"
-
-          APP_NAME="${{ vars.CONTAINERAPP_NAME || '' }}"
-          if [ -z "$APP_NAME" ]; then
-            APP_NAME="ca-pw-${ENV_SHORT}-api"
-            if ! az containerapp show --name "$APP_NAME" --resource-group "$RESOURCE_GROUP" >/dev/null 2>&1; then
-              DISCOVERED_APP=$(az containerapp list --resource-group "$RESOURCE_GROUP" --query "[?contains(name, 'api') || contains(name, 'backend')].name | [0]" -o tsv 2>/dev/null || echo "")
-              if [ -n "$DISCOVERED_APP" ]; then
-                APP_NAME="$DISCOVERED_APP"
-              fi
-            fi
-          fi
-
-          echo "Target Container App: $APP_NAME"
-          echo "Fetching Container App configuration for inspection..."
-          az containerapp show \
-            --name "$APP_NAME" \
-            --resource-group "$RESOURCE_GROUP" \
-            -o json > /tmp/ca-config.json
-
-          python3 .github/scripts/verify-containerapp-env.py /tmp/ca-config.json "$TARGET_ENV"
-          echo "CONTAINERAPP_NAME=${APP_NAME}" >> $GITHUB_ENV
-
-      - name: Run Database Migrations
-        if: ${{ github.event_name == 'push' || inputs.run_migrations != false }}
+      - name: "Safeguard: Fetch & Inspect Backend ECS Task Definition"
         env:
-          SQL_FILE_PATH: 'backend-api/internal/database/init.sql'
+          AWS_REGION: ${{ vars.AWS_REGION || 'us-east-2' }}
+          ECS_CLUSTER: ${{ vars.ECS_CLUSTER }}
+          ECS_SERVICE: ${{ vars.ECS_SERVICE }}
+          ECS_TASK_DEFINITION: ${{ vars.ECS_TASK_DEFINITION }}
         run: |
-          RESOURCE_GROUP="${{ steps.meta.outputs.RESOURCE_GROUP }}"
-          ENV_SHORT="${{ steps.meta.outputs.ENV_SHORT }}"
-          CONTAINER_IMAGE="${{ vars.MIGRATION_CONTAINER_IMAGE || 'postgres:16-alpine' }}"
-
-          JOB_NAME="${{ vars.MIGRATION_JOB_NAME || '' }}"
-          if [ -z "$JOB_NAME" ]; then
-            JOB_NAME="job-pw-${ENV_SHORT}-migrations"
-          fi
-
-          echo "Target Environment: ${{ steps.meta.outputs.TARGET_ENV }}"
-          echo "Resource Group: $RESOURCE_GROUP"
-          echo "Migration Job: $JOB_NAME"
-          echo "Migration Container Image: $CONTAINER_IMAGE"
-          echo "SQL File Path: $SQL_FILE_PATH"
-
-          # 1. Fetch current job template
-          echo "Fetching job template for '$JOB_NAME'..."
-          az containerapp job show \
-            --name "$JOB_NAME" \
-            --resource-group "$RESOURCE_GROUP" \
-            --query "properties.template" \
-            -o json > /tmp/migration-template.json
-
-          # 2. Modify template to execute SQL script via python helper
-          python3 .github/scripts/prepare-migration-job.py \
-            /tmp/migration-template.json \
-            "$SQL_FILE_PATH" \
-            "$CONTAINER_IMAGE"
-          CONTAINER_NAME=$(cat /tmp/container-name.txt 2>/dev/null || echo "migration-runner")
-          echo "Target Container Name: $CONTAINER_NAME"
-
-          # 3. Start Container App Job execution using the prepared template
-          echo "Starting Container App Job '$JOB_NAME'..."
-          EXECUTION_NAME=$(az containerapp job start \
-            --name "$JOB_NAME" \
-            --resource-group "$RESOURCE_GROUP" \
-            --yaml /tmp/migration-template.json \
-            --query "name" -o tsv)
-
-          if [ -z "$EXECUTION_NAME" ]; then
-            echo "Error: Failed to initiate Container App Job execution."
+          if [ -z "$ECS_CLUSTER" ] || [ -z "$ECS_SERVICE" ] || [ -z "$ECS_TASK_DEFINITION" ]; then
+            echo "::error::ECS_CLUSTER, ECS_SERVICE, and ECS_TASK_DEFINITION environment variables must be set."
             exit 1
           fi
 
-          echo "Container App Job execution started: $EXECUTION_NAME"
-          echo "Monitoring execution status..."
+          echo "Describing backend ECS task definition '${ECS_TASK_DEFINITION}'..."
+          aws ecs describe-task-definition \
+            --region "${AWS_REGION}" \
+            --task-definition "${ECS_TASK_DEFINITION}" \
+            --query "taskDefinition" \
+            --output json > task-def.json
 
-          # 4. Poll execution status until completion (up to 300 seconds)
-          START_TIME=$(date +%s)
-          TIMEOUT_SECONDS=300
+          python3 .github/scripts/verify_ecs_taskdef_env.py task-def.json "${TARGET_ENV}" --container-name backend
 
-          while true; do
-            STATUS=$(az containerapp job execution show \
-              --name "$JOB_NAME" \
-              --resource-group "$RESOURCE_GROUP" \
-              --job-execution-name "$EXECUTION_NAME" \
-              --query "properties.status" -o tsv 2>/dev/null || az containerapp job execution show \
-              --name "$JOB_NAME" \
-              --resource-group "$RESOURCE_GROUP" \
-              --job-execution-name "$EXECUTION_NAME" \
-              --query "status" -o tsv 2>/dev/null || echo "Unknown")
-
-            echo "Current execution status: $STATUS"
-
-            if [ "$STATUS" = "Succeeded" ]; then
-              echo "Database schema migration completed successfully inside the VNet."
-              echo "--- Container Execution Logs ---"
-              az containerapp job logs show \
-                --name "$JOB_NAME" \
-                --resource-group "$RESOURCE_GROUP" \
-                --container "$CONTAINER_NAME" \
-                --execution "$EXECUTION_NAME" \
-                --tail 300 || true
-              echo "--- End Container Execution Logs ---"
-              break
-            elif [ "$STATUS" = "Failed" ]; then
-              echo "Error: Database migration job execution failed in Azure Container Apps."
-              echo "--- Container Execution Logs ---"
-              az containerapp job logs show \
-                --name "$JOB_NAME" \
-                --resource-group "$RESOURCE_GROUP" \
-                --container "$CONTAINER_NAME" \
-                --execution "$EXECUTION_NAME" \
-                --tail 300 || true
-              echo "--- End Container Execution Logs ---"
-              az containerapp job execution show \
-                --name "$JOB_NAME" \
-                --resource-group "$RESOURCE_GROUP" \
-                --job-execution-name "$EXECUTION_NAME" \
-                --output json || true
-              exit 1
-            fi
-
-            CURRENT_TIME=$(date +%s)
-            ELAPSED=$((CURRENT_TIME - START_TIME))
-            if [ $ELAPSED -ge $TIMEOUT_SECONDS ]; then
-              echo "Error: Timed out after $TIMEOUT_SECONDS seconds waiting for migration job to complete."
-              exit 1
-            fi
-
-            sleep 5
-          done
-
-      - name: Deploy New Revision to Azure Container App
+      - name: Run Database Migrations (ECS Fargate RunTask)
+        if: ${{ github.event_name == 'push' || inputs.run_migrations != false }}
+        env:
+          AWS_REGION: ${{ vars.AWS_REGION || 'us-east-2' }}
+          ECS_CLUSTER: ${{ vars.ECS_CLUSTER }}
+          ECS_MIGRATION_TASK_DEFINITION: ${{ vars.ECS_MIGRATION_TASK_DEFINITION }}
+          MIGRATION_SUBNETS: ${{ vars.MIGRATION_SUBNETS }}
+          MIGRATION_SG: ${{ vars.MIGRATION_SG }}
         run: |
-          RESOURCE_GROUP="${{ steps.meta.outputs.RESOURCE_GROUP }}"
-          APP_NAME="${CONTAINERAPP_NAME}"
-          IMAGE_NAME="${{ steps.meta.outputs.IMAGE_NAME }}"
+          python3 .github/scripts/run_ecs_sql.py \
+            --sql-file backend-api/internal/database/init.sql \
+            --region "${AWS_REGION}" \
+            --cluster "${ECS_CLUSTER}" \
+            --task-definition "${ECS_MIGRATION_TASK_DEFINITION}" \
+            --subnets "${MIGRATION_SUBNETS}" \
+            --security-group "${MIGRATION_SG}"
 
-          echo "Deploying image $IMAGE_NAME to Container App $APP_NAME..."
-          az containerapp update \
-            --name "$APP_NAME" \
-            --resource-group "$RESOURCE_GROUP" \
-            --image "$IMAGE_NAME"
+      - name: Render Amazon ECS Task Definition
+        id: render_task_def
+        uses: aws-actions/amazon-ecs-render-task-definition@v1
+        with:
+          task-definition: task-def.json
+          container-name: backend
+          image: ${{ steps.build_ecr.outputs.image_uri }}
 
-          echo "Deployment revision successfully submitted to $APP_NAME!"
+      - name: Deploy Amazon ECS Task Definition to Fargate Service
+        uses: aws-actions/amazon-ecs-deploy-task-definition@v2
+        with:
+          task-definition: ${{ steps.render_task_def.outputs.task-definition }}
+          service: ${{ vars.ECS_SERVICE }}
+          cluster: ${{ vars.ECS_CLUSTER }}
+          wait-for-service-stability: true
 
       - name: Deploy Verification Gate (/api/v1/version within 2 minutes)
         run: |
-          TARGET_ENV="${{ steps.meta.outputs.TARGET_ENV }}"
           BASE_URL="${{ vars.BACKEND_URL || '' }}"
           if [ -z "$BASE_URL" ]; then
             CUSTOM_DOMAIN="${{ vars.CUSTOM_DOMAIN || '' }}"

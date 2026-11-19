@@ -1202,7 +1202,7 @@ func TestPolicyAgreementAndEnforcementEndpoints(t *testing.T) {
 	}
 }
 
-func postPolicyWithAzureIP(r *gin.Engine, tok, username, hash, headerVal string) models.PolicyAgreementResponse {
+func postPolicyWithOriginViewerIP(r *gin.Engine, tok, username, hash, headerVal string) models.PolicyAgreementResponse {
 	payload, _ := json.Marshal(map[string]any{
 		"terms_approved": true, "privacy_approved": true, "us_customer": true, "terms_sha256": hash,
 	})
@@ -1210,7 +1210,7 @@ func postPolicyWithAzureIP(r *gin.Engine, tok, username, hash, headerVal string)
 	req.RemoteAddr = "10.0.0.12:443"
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+tok)
-	req.Header.Set("X-Azure-ClientIP", headerVal)
+	req.Header.Set("CloudFront-Viewer-Address", headerVal)
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 	var out models.PolicyAgreementResponse
@@ -1218,14 +1218,14 @@ func postPolicyWithAzureIP(r *gin.Engine, tok, username, hash, headerVal string)
 	return out
 }
 
-func TestRecordPolicyAgreement_ResolvesAzureClientIP(t *testing.T) {
+func TestRecordPolicyAgreement_ResolvesOriginViewerIP(t *testing.T) {
 	hash := "b08f3d8b1cd44544888a78ed13316c0910725944bc46808ab542e36d9b2fd84c"
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
-	var verifiedAFD bool
+	var verifiedOrigin bool
 	r.Use(trace.Middleware(), func(c *gin.Context) {
-		if verifiedAFD {
-			c.Set("azureFDIDVerified", true)
+		if verifiedOrigin {
+			c.Set("originVerified", true)
 		}
 		c.Next()
 	})
@@ -1237,18 +1237,18 @@ func TestRecordPolicyAgreement_ResolvesAzureClientIP(t *testing.T) {
 	handlers.NewHandler(ctrl, svc).RegisterRoutes(r)
 
 	tok := registerAndGetToken(t, r, "ip_user", "ip@example.com", "Password123!")
-	if got := postPolicyWithAzureIP(r, tok, "ip_user", hash, "198.51.100.99"); got.ClientIP != "10.0.0.12" {
-		t.Fatalf("expected spoofed X-Azure-ClientIP ignored when AFD unverified, got %q", got.ClientIP)
+	if got := postPolicyWithOriginViewerIP(r, tok, "ip_user", hash, "198.51.100.99"); got.ClientIP != "10.0.0.12" {
+		t.Fatalf("expected spoofed CloudFront-Viewer-Address ignored when origin unverified, got %q", got.ClientIP)
 	}
-	verifiedAFD = true
-	if got := postPolicyWithAzureIP(r, tok, "ip_user", hash, "198.51.100.99:54321"); got.ClientIP != "198.51.100.99" {
-		t.Fatalf("expected X-Azure-ClientIP IPv4 used when AFD verified, got %q", got.ClientIP)
+	verifiedOrigin = true
+	if got := postPolicyWithOriginViewerIP(r, tok, "ip_user", hash, "198.51.100.99:54321"); got.ClientIP != "198.51.100.99" {
+		t.Fatalf("expected CloudFront-Viewer-Address IPv4 used when origin verified, got %q", got.ClientIP)
 	}
-	if got := postPolicyWithAzureIP(r, tok, "ip_user", hash, "2001:db8::42"); got.ClientIP != "2001:db8::42" {
-		t.Fatalf("expected X-Azure-ClientIP IPv6 used when AFD verified, got %q", got.ClientIP)
+	if got := postPolicyWithOriginViewerIP(r, tok, "ip_user", hash, "2001:db8::42"); got.ClientIP != "2001:db8::42" {
+		t.Fatalf("expected CloudFront-Viewer-Address IPv6 used when origin verified, got %q", got.ClientIP)
 	}
-	if got := postPolicyWithAzureIP(r, tok, "ip_user", hash, "not-an-ip"); got.ClientIP != "10.0.0.12" {
-		t.Fatalf("expected fallback to RemoteAddr on malformed X-Azure-ClientIP, got %q", got.ClientIP)
+	if got := postPolicyWithOriginViewerIP(r, tok, "ip_user", hash, "not-an-ip"); got.ClientIP != "10.0.0.12" {
+		t.Fatalf("expected fallback to RemoteAddr on malformed CloudFront-Viewer-Address, got %q", got.ClientIP)
 	}
 }
 

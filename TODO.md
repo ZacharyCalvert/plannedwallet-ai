@@ -35,13 +35,11 @@ Medium priority:
 - [x] validation including UI tests, unit tests for UI loading, docker standup, local itests
 - [x] Add income / schedule income
 - [x] safeguards against "too new" dependencies from dependabot
-embed privacy and terms policy version in jwt.  Enforce
-Account recovery - password reset if you know totp, totp reset if you know password
-Account recovery - email username
-Email confirmation
-Email restrictions (1 email only in record system)
+- [x] embed privacy and terms policy version in jwt.  Enforce
+- [x] Account recovery - password reset if you know totp, totp reset if you know password
 Add Money-in / Money-out features (trending) for asset and snapshot accounts to track growth/change
 create batch job for data grabs (indexes/prices, captcha cleanup)
+perspectives
 earmark
 - [x] Monthly bill additions / automation
 - [x] cleanup UI
@@ -66,6 +64,7 @@ Production ready:
 - Calculate space, size, cost (confirm limits for usage planning)
 
 Premium features:
+earmark (capture bill, mark it against an account over time)
 Add financial records over 365 days old
 Bulk data upload (json/csv)
 over 5 accounts
@@ -82,8 +81,8 @@ Loan principal management
 
 Low priority:
 - [x] Means to halt/disable signups (new accounts)
-Allow to rename account
-Add sql injection test cases
+- [x] Allow to rename account
+- [x] Add sql injection test cases
 Help text / features on hover
 Cookie retention removing need for TOTP
 Phone app - input service

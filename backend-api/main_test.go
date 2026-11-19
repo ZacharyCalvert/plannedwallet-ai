@@ -181,86 +181,102 @@ func TestCheckJWTSecretBits(t *testing.T) {
 	}
 }
 
-func TestValidateExpectedFDID(t *testing.T) {
-	validateExpectedFDID("", false)
-	validateExpectedFDID("some-fdid", false)
-	validateExpectedFDID("12345678-1234-1234-1234-123456789abc", true)
+func TestValidateExpectedOriginSecret(t *testing.T) {
+	validateExpectedOriginSecret("", false)
+	validateExpectedOriginSecret("some-origin-secret", false)
+	validateExpectedOriginSecret("a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6q7r8s9t0u1v2w3x4", true)
 }
 
-func TestGetIncomingFDID(t *testing.T) {
+func TestGetIncomingOriginSecret(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	w1 := httptest.NewRecorder()
 	c1, _ := gin.CreateTestContext(w1)
 	c1.Request = httptest.NewRequest("GET", "/", nil)
-	c1.Request.Header.Set("X-Azure-FDID", "azure-id-123")
-	if id := getIncomingFDID(c1); id != "azure-id-123" {
-		t.Errorf("Expected 'azure-id-123', got %q", id)
+	c1.Request.Header.Set("X-Origin-Verify", "  origin-secret-123  ")
+	if secret := getIncomingOriginSecret(c1); secret != "origin-secret-123" {
+		t.Errorf("Expected 'origin-secret-123', got %q", secret)
 	}
 
 	w2 := httptest.NewRecorder()
 	c2, _ := gin.CreateTestContext(w2)
 	c2.Request = httptest.NewRequest("GET", "/", nil)
-	c2.Request.Header.Set("X-FDID", "fdid-456")
-	if id := getIncomingFDID(c2); id != "fdid-456" {
-		t.Errorf("Expected 'fdid-456', got %q", id)
-	}
-
-	w3 := httptest.NewRecorder()
-	c3, _ := gin.CreateTestContext(w3)
-	c3.Request = httptest.NewRequest("GET", "/", nil)
-	if id := getIncomingFDID(c3); id != "" {
-		t.Errorf("Expected empty string, got %q", id)
+	c2.Request.Header.Set("X-Azure-FDID", "legacy-header")
+	if secret := getIncomingOriginSecret(c2); secret != "" {
+		t.Errorf("Expected empty string when only legacy header is set, got %q", secret)
 	}
 }
 
-func TestFDIDMiddleware(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-	expected := "12345678-abcd-1234-abcd-1234567890ab"
+func TestIsOriginSecretValid(t *testing.T) {
+	if isOriginSecretValid("", "") {
+		t.Fatal("expected empty secret never valid")
+	}
+	if isOriginSecretValid("SecretCase", "secretcase") {
+		t.Fatal("expected case mismatch to fail constant-time secret check")
+	}
+	if isOriginSecretValid("short", "longer-secret") {
+		t.Fatal("expected length mismatch to fail")
+	}
+	if !isOriginSecretValid("MySecretValue48Chars", "MySecretValue48Chars") {
+		t.Fatal("expected exact secret match to succeed")
+	}
+}
 
-	// Dev mode: no header required
+func TestOriginVerifyMiddleware(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	expected := "AbCdEfGhIjKlMnOpQrStUvWxYz0123456789AbCdEfGhIjKl"
+
+	// Dev mode: no header required when secret unset
 	rDev := gin.New()
-	rDev.Use(fdidMiddleware("", false))
+	rDev.Use(originVerifyMiddleware("", false))
 	rDev.GET("/test", func(c *gin.Context) { c.String(http.StatusOK, "ok") })
 	wDev := httptest.NewRecorder()
 	rDev.ServeHTTP(wDev, httptest.NewRequest("GET", "/test", nil))
 	if wDev.Code != http.StatusOK {
-		t.Errorf("Expected 200 in dev without FDID, got %d", wDev.Code)
+		t.Errorf("Expected 200 in dev without origin secret, got %d", wDev.Code)
 	}
 
-	// Prod mode: header required
+	// Prod mode: header required on API routes, exempt on /api/health
 	rProd := gin.New()
-	rProd.Use(fdidMiddleware(expected, true))
+	rProd.Use(originVerifyMiddleware(expected, true))
 	rProd.GET("/test", func(c *gin.Context) { c.String(http.StatusOK, "ok") })
+	rProd.GET("/api/health", func(c *gin.Context) { c.String(http.StatusOK, "healthy") })
 
 	// 1. Missing header -> 403
 	wProd1 := httptest.NewRecorder()
 	rProd.ServeHTTP(wProd1, httptest.NewRequest("GET", "/test", nil))
 	if wProd1.Code != http.StatusForbidden {
-		t.Errorf("Expected 403 for missing FDID, got %d", wProd1.Code)
+		t.Errorf("Expected 403 for missing X-Origin-Verify, got %d", wProd1.Code)
 	}
 
-	// 2. Matching header -> 200
-	reqValid := httptest.NewRequest("GET", "/test", nil)
-	reqValid.Header.Set("X-Azure-FDID", expected)
-	wProd2 := httptest.NewRecorder()
-	rProd.ServeHTTP(wProd2, reqValid)
-	if wProd2.Code != http.StatusOK {
-		t.Errorf("Expected 200 for valid FDID, got %d", wProd2.Code)
+	// 2. Wrong case -> 403 (exact secret match required)
+	reqWrongCase := httptest.NewRequest("GET", "/test", nil)
+	reqWrongCase.Header.Set("X-Origin-Verify", strings.ToUpper(expected))
+	wWrongCase := httptest.NewRecorder()
+	rProd.ServeHTTP(wWrongCase, reqWrongCase)
+	if wWrongCase.Code != http.StatusForbidden {
+		t.Errorf("Expected 403 for case-mismatched X-Origin-Verify, got %d", wWrongCase.Code)
 	}
 
-	// 3. Case-insensitive matching header -> 200
+	// 3. Health check exempt even without X-Origin-Verify
+	wHealth := httptest.NewRecorder()
+	rProd.ServeHTTP(wHealth, httptest.NewRequest("GET", "/api/health", nil))
+	if wHealth.Code != http.StatusOK {
+		t.Errorf("Expected 200 for /api/health without X-Origin-Verify, got %d", wHealth.Code)
+	}
+
+	// 4. Matching header -> 200 and originVerified=true
 	var verified bool
 	rProd.GET("/verified", func(c *gin.Context) {
-		verified = c.GetBool("azureFDIDVerified")
+		verified = c.GetBool("originVerified")
 		c.String(http.StatusOK, "ok")
 	})
-	reqUpper := httptest.NewRequest("GET", "/verified", nil)
-	reqUpper.Header.Set("X-Azure-FDID", strings.ToUpper(expected))
-	wProd3 := httptest.NewRecorder()
-	rProd.ServeHTTP(wProd3, reqUpper)
-	if wProd3.Code != http.StatusOK || !verified {
-		t.Errorf("Expected 200 and azureFDIDVerified=true for uppercase FDID, got %d verified=%v", wProd3.Code, verified)
+	reqValid := httptest.NewRequest("GET", "/verified", nil)
+	reqValid.Header.Set("X-Origin-Verify", expected)
+	wProd2 := httptest.NewRecorder()
+	rProd.ServeHTTP(wProd2, reqValid)
+	if wProd2.Code != http.StatusOK || !verified {
+		t.Errorf("Expected 200 and originVerified=true for valid X-Origin-Verify, got %d verified=%v", wProd2.Code, verified)
 	}
 }
 

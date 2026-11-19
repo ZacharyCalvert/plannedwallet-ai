@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"crypto/subtle"
 	"database/sql"
 	"errors"
 	"fmt"
@@ -84,40 +85,47 @@ func isDefaultJWTSecret(secret string) bool {
 	return strings.Contains(clean, "super-secret") || strings.Contains(clean, "super secret")
 }
 
-func validateExpectedFDID(expectedFDID string, isProd bool) {
-	if isProd && strings.TrimSpace(expectedFDID) == "" {
-		log.Fatalf("Fatal: PRODUCTION_ENV is true but EXPECTED_FDID is not configured. An expected Azure Front Door ID is required.")
+func validateExpectedOriginSecret(expectedSecret string, isProd bool) {
+	if isProd && strings.TrimSpace(expectedSecret) == "" {
+		log.Fatalf("Fatal: PRODUCTION_ENV is true but EXPECTED_ORIGIN_SECRET is not configured. An expected origin secret is required.")
 	}
 }
 
-func getIncomingFDID(c *gin.Context) string {
-	if id := c.GetHeader("X-Azure-FDID"); id != "" {
-		return strings.TrimSpace(id)
-	}
-	return strings.TrimSpace(c.GetHeader("X-FDID"))
+func getIncomingOriginSecret(c *gin.Context) string {
+	return strings.TrimSpace(c.GetHeader("X-Origin-Verify"))
 }
 
-func fdidMiddleware(expectedFDID string, isProd bool) gin.HandlerFunc {
-	cleanExpected := strings.TrimSpace(expectedFDID)
+func isOriginSecretValid(incoming, expected string) bool {
+	if expected == "" || len(incoming) != len(expected) {
+		return false
+	}
+	return subtle.ConstantTimeCompare([]byte(incoming), []byte(expected)) == 1
+}
+
+func isOriginExempt(c *gin.Context, cleanExpected string, isProd bool) bool {
+	if (!isProd && cleanExpected == "") || c.Request.Method == http.MethodOptions {
+		return true
+	}
+	return c.Request.URL.Path == "/api/health" || c.Request.URL.Path == "/health"
+}
+
+func originVerifyMiddleware(expectedSecret string, isProd bool) gin.HandlerFunc {
+	cleanExpected := strings.TrimSpace(expectedSecret)
 	return func(c *gin.Context) {
-		if (!isProd && cleanExpected == "") || c.Request.Method == http.MethodOptions {
+		if isOriginExempt(c, cleanExpected, isProd) {
 			c.Next()
 			return
 		}
-		if c.Request.URL.Path == "/api/health" || c.Request.URL.Path == "/health" {
-			c.Next()
-			return
-		}
-		if !strings.EqualFold(getIncomingFDID(c), cleanExpected) {
-			trace.LogError(c.Request.Context(), nil, "Access denied: missing or invalid Azure Front Door ID header")
+		if !isOriginSecretValid(getIncomingOriginSecret(c), cleanExpected) {
+			trace.LogError(c.Request.Context(), nil, "Access denied: missing or invalid X-Origin-Verify header")
 			c.AbortWithStatusJSON(http.StatusForbidden, models.ErrorResponse{
 				Error:     "INVALID_PROXY_HEADER",
-				Message:   "Access denied: missing or invalid Azure Front Door ID.",
+				Message:   "Access denied: missing or invalid origin verification header.",
 				Timestamp: time.Now().UTC(),
 			})
 			return
 		}
-		c.Set("azureFDIDVerified", true)
+		c.Set("originVerified", true)
 		c.Next()
 	}
 }
@@ -167,13 +175,17 @@ func applyDatabaseSchema(db *sql.DB, isProd bool) {
 }
 
 func initDatabase(isProd bool) repository.Repository {
+	defaultSSLMode := "disable"
+	if isProd {
+		defaultSSLMode = "require"
+	}
 	cfg := database.Config{
-		Host:     getEnv("POSTGRES_HOST", "localhost"),
-		Port:     getEnv("POSTGRES_PORT", "5432"),
-		User:     getEnv("POSTGRES_USER", "postgres"),
-		Password: getEnv("POSTGRES_PASSWORD", "postgres"),
-		DBName:   getEnv("POSTGRES_DB", "plannedwallet"),
-		SSLMode:  getEnv("POSTGRES_SSLMODE", "disable"),
+		Host:     getEnv("POSTGRES_HOST", getEnv("DB_HOST", "localhost")),
+		Port:     getEnv("POSTGRES_PORT", getEnv("DB_PORT", "5432")),
+		User:     getEnv("POSTGRES_USER", getEnv("DB_USER", "postgres")),
+		Password: getEnv("POSTGRES_PASSWORD", getEnv("DB_PASSWORD", "postgres")),
+		DBName:   getEnv("POSTGRES_DB", getEnv("DB_NAME", "plannedwallet")),
+		SSLMode:  getEnv("POSTGRES_SSLMODE", getEnv("DB_SSLMODE", defaultSSLMode)),
 	}
 
 	db, err := database.ConnectWithRetry(cfg, 5, time.Second)
@@ -212,14 +224,14 @@ func addHandlers(r *gin.Engine, repo repository.Repository, authService *auth.Se
 	handler.RegisterRoutes(r)
 }
 
-func setupGinEngine(repo repository.Repository, authService *auth.Service, isProd bool, expectedFDID string) *gin.Engine {
+func setupGinEngine(repo repository.Repository, authService *auth.Service, isProd bool, expectedOriginSecret string) *gin.Engine {
 	if isProd {
 		gin.SetMode(gin.ReleaseMode)
 	}
 	r := gin.New()
 	r.Use(trace.Middleware())
 	r.Use(cors.Middleware())
-	r.Use(fdidMiddleware(expectedFDID, isProd))
+	r.Use(originVerifyMiddleware(expectedOriginSecret, isProd))
 	r.Use(gin.Recovery())
 	configureProxies(r, isProd)
 	addHandlers(r, repo, authService, isProd)
@@ -270,15 +282,15 @@ func runServer(srv *http.Server, isProd bool) {
 func main() {
 	isProd := isProduction()
 	port := getEnv("PORT", "8080")
-	expectedFDID := getEnv("EXPECTED_FDID", "")
-	validateExpectedFDID(expectedFDID, isProd)
+	expectedOriginSecret := getEnv("EXPECTED_ORIGIN_SECRET", "")
+	validateExpectedOriginSecret(expectedOriginSecret, isProd)
 	validatePolicyConfig(os.Getenv("ENFORCE_POLICY"), os.Getenv("PW_TERMS"), isProd)
 
 	authService := initJWTService(isProd)
 	repo := initDatabase(isProd)
 	cleanupStartupCaptchas(repo)
 
-	r := setupGinEngine(repo, authService, isProd, expectedFDID)
+	r := setupGinEngine(repo, authService, isProd, expectedOriginSecret)
 	srv := &http.Server{
 		Addr:    ":" + port,
 		Handler: r,

@@ -17,7 +17,7 @@
 
 # ---------------------------------------------------------
 # Database Schema & Migrations
-# Applied directly against Azure PostgreSQL Flexible Server.
+# Applied directly against AWS RDS PostgreSQL.
 # ---------------------------------------------------------
 /backend-api/internal/database/init.sql @ZacharyCalvert
 /SQL_CONFIG.md @ZacharyCalvert

@@ -10,7 +10,7 @@ permissions:
 jobs:
   destroy-stage-data:
     name: Purge Users and Accounts (Stage Only)
-    if: github.actor == 'ZacharyCalvert' || github.triggering_actor == 'ZacharyCalvert'
+    if: github.actor == 'ZacharyCalvert'
     runs-on: ubuntu-latest
     environment: stage
     concurrency:
@@ -21,12 +21,8 @@ jobs:
       - name: Enforce operator authorization (ZacharyCalvert only)
         env:
           ACTOR: ${{ github.actor }}
-          TRIGGERING_ACTOR: ${{ github.triggering_actor }}
         run: |
-          echo "Verifying operator authorization for stage data destruction..."
-          echo "Triggered by Actor: $ACTOR"
-          echo "Triggering Actor: $TRIGGERING_ACTOR"
-          if [ "$ACTOR" != "ZacharyCalvert" ] && [ "$TRIGGERING_ACTOR" != "ZacharyCalvert" ]; then
+          if [ "$ACTOR" != "ZacharyCalvert" ]; then
             echo "::error::Access Denied: Only user 'ZacharyCalvert' is authorized to execute this stage data destruction workflow. Execution by '$ACTOR' rejected."
             exit 1
           fi
@@ -35,107 +31,24 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v7
 
-      - name: Azure Login via OIDC Federated Trust
-        uses: azure/login@v3
+      - name: Configure AWS Credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
         with:
-          client-id: ${{ secrets.AZURE_CLIENT_ID }}
-          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION || 'us-east-2' }}
 
-      - name: Execute Stage Data Destruction SQL inside VNet via Container App Job
+      - name: Execute Stage Data Destruction SQL via ECS Fargate RunTask
         env:
-          TARGET_ENV: 'stage'
-          AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP || 'rg-plannedwallet-stage' }}
-          MIGRATION_JOB_NAME: ${{ vars.MIGRATION_JOB_NAME || 'job-pw-stage-migrations' }}
-          CONTAINER_IMAGE: ${{ vars.MIGRATION_CONTAINER_IMAGE || 'postgres:16-alpine' }}
-          SQL_FILE_PATH: '.github/scripts/destroy-stage.sql'
+          AWS_REGION: ${{ vars.AWS_REGION || 'us-east-2' }}
+          ECS_CLUSTER: ${{ vars.ECS_CLUSTER }}
+          ECS_MIGRATION_TASK_DEFINITION: ${{ vars.ECS_MIGRATION_TASK_DEFINITION }}
+          MIGRATION_SUBNETS: ${{ vars.MIGRATION_SUBNETS }}
+          MIGRATION_SG: ${{ vars.MIGRATION_SG }}
         run: |
-          echo "Target Environment: $TARGET_ENV"
-          echo "Resource Group: $AZURE_RESOURCE_GROUP"
-          echo "Container App Job: $MIGRATION_JOB_NAME"
-          echo "Container Image: $CONTAINER_IMAGE"
-          echo "Executing SQL file: $SQL_FILE_PATH"
-
-          # 1. Fetch current job template
-          echo "Fetching job template for '$MIGRATION_JOB_NAME'..."
-          az containerapp job show \
-            --name "$MIGRATION_JOB_NAME" \
-            --resource-group "$AZURE_RESOURCE_GROUP" \
-            --query "properties.template" \
-            -o json > /tmp/migration-template.json
-
-          # 2. Modify template to execute SQL script via python helper
-          python3 .github/scripts/prepare-migration-job.py \
-            /tmp/migration-template.json \
-            "$SQL_FILE_PATH" \
-            "$CONTAINER_IMAGE"
-          CONTAINER_NAME=$(cat /tmp/container-name.txt 2>/dev/null || echo "migration-runner")
-          echo "Target Container Name: $CONTAINER_NAME"
-
-          # 3. Start Container App Job execution using the prepared template
-          echo "Starting Container App Job '$MIGRATION_JOB_NAME'..."
-          EXEC_NAME=$(az containerapp job start \
-            --name "$MIGRATION_JOB_NAME" \
-            --resource-group "$AZURE_RESOURCE_GROUP" \
-            --yaml /tmp/migration-template.json \
-            --query "name" -o tsv)
-
-          if [ -z "$EXEC_NAME" ]; then
-            echo "Error: Failed to initiate Container App Job execution."
-            exit 1
-          fi
-
-          echo "Container App Job execution started: $EXEC_NAME"
-          echo "Monitoring execution status..."
-
-          # 4. Poll execution status until completion
-          START_TIME=$(date +%s)
-          TIMEOUT_SECONDS=300 # 5 minutes max
-
-          while true; do
-            STATUS=$(az containerapp job execution show \
-              --name "$MIGRATION_JOB_NAME" \
-              --resource-group "$AZURE_RESOURCE_GROUP" \
-              --job-execution-name "$EXEC_NAME" \
-              --query "properties.status" -o tsv 2>/dev/null || echo "Unknown")
-
-            echo "Current execution status: $STATUS"
-
-            if [ "$STATUS" = "Succeeded" ]; then
-              echo "Stage data destruction script executed successfully inside the VNet."
-              echo "--- Container Execution Logs ---"
-              az containerapp job logs show \
-                --name "$MIGRATION_JOB_NAME" \
-                --resource-group "$AZURE_RESOURCE_GROUP" \
-                --container "$CONTAINER_NAME" \
-                --execution "$EXEC_NAME" \
-                --tail 300 || true
-              echo "--- End Container Execution Logs ---"
-              break
-            elif [ "$STATUS" = "Failed" ]; then
-              echo "Error: Stage data destruction job execution failed in Azure Container Apps."
-              echo "--- Container Execution Logs ---"
-              az containerapp job logs show \
-                --name "$MIGRATION_JOB_NAME" \
-                --resource-group "$AZURE_RESOURCE_GROUP" \
-                --container "$CONTAINER_NAME" \
-                --execution "$EXEC_NAME" \
-                --tail 300 || true
-              echo "--- End Container Execution Logs ---"
-              az containerapp job execution show \
-                --name "$MIGRATION_JOB_NAME" \
-                --resource-group "$AZURE_RESOURCE_GROUP" \
-                --job-execution-name "$EXEC_NAME" \
-                --output json || true
-              exit 1
-            fi
-
-            CURRENT_TIME=$(date +%s)
-            ELAPSED=$((CURRENT_TIME - START_TIME))
-            if [ $ELAPSED -ge $TIMEOUT_SECONDS ]; then
-              echo "Error: Timed out after $TIMEOUT_SECONDS seconds waiting for destruction job to complete."
-              exit 1
-            fi
-
-            sleep 5
-          done
+          python3 .github/scripts/run_ecs_sql.py \
+            --sql-file .github/scripts/destroy-stage.sql \
+            --region "${AWS_REGION}" \
+            --cluster "${ECS_CLUSTER}" \
+            --task-definition "${ECS_MIGRATION_TASK_DEFINITION}" \
+            --subnets "${MIGRATION_SUBNETS}" \
+            --security-group "${MIGRATION_SG}"

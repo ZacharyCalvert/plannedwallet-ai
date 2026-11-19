@@ -42,17 +42,22 @@ The engagement deliverable encompasses a complete, self-contained multi-tier cod
 │   ├── lib/               # Typed API client, W3C trace propagation, CSV parser, math
 │   ├── Dockerfile         # Multi-stage Node/Nginx container build
 │   └── Makefile           # Frontend test, lint, and bundle targets
-├── nginx-gateway/         # Reverse proxy gateway & ingress boundary
-│   ├── default.conf       # Route proxying (/api/v1 -> backend, / -> frontend)
+├── nginx-gateway/         # Reverse proxy gateway & local ingress boundary
+│   ├── nginx.conf         # Route proxying (/api -> backend, / -> frontend)
 │   └── Dockerfile         # Lightweight Alpine-based reverse proxy container
 ├── itests/                # End-to-End Integration Test Suite (Python, Pytest, Playwright)
 │   ├── conftest.py        # Fresh database fixtures, auth generators, TOTP drivers
-│   ├── test_*.py          # 35 comprehensive automated test suites
+│   ├── test_*.py          # Comprehensive automated integration test suites
 │   └── Makefile           # Isolated virtual environment test runner
-├── .github/workflows/     # CI/CD Deployment & Database Migration Pipelines
-│   ├── apply-sql.yml      # Concurrency-locked idempotent database migration runner
-│   ├── backend-api.yml    # Concurrency-locked backend testing, container build & push
-│   └── frontend-ui.yml    # Concurrency-locked frontend verification & deployment
+├── .github/
+│   ├── scripts/           # AWS ECS safeguard, ECS SQL runner, & dependency age checks
+│   └── workflows/         # CI/CD Deployment & Database Migration Pipelines (AWS OIDC)
+│       ├── apply-sql.yml          # Concurrency-locked ECS Fargate SQL migration runner
+│       ├── backend-api.yml        # Backend unit/itests, ECR push & ECS Fargate rolling deploy
+│       ├── db-statistics.yml      # Read-only RDS table metrics via ECS Fargate
+│       ├── destroy-stage-data.yml # Owner-gated stage data purge via ECS Fargate
+│       ├── frontend-ui.yml        # Frontend tests, S3 sync & CloudFront invalidation
+│       └── pr-checks.yml          # PR unit/lint/build/dependency-quarantine/gateway gate
 ├── docker-compose.yml     # Multi-container orchestration (Postgres 16, API, UI, Gateway)
 ├── Makefile               # Top-level orchestration (start, stop, clean, refresh, test)
 ├── schema.md              # Root database architecture and API documentation
@@ -212,12 +217,13 @@ Planned Wallet implements defense-in-depth principles across transport, identity
   - Automatic trace ID generation on the client, passed through the Nginx gateway, propagated into backend Gin contexts, and bound to structured application logs.
 - **Mandatory Client Identification (`X-Client-ID`)**:
   - All API interactions require the `X-Client-ID` header. Requests omitting the header are rejected with `400 Bad Request`.
-- **Azure Front Door Security Invariant (`X-Azure-FDID`)**:
-  - Production deployments validate the reverse proxy / ingress header against the expected Front Door identifier, dropping spoofed external traffic.
+- **CloudFront Origin Verification Invariant (`X-Origin-Verify`)**:
+  - CloudFront (fronted by AWS WAF v2) injects the 48-character `X-Origin-Verify` header across API Gateway HTTP API and Private VPC Link into ECS Fargate.
+  - Production deployments validate `X-Origin-Verify` against `EXPECTED_ORIGIN_SECRET` using constant-time comparison (`crypto/subtle.ConstantTimeCompare`), rejecting direct or spoofed external traffic (`403 Forbidden`) while trusting `CloudFront-Viewer-Address` for verified origin requests.
 - **Strict CORS & Host Protection**:
   - Preflight `OPTIONS` and runtime origin inspection ensuring requests originate only from whitelisted hosts and origins.
 - **Deployment Concurrency Protections**:
-  - GitHub Actions deployment workflows for `backend-api`, `frontend-ui`, and `apply-sql` enforce strict concurrency grouping (`cancel-in-progress: false`).
+  - GitHub Actions deployment and SQL operational workflows (`backend-api`, `frontend-ui`, `apply-sql`, `db-statistics`, `destroy-stage-data`) enforce strict actor safeguards and environment concurrency grouping (`cancel-in-progress: false`).
   - Guarantees that two deployments or database migration runs can never execute simultaneously, eliminating migration race conditions and schema corruption.
 
 ---

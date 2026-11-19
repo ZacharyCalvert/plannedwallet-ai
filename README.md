@@ -6,7 +6,9 @@ A full-stack personal wealth, ledger, asset portfolio, reconciliation, and finan
 
 ## Architecture
 
-Planned Wallet uses a multi-container 3-tier architecture fronted by an Nginx reverse proxy (`:8181`) in local Docker Compose deployments (and Azure Container Apps / Static Storage + Azure Front Door in cloud environments):
+Planned Wallet uses a multi-container 3-tier architecture fronted by an Nginx reverse proxy (`:8181`) in local Docker Compose deployments, and an **AWS (`us-east-2`)** serverless/container architecture in `stage` and `prod` (**CloudFront + AWS WAF v2 -> Private S3 (OAC) / API Gateway HTTP API + Private VPC Link -> ECS Fargate -> Amazon RDS PostgreSQL 16**):
+
+### Local Architecture (Docker Compose)
 
 ```mermaid
 flowchart LR
@@ -16,7 +18,7 @@ flowchart LR
 
     subgraph BackendLayers ["Backend API Internals"]
         direction TB
-        MW["Middleware Chain<br/>Trace -> CORS -> FDID -> ReadOnly -> JWT Auth"]
+        MW["Middleware Chain<br/>Trace -> CORS -> Origin Verify -> ReadOnly -> JWT Auth"]
         HDL["Handlers & Controller<br/>Validation, RBAC, Financial Math"]
         REPO["Repository Interface<br/>PostgresRepository / MemoryRepository"]
         MW --> HDL --> REPO
@@ -24,6 +26,22 @@ flowchart LR
 
     API --> MW
     REPO -->|":5432 TCP"| DB[("PostgreSQL 16")]
+```
+
+### Cloud Architecture (AWS `us-east-2`)
+
+```mermaid
+flowchart LR
+    User["Web Browser / Client"] -->|"HTTPS"| Edge["CloudFront + AWS WAF v2<br/>(Injects X-Origin-Verify &<br/>CloudFront-Viewer-Address)"]
+    Edge -->|"/* (OAC)"| S3["Amazon S3 (Private)<br/>s3-pw-env-web"]
+    Edge -->|"/api/*"| APIGW["API Gateway HTTP API<br/>(apigw-pw-env)"]
+    APIGW -->|"Private VPC Link"| ECS["ECS Fargate Service<br/>(ecs-pw-env / svc-pw-env-api)<br/>Go + Gin (:8080)"]
+    ECS -->|":5432 TLS (rds.force_ssl=1)"| RDS[("Amazon RDS PostgreSQL 16<br/>psql-pw-env (Private Subnets)")]
+
+    GHA["GitHub Actions<br/>(OIDC IAM Federation)"] -->|"Immutable SHA Image"| ECR["Amazon ECR<br/>ecr-pw-env-api"]
+    ECR -->|"Task Def Render & Deploy"| ECS
+    GHA -->|"RunTask (Public Subnets, No NAT)"| Mig["Ephemeral ECS Fargate<br/>task-pw-env-migrations"]
+    Mig -->|":5432 TLS (psql)"| RDS
 ```
 
 ### Architectural Highlights
@@ -38,7 +56,7 @@ flowchart LR
 
 ```text
 ├── .github/
-│   ├── scripts/                  # Azure SQL migration & inspection helpers
+│   ├── scripts/                  # AWS ECS safeguard, ECS SQL runner, & dependency checks
 │   └── workflows/                # GitHub Actions CI/CD & ops workflows
 ├── backend-api/                  # Go microservice (Gin + PostgreSQL / In-Memory)
 │   ├── internal/
@@ -85,7 +103,7 @@ flowchart LR
 ### Security & Access Control
 - **User Authentication & MFA**: Self-registration (`POST /api/v1/users`) with BCrypt password hashing and mandatory **RFC 6238 TOTP** secret provisioning, plus credential exchange (`POST /api/v1/users/{username}/token`) issuing signed JWT bearer tokens.
 - **12-Word Account Recovery & Key Rotation (`user_recovery_keys`)**: Registration issues a one-time 12-word recovery phrase hashed with salted **Argon2id** (`m=19456,t=2,p=1`) and verified during onboarding with a **2-word anti-skip spot check**. Lost credentials (`POST /api/v1/users/{username}/recover`) verify CAPTCHA and the active phrase to reset both password and TOTP secret while enforcing single-use rotation, and signed-in users can rotate their phrase (`POST /api/v1/users/{username}/recovery-key/rotate`).
-- **CAPTCHA & Edge Protections**: Visual PNG CAPTCHA verification during registration and recovery (`REQUIRE_CAPTCHA`), strict host/origin validation middleware (`cors`), required `X-Client-ID` headers, and optional Azure Front Door ID (`EXPECTED_FDID`) validation in production.
+- **CAPTCHA & Edge Protections**: Visual PNG CAPTCHA verification during registration and recovery (`REQUIRE_CAPTCHA`), strict host/origin validation middleware (`cors`), required `X-Client-ID` headers, and CloudFront origin verification (`EXPECTED_ORIGIN_SECRET` / `X-Origin-Verify`) in production.
 - **Multi-User Account & Perspective Sharing**: Role-based collaboration (`admin`, `edit`, `read`) enforced server-side. Unauthorized users receive `404 Not Found` (`ACCOUNT_NOT_FOUND`) to prevent private resource enumeration.
 
 ### Financial Account Types
@@ -112,7 +130,7 @@ flowchart LR
 - **Frontend Maintenance UX**: On startup, the UI checks `/api/v1/features`; when `read_only` is active, it renders a top banner (`"Planned Wallet is under maintenance."`), hides the account creation tab while keeping Sign In available, and pops up a graceful maintenance warning dialog if any write action is attempted.
 
 ### Policy & U.S. Consumer Compliance (`ENFORCE_POLICY`, `PW_TERMS`)
-- **Terms Checksum & Ledger (`policy_agreements`)**: `PW_TERMS` sets the required 64-character SHA-256 hex digest of `frontend-ui/public/terms-of-use.pdf` (configured automatically in `docker-compose.yml`). When `ENFORCE_POLICY=true` or `PRODUCTION_ENV=true`, the backend requires a valid `PW_TERMS` at startup and gates data access behind an active ledger row confirming Terms of Use (`terms_sha256 == PW_TERMS`), Privacy Policy, and `"I am a consumer in the United States"` alongside client IP (`X-Azure-ClientIP` when AFD-verified, otherwise `c.ClientIP()`) and timestamp.
+- **Terms Checksum & Ledger (`policy_agreements`)**: `PW_TERMS` sets the required 64-character SHA-256 hex digest of `frontend-ui/public/terms-of-use.pdf` (configured automatically in `docker-compose.yml`). When `ENFORCE_POLICY=true` or `PRODUCTION_ENV=true`, the backend requires a valid `PW_TERMS` at startup and gates data access behind an active ledger row confirming Terms of Use (`terms_sha256 == PW_TERMS`), Privacy Policy, and `"I am a consumer in the United States"` alongside client IP (`CloudFront-Viewer-Address` when origin-verified, otherwise `c.ClientIP()`) and timestamp.
 - **Token Promotion Flow**: Users without an active matching approval receive JWTs with `terms_approved: false`, can access only `POST/GET /api/v1/users/{username}/policy-agreements` and `POST /api/v1/users/{username}/token/refresh`, and upgrade to a `terms_approved: true` token once accepted in the UI.
 
 ---
@@ -162,8 +180,8 @@ erDiagram
 | `POSTGRES_SSLMODE` | `disable` | PostgreSQL SSL mode (`disable`, `require`, etc.). |
 | `JWT_SECRET` | `super-secret-jwt-key-replace-in-production` | HMAC secret for signing JWTs. Must be ≥ 32 bytes when set; non-default required when `PRODUCTION_ENV=true`. |
 | `JWT_EXPIRATION_SECONDS` | `900` | JWT token lifetime in seconds (defaults to 15 minutes / 900s). |
-| `PRODUCTION_ENV` | `false` | Enables Gin release mode, skips startup `init.sql` execution, enforces PostgreSQL availability, secure `JWT_SECRET`, `EXPECTED_FDID`, CAPTCHA, `ENFORCE_POLICY=true`, and `PW_TERMS`. |
-| `EXPECTED_FDID` | `""` | Expected Azure Front Door ID (`X-Azure-FDID` / `X-FDID`). Required when `PRODUCTION_ENV=true`; also authorizes trusting `X-Azure-ClientIP`. |
+| `PRODUCTION_ENV` | `false` | Enables Gin release mode, skips startup `init.sql` execution, enforces PostgreSQL availability, secure `JWT_SECRET`, `EXPECTED_ORIGIN_SECRET`, CAPTCHA, `ENFORCE_POLICY=true`, and `PW_TERMS`. |
+| `EXPECTED_ORIGIN_SECRET` | `""` | Expected CloudFront `X-Origin-Verify` header secret (checked via constant-time compare). Required when `PRODUCTION_ENV=true`; also authorizes trusting `CloudFront-Viewer-Address`. |
 | `REQUIRE_CAPTCHA` | `false` | Forces CAPTCHA challenge validation on registration (always `true` when `PRODUCTION_ENV=true`). |
 | `ENFORCE_POLICY` | `false` | **Must be `"true"` when `PRODUCTION_ENV=true`** (process exits at startup otherwise). Enforces active `policy_agreements` acceptance matching `PW_TERMS` and U.S. consumer confirmation. |
 | `PW_TERMS` | `""` (`docker-compose.yml` sets Terms PDF SHA-256) | 64-character hex SHA-256 digest of `frontend-ui/public/terms-of-use.pdf`. Required on startup whenever `ENFORCE_POLICY=true` or `PRODUCTION_ENV=true`. |
@@ -176,6 +194,22 @@ erDiagram
 | :--- | :--- | :--- |
 | `DATA_DIR` | `data` | Host directory bind-mounted to PostgreSQL `/var/lib/postgresql/data` in `docker-compose.yml` (`make local` sets `local-data`). |
 | `TARGET_SERVER` | `http://localhost:8080` | Base URL targeted by `itests` when running Pytest integration suites. |
+
+### GitHub Environments (`stage` & `prod` AWS Variables)
+
+| Variable | Example / Value | Description |
+| :--- | :--- | :--- |
+| `AWS_ROLE_ARN` | `arn:aws:iam::<account>:role/...` | AWS IAM role assumed via passwordless GitHub OIDC (`id-token: write`). |
+| `AWS_REGION` | `us-east-2` | Primary AWS region (Ohio). |
+| `FRONTEND_S3_BUCKET` | `s3-pw-${env}-web-<suffix>` | Private Amazon S3 bucket storing the Next.js static export behind CloudFront OAC. |
+| `CLOUDFRONT_DISTRIBUTION_ID` | `E...` | CloudFront distribution ID invalidated (`/*`) after S3 sync. |
+| `ECR_REPOSITORY` | `ecr-pw-${env}-api` | Amazon ECR repository (`IMMUTABLE` image tags) for `backend-api` `linux/amd64` images. |
+| `ECS_CLUSTER` | `ecs-pw-${env}` | Amazon ECS cluster hosting backend services and ephemeral migration tasks. |
+| `ECS_SERVICE` | `svc-pw-${env}-api` | ECS Fargate service running behind API Gateway HTTP API + Private VPC Link. |
+| `ECS_TASK_DEFINITION` | `task-pw-${env}-api` | Backend ECS task definition (`backend` container) rendered on deploy. |
+| `ECS_MIGRATION_TASK_DEFINITION` | `task-pw-${env}-migrations` | Migration ECS task definition (`migration-runner` container) executed via `RunTask`. |
+| `MIGRATION_SUBNETS` | `subnet-...,subnet-...` | Comma-separated public subnet IDs for ephemeral migration tasks (no NAT Gateway). |
+| `MIGRATION_SG` | `sg-...` | Security group ID allowing ECS migration tasks to reach RDS port `5432`. |
 
 ---
 
@@ -218,9 +252,9 @@ CI/CD and operational workflows are defined in [`.github/workflows/`](.github/wo
 flowchart LR
     PR["Pull Request (inc. Dependabot)"] --> PRGate["pr-checks.yml<br/>5-Day Dependency Quarantine + Unit Tests + Docker/Static Builds + Gateway itests (No Deploy)"]
 
-    PushMain["Push to main"] --> BackendWF["backend-api.yml<br/>Go unit tests + Docker Postgres + Pytest itests + GHCR + Deploy"]
-    PushMain --> FrontendWF["frontend-ui.yml<br/>Node tests + Next.js static export + Container smoke check + Deploy"]
-    PushMain --> SqlWF["apply-sql.yml<br/>VNet Container App Job applies init.sql to stage"]
+    PushMain["Push to main"] --> BackendWF["backend-api.yml<br/>Go unit tests + Docker Postgres + Pytest itests + ECR + ECS Fargate + /api/v1/version Gate"]
+    PushMain --> FrontendWF["frontend-ui.yml<br/>Node tests + Next.js static export + S3 Sync + CloudFront /* Invalidation"]
+    PushMain --> SqlWF["apply-sql.yml<br/>ECS Fargate RunTask applies init.sql to stage RDS"]
 
     Manual["Manual workflow_dispatch"] --> BackendWF
     Manual --> FrontendWF
@@ -232,8 +266,8 @@ flowchart LR
 | Workflow | Link | Triggers | Purpose |
 | :--- | :--- | :--- | :--- |
 | **Pull Request Gate** | [`.github/workflows/pr-checks.yml`](.github/workflows/pr-checks.yml) | `pull_request`, `workflow_dispatch` | Gating workflow (no deployment) that runs all Go & Node unit tests, builds backend/frontend/gateway artifacts & Docker images, runs `make refresh` + `itests` against the local gateway (`:8181`), and fails on any adopted/updated NPM, Go, or Docker dependency published fewer than 5 days ago. |
-| **Backend API CI/CD** | [`.github/workflows/backend-api.yml`](.github/workflows/backend-api.yml) | Push to `main` (`backend-api/**`, `itests/**`) or `workflow_dispatch` (`stage`, `production`/`prod`) | Runs Go unit tests, builds `backend-api` image, launches fresh PostgreSQL 16 + API containers, executes `make -C itests test`, pushes image to GHCR, and deploys via Azure OIDC (`deploy-backend`). |
-| **Frontend UI CI/CD** | [`.github/workflows/frontend-ui.yml`](.github/workflows/frontend-ui.yml) | Push to `main` (`frontend-ui/**`) or `workflow_dispatch` (`stage`, `production`/`prod`) | Runs `npm test`, builds static export (`frontend-ui/out`), verifies `index.html` / `404.html`, smoke-tests Docker container, pushes image to GHCR, and deploys static site (`deploy-static`). |
-| **Apply Database Migrations** | [`.github/workflows/apply-sql.yml`](.github/workflows/apply-sql.yml) | Push to `main` (`backend-api/internal/database/init.sql`) or `workflow_dispatch` (`stage`, `production`) | Uses Azure OIDC and `.github/scripts/prepare-migration-job.py` to execute idempotent DDL migrations (`init.sql`) inside an Azure VNet Container App Job with concurrency locking. |
-| **Database Statistics** | [`.github/workflows/db-statistics.yml`](.github/workflows/db-statistics.yml) | `workflow_dispatch` (`stage`, `production`) | Executes read-only SQL statistics inspection ([`db-statistics.sql`](.github/scripts/db-statistics.sql)) via VNet Container App Job. |
-| **Destroy Stage Data** | [`.github/workflows/destroy-stage-data.yml`](.github/workflows/destroy-stage-data.yml) | `workflow_dispatch` (restricted to authorized actor, `stage` only) | Executes [`destroy-stage.sql`](.github/scripts/destroy-stage.sql) against `stage` via VNet Container App Job to purge stage users/accounts. |
+| **Backend API CI/CD** | [`.github/workflows/backend-api.yml`](.github/workflows/backend-api.yml) | Push to `main` (`backend-api/**`, `itests/**`) or `workflow_dispatch` (`stage`, `prod`) | Runs Go unit tests, builds `backend-api` image, launches fresh PostgreSQL 16 + API containers, executes `make -C itests test`, pushes image to GHCR, and deploys via AWS OIDC to Amazon ECR + ECS Fargate (`deploy-backend`, plus `/api/v1/version` deploy gate). |
+| **Frontend UI CI/CD** | [`.github/workflows/frontend-ui.yml`](.github/workflows/frontend-ui.yml) | Push to `main` (`frontend-ui/**`) or `workflow_dispatch` (`stage`, `prod`) | Runs `npm test`, builds static export (`frontend-ui/out`), verifies `index.html` / `404.html`, smoke-tests Docker container, pushes image to GHCR, and syncs static site to Amazon S3 + invalidates CloudFront (`deploy-static`). |
+| **Apply Database Migrations** | [`.github/workflows/apply-sql.yml`](.github/workflows/apply-sql.yml) | Push to `main` (`backend-api/internal/database/init.sql`) or `workflow_dispatch` (`stage`, `prod`) | Uses AWS OIDC and `.github/scripts/run_ecs_sql.py` to execute idempotent DDL migrations (`init.sql`) on Amazon RDS PostgreSQL (`rds.force_ssl=1`) via ephemeral ECS Fargate `RunTask` with concurrency locking. |
+| **Database Statistics** | [`.github/workflows/db-statistics.yml`](.github/workflows/db-statistics.yml) | `workflow_dispatch` (`stage`, `prod`) | Executes read-only SQL statistics inspection ([`db-statistics.sql`](.github/scripts/db-statistics.sql)) via ECS Fargate `RunTask` and CloudWatch Logs. |
+| **Destroy Stage Data** | [`.github/workflows/destroy-stage-data.yml`](.github/workflows/destroy-stage-data.yml) | `workflow_dispatch` (restricted to authorized actor, `stage` only) | Executes [`destroy-stage.sql`](.github/scripts/destroy-stage.sql) against `stage` RDS via ECS Fargate `RunTask` to purge stage users/accounts. |

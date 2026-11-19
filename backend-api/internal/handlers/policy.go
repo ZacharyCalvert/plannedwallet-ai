@@ -80,8 +80,8 @@ func parseHeaderClientIP(raw string) string {
 }
 
 func resolveClientIP(c *gin.Context) string {
-	if c.GetBool("azureFDIDVerified") {
-		if ip := parseHeaderClientIP(c.GetHeader("X-Azure-ClientIP")); ip != "" {
+	if c.GetBool("originVerified") {
+		if ip := parseHeaderClientIP(c.GetHeader("CloudFront-Viewer-Address")); ip != "" {
 			return ip
 		}
 	}
