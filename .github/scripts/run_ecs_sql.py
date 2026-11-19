@@ -27,13 +27,28 @@ def build_sql_shell_command(sql_bytes: bytes) -> str:
     """Compress and base64-encode SQL bytes into a POSIX /bin/sh psql pipeline."""
     compressed = gzip.compress(sql_bytes, mtime=0)
     b64 = base64.b64encode(compressed).decode("ascii")
+    ensure_psql = (
+        "set -e; "
+        "if ! command -v psql >/dev/null 2>&1; then "
+        "if command -v apk >/dev/null 2>&1; then "
+        "apk add --no-cache postgresql16-client >/dev/null 2>&1 || apk add --no-cache postgresql-client; "
+        "elif command -v apt-get >/dev/null 2>&1; then "
+        "DEBIAN_FRONTEND=noninteractive apt-get update -qq >/dev/null && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq postgresql-client >/dev/null; "
+        "elif command -v dnf >/dev/null 2>&1; then "
+        "dnf install -y -q postgresql16 >/dev/null 2>&1 || dnf install -y -q postgresql; "
+        "elif command -v yum >/dev/null 2>&1; then "
+        "yum install -y -q postgresql16 >/dev/null 2>&1 || yum install -y -q postgresql; "
+        "else echo 'psql not found and no supported package manager available' >&2; exit 127; fi; "
+        "fi; "
+    )
     return (
+        f"{ensure_psql}"
         f"printf '%s' '{b64}' | base64 -d | gzip -d | "
-        'PGPASSWORD="${DB_PASSWORD:-$POSTGRES_PASSWORD}" '
+        'PGPASSWORD="${DB_PASSWORD:-${POSTGRES_PASSWORD:-}}" '
         'PGSSLMODE="${DB_SSLMODE:-${POSTGRES_SSLMODE:-require}}" '
-        'psql -v ON_ERROR_STOP=1 -h "${DB_HOST:-$POSTGRES_HOST}" '
+        'psql -v ON_ERROR_STOP=1 -h "${DB_HOST:-${POSTGRES_HOST:-}}" '
         '-p "${DB_PORT:-${POSTGRES_PORT:-5432}}" '
-        '-U "${DB_USER:-$POSTGRES_USER}" -d "${DB_NAME:-$POSTGRES_DB}"'
+        '-U "${DB_USER:-${POSTGRES_USER:-}}" -d "${DB_NAME:-${POSTGRES_DB:-}}"'
     )
 
 
@@ -86,6 +101,7 @@ def describe_task_metadata(region: str, task_definition: str) -> dict:
     log_cfg = (first.get("logConfiguration") or {}).get("options") or {}
     return {
         "container_name": first.get("name") or "migration-runner",
+        "image": first.get("image") or "",
         "log_group": log_cfg.get("awslogs-group", ""),
         "log_prefix": log_cfg.get("awslogs-stream-prefix", ""),
     }
@@ -167,7 +183,10 @@ def main():
     overrides_json = build_ecs_overrides(container_name, sql_bytes)
     net_cfg = format_network_config(args.subnets, args.security_group)
 
-    print(f"Running SQL '{args.sql_file}' on ECS cluster '{args.cluster}' (container '{container_name}')...")
+    print(
+        f"Running SQL '{args.sql_file}' on ECS cluster '{args.cluster}' "
+        f"(container '{container_name}', image '{meta['image']}')..."
+    )
     run_proc = run_aws_cli(
         [
             "ecs",
