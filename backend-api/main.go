@@ -205,7 +205,14 @@ func configureProxies(r *gin.Engine, isProd bool) {
 	if !isProd {
 		return
 	}
-	if err := r.SetTrustedProxies([]string{"10.0.0.0/8"}); err != nil {
+	trustedVPCProxies := []string{
+		"10.0.0.0/8",
+		"172.16.0.0/12",
+		"192.168.0.0/16",
+		"127.0.0.0/8",
+		"::1/128",
+	}
+	if err := r.SetTrustedProxies(trustedVPCProxies); err != nil {
 		log.Fatalf("Failed to configure trusted proxies: %v", err)
 	}
 }

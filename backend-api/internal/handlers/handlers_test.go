@@ -1250,6 +1250,24 @@ func TestRecordPolicyAgreement_ResolvesOriginViewerIP(t *testing.T) {
 	if got := postPolicyWithOriginViewerIP(r, tok, "ip_user", hash, "not-an-ip"); got.ClientIP != "10.0.0.12" {
 		t.Fatalf("expected fallback to RemoteAddr on malformed CloudFront-Viewer-Address, got %q", got.ClientIP)
 	}
+
+	// Fallback to X-Forwarded-For when CloudFront-Viewer-Address is absent and proxy is trusted
+	_ = r.SetTrustedProxies([]string{"10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"})
+	payload, _ := json.Marshal(map[string]any{
+		"terms_approved": true, "privacy_approved": true, "us_customer": true, "terms_sha256": hash,
+	})
+	reqXFF := newTestRequest(http.MethodPost, "/api/v1/users/ip_user/policy-agreements", bytes.NewReader(payload))
+	reqXFF.RemoteAddr = "172.31.10.5:443"
+	reqXFF.Header.Set("Content-Type", "application/json")
+	reqXFF.Header.Set("Authorization", "Bearer "+tok)
+	reqXFF.Header.Set("X-Forwarded-For", "203.0.113.77, 172.31.10.5")
+	wXFF := httptest.NewRecorder()
+	r.ServeHTTP(wXFF, reqXFF)
+	var outXFF models.PolicyAgreementResponse
+	_ = json.Unmarshal(wXFF.Body.Bytes(), &outXFF)
+	if outXFF.ClientIP != "203.0.113.77" {
+		t.Fatalf("expected X-Forwarded-For fallback IP '203.0.113.77', got %q", outXFF.ClientIP)
+	}
 }
 
 func registerUserFull(t *testing.T, r *gin.Engine, username, email, password string) models.UserResponse {
