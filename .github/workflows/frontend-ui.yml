@@ -1,4 +1,5 @@
 name: Frontend UI CI/CD
+run-name: "Frontend UI CI/CD [${{ (github.event_name == 'workflow_dispatch' && inputs.environment == 'prod') && 'prod' || 'stage' }}] (${{ github.event_name }})"
 
 on:
   push:

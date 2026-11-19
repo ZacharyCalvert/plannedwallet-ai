@@ -1,4 +1,5 @@
 name: Pull Request Gate
+run-name: "Pull Request Gate (${{ github.event_name }})"
 
 on:
   pull_request:
