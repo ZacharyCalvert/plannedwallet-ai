@@ -29,7 +29,7 @@ def test_terms_of_use_pdf_served_and_matches_pw_terms(raw_context: APIRequestCon
     body = load_frontend_pdf_bytes(raw_context, "terms-of-use.pdf")
     assert body.startswith(b"%PDF-"), "Expected valid PDF signature"
     digest = hashlib.sha256(body).hexdigest()
-    assert digest == "b08f3d8b1cd44544888a78ed13316c0910725944bc46808ab542e36d9b2fd84c"
+    assert digest == "4906a573260b73ad9c9c5b95c7492cca669ce4354e91a7ba4383a955d85bfb80"
 
 
 def test_get_version_endpoint(raw_context: APIRequestContext):

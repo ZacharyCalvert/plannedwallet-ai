@@ -1,4 +1,4 @@
-.PHONY: start stop clean build build-api build-frontend build-gateway test itest refresh local
+.PHONY: start stop clean build build-api build-frontend build-gateway test itest refresh local pdfs
 
 export DATA_DIR ?= data
 
@@ -59,3 +59,9 @@ itest: refresh
 	fi; \
 	make clean || true; \
 	exit $$status
+
+pdfs:
+	@if [ ! -x itests/.venv/bin/python ]; then $(MAKE) -C itests install; fi
+	itests/.venv/bin/python scripts/pdf-generation/generate_pdfs.py
+	@echo "Updated PW_TERMS SHA-256:"
+	@shasum -a 256 frontend-ui/public/terms-of-use.pdf

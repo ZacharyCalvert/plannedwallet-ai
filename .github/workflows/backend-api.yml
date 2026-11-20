@@ -104,7 +104,7 @@ jobs:
             -e POSTGRES_DB=plannedwallet \
             -e POSTGRES_SSLMODE=disable \
             -e ENFORCE_POLICY=false \
-            -e PW_TERMS=b08f3d8b1cd44544888a78ed13316c0910725944bc46808ab542e36d9b2fd84c \
+            -e PW_TERMS=4906a573260b73ad9c9c5b95c7492cca669ce4354e91a7ba4383a955d85bfb80 \
             backend-api:test
           for i in $(seq 1 30); do
             if curl -s -f -H "X-Client-ID: github-action" http://localhost:8080/api/v1/hello >/dev/null 2>&1; then

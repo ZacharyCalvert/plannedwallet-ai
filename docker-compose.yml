@@ -38,7 +38,7 @@ services:
       JWT_SECRET: ${JWT_SECRET:-super-secret-jwt-key-replace-in-production}
       PRODUCTION_ENV: ${PRODUCTION_ENV:-false}
       ENFORCE_POLICY: ${ENFORCE_POLICY:-false}
-      PW_TERMS: ${PW_TERMS:-b08f3d8b1cd44544888a78ed13316c0910725944bc46808ab542e36d9b2fd84c}
+      PW_TERMS: ${PW_TERMS:-4906a573260b73ad9c9c5b95c7492cca669ce4354e91a7ba4383a955d85bfb80}
       EXPECTED_ORIGIN_SECRET: ${EXPECTED_ORIGIN_SECRET:-}
       PW_READONLY: ${PW_READONLY:-false}
     ports:
