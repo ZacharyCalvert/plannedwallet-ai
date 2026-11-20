@@ -157,6 +157,16 @@ body {
   flex-direction: column;
 }
 
+.staging-banner {
+  background-color: #ffedd5;
+  color: #9a3412;
+  border-bottom: 1px solid #f97316;
+  padding: 0.6rem 1.5rem;
+  text-align: center;
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
 .maintenance-banner {
   background-color: #fef3c7;
   color: #92400e;

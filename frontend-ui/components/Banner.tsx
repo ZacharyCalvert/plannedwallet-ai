@@ -1,3 +1,7 @@
+'use client';
+
+import { useEffect, useState } from 'react';
+import { STAGE_BANNER_TEXT, isStagingBrowser } from '../lib/environment';
 import { MAINTENANCE_BANNER_TEXT } from '../lib/maintenance';
 
 interface BannerProps {
@@ -8,8 +12,19 @@ interface BannerProps {
 }
 
 export function Banner({ username, onUserClick, onSignOut, readOnly = false }: BannerProps) {
+  const [isStaging, setIsStaging] = useState(false);
+
+  useEffect(() => {
+    setIsStaging(isStagingBrowser());
+  }, []);
+
   return (
     <>
+      {isStaging && (
+        <div className="staging-banner" role="alert">
+          {STAGE_BANNER_TEXT}
+        </div>
+      )}
       {readOnly && (
         <div className="maintenance-banner" role="alert">
           {MAINTENANCE_BANNER_TEXT}
