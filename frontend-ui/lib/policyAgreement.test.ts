@@ -6,10 +6,12 @@ import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import {
   computeBufferSha256Hex,
+  fetchPrivacyPdfSha256,
   fetchTermsPdfSha256,
   isPolicyApprovalRequiredResponse,
   notifyPolicyRequired,
   POLICY_APPROVAL_ERROR_CODE,
+  PRIVACY_PDF_URL,
   sha256HexFallback,
   subscribePolicyRequired,
   TERMS_PDF_URL,
@@ -49,10 +51,33 @@ describe('Policy Agreement Helpers', () => {
     assert.equal(fetchedHash, expectedHash);
   });
 
-  it('throws if downloading terms-of-use.pdf fails', async () => {
+  it('computes lowercase SHA-256 hex matching the static privacy-and-security-policy.pdf bytes', async () => {
+    const here = path.dirname(fileURLToPath(import.meta.url));
+    const pdfPath = path.resolve(here, '../public/privacy-and-security-policy.pdf');
+    const pdfBytes = await readFile(pdfPath);
+    const expectedHash = createHash('sha256').update(pdfBytes).digest('hex');
+
+    let capturedUrl = '';
+    let capturedCache = '';
+    const fetchedHash = await fetchPrivacyPdfSha256(async (input, init) => {
+      capturedUrl = String(input);
+      capturedCache = init?.cache ?? '';
+      return new Response(pdfBytes, { status: 200 });
+    });
+
+    assert.equal(capturedUrl, PRIVACY_PDF_URL);
+    assert.equal(capturedCache, 'no-store');
+    assert.equal(fetchedHash, expectedHash);
+  });
+
+  it('throws if downloading terms-of-use.pdf or privacy-and-security-policy.pdf fails', async () => {
     await assert.rejects(
       () => fetchTermsPdfSha256(async () => new Response('missing', { status: 404 })),
       /Unable to download Terms of Use PDF/
+    );
+    await assert.rejects(
+      () => fetchPrivacyPdfSha256(async () => new Response('missing', { status: 404 })),
+      /Unable to download Privacy & Security Policy PDF/
     );
   });
 

@@ -19,17 +19,18 @@ func (p *PostgresRepository) CreatePolicyAgreement(ctx context.Context, agreemen
 		return err
 	}
 	query := `INSERT INTO policy_agreements
-	          (id, user_id, terms_sha256, terms_approved, privacy_approved, us_customer, active, client_ip, agreed_at)
-	          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`
+	          (id, user_id, terms_sha256, privacy_sha256, terms_approved, privacy_approved, us_adult_consumer_confirmed, active, client_ip, agreed_at)
+	          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`
 	if _, err := tx.ExecContext(
 		ctx,
 		query,
 		agreement.ID,
 		agreement.UserID,
 		agreement.TermsSHA256,
+		agreement.PrivacySHA256,
 		agreement.TermsApproved,
 		agreement.PrivacyApproved,
-		agreement.USCustomer,
+		agreement.USAdultConsumerConfirmed,
 		agreement.Active,
 		agreement.ClientIP,
 		agreement.AgreedAt,
@@ -45,9 +46,10 @@ func scanPolicyAgreement(scanner interface{ Scan(...any) error }) (*models.Polic
 		&a.ID,
 		&a.UserID,
 		&a.TermsSHA256,
+		&a.PrivacySHA256,
 		&a.TermsApproved,
 		&a.PrivacyApproved,
-		&a.USCustomer,
+		&a.USAdultConsumerConfirmed,
 		&a.Active,
 		&a.ClientIP,
 		&a.AgreedAt,
@@ -56,7 +58,7 @@ func scanPolicyAgreement(scanner interface{ Scan(...any) error }) (*models.Polic
 }
 
 func (p *PostgresRepository) GetActivePolicyAgreement(ctx context.Context, userID string) (*models.PolicyAgreement, error) {
-	query := `SELECT id, user_id, terms_sha256, terms_approved, privacy_approved, us_customer, active, client_ip, agreed_at
+	query := `SELECT id, user_id, terms_sha256, privacy_sha256, terms_approved, privacy_approved, us_adult_consumer_confirmed, active, client_ip, agreed_at
 	          FROM policy_agreements
 	          WHERE user_id = $1 AND active = TRUE
 	          ORDER BY agreed_at DESC
@@ -72,7 +74,7 @@ func (p *PostgresRepository) GetActivePolicyAgreement(ctx context.Context, userI
 }
 
 func (p *PostgresRepository) ListPolicyAgreementsByUserID(ctx context.Context, userID string) ([]*models.PolicyAgreement, error) {
-	query := `SELECT id, user_id, terms_sha256, terms_approved, privacy_approved, us_customer, active, client_ip, agreed_at
+	query := `SELECT id, user_id, terms_sha256, privacy_sha256, terms_approved, privacy_approved, us_adult_consumer_confirmed, active, client_ip, agreed_at
 	          FROM policy_agreements
 	          WHERE user_id = $1
 	          ORDER BY agreed_at DESC`

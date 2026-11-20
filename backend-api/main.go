@@ -59,20 +59,21 @@ func checkEnforcePolicyForProd(rawEnforce string, isProd bool) error {
 	return nil
 }
 
-func validatePolicyConfig(rawEnforce, rawTerms string, isProd bool) string {
+func validatePolicyConfig(rawEnforce, rawTerms, rawPrivacy string, isProd bool) (string, string) {
 	if err := checkEnforcePolicyForProd(rawEnforce, isProd); err != nil {
 		log.Fatalf("Fatal: %v", err)
 	}
-	return validateTermsHash(rawTerms, isPolicyEnforced(isProd))
+	enforced := isPolicyEnforced(isProd)
+	return validatePolicyHash("PW_TERMS", rawTerms, enforced), validatePolicyHash("PW_PRIVACY", rawPrivacy, enforced)
 }
 
-func validateTermsHash(rawTerms string, enforcePolicy bool) string {
-	clean := strings.ToLower(strings.TrimSpace(rawTerms))
+func validatePolicyHash(envName, rawHash string, enforcePolicy bool) string {
+	clean := strings.ToLower(strings.TrimSpace(rawHash))
 	if enforcePolicy && !controller.IsValidSHA256Hex(clean) {
-		log.Fatalf("Fatal: Policy enforcement is active (PRODUCTION_ENV or ENFORCE_POLICY) but PW_TERMS is missing or invalid SHA-256 hex.")
+		log.Fatalf("Fatal: Policy enforcement is active (PRODUCTION_ENV or ENFORCE_POLICY) but %s is missing or invalid SHA-256 hex.", envName)
 	}
 	if clean != "" && !controller.IsValidSHA256Hex(clean) {
-		log.Fatalf("Fatal: PW_TERMS is set but is not a valid 64-character hex SHA-256 digest.")
+		log.Fatalf("Fatal: %s is set but is not a valid 64-character hex SHA-256 digest.", envName)
 	}
 	return clean
 }
@@ -226,6 +227,9 @@ func addHandlers(r *gin.Engine, repo repository.Repository, authService *auth.Se
 	if rawTerms := strings.TrimSpace(os.Getenv("PW_TERMS")); rawTerms != "" {
 		ctrl.SetTermsHash(rawTerms)
 	}
+	if rawPrivacy := strings.TrimSpace(os.Getenv("PW_PRIVACY")); rawPrivacy != "" {
+		ctrl.SetPrivacyHash(rawPrivacy)
+	}
 	handler := handlers.NewHandler(ctrl, authService)
 	handler.SetReadOnly(isReadOnlyMode())
 	handler.RegisterRoutes(r)
@@ -291,7 +295,7 @@ func main() {
 	port := getEnv("PORT", "8080")
 	expectedOriginSecret := getEnv("EXPECTED_ORIGIN_SECRET", "")
 	validateExpectedOriginSecret(expectedOriginSecret, isProd)
-	validatePolicyConfig(os.Getenv("ENFORCE_POLICY"), os.Getenv("PW_TERMS"), isProd)
+	validatePolicyConfig(os.Getenv("ENFORCE_POLICY"), os.Getenv("PW_TERMS"), os.Getenv("PW_PRIVACY"), isProd)
 
 	authService := initJWTService(isProd)
 	repo := initDatabase(isProd)

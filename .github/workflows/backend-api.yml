@@ -105,6 +105,7 @@ jobs:
             -e POSTGRES_SSLMODE=disable \
             -e ENFORCE_POLICY=false \
             -e PW_TERMS=4906a573260b73ad9c9c5b95c7492cca669ce4354e91a7ba4383a955d85bfb80 \
+            -e PW_PRIVACY=a731e26873a4229a02f875965c59a4f7b5de6c029b7e24de6907ed5b9aa6a1a7 \
             backend-api:test
           for i in $(seq 1 30); do
             if curl -s -f -H "X-Client-ID: github-action" http://localhost:8080/api/v1/hello >/dev/null 2>&1; then

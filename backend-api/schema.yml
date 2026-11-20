@@ -556,13 +556,15 @@ paths:
     post:
       tags:
         - Authentication
-      summary: Record user acceptance of Privacy Policy, Terms of Use, and US consumer confirmation
+      summary: Record user acceptance of Privacy Policy, Terms of Use, and 18+ US adult consumer confirmation
       description: |
         Appends an active entry to the `policy_agreements` ledger recording client IP (`client_ip`),
-        timestamp (`agreed_at`), and the SHA-256 digest of the Terms of Use PDF (`terms_sha256`).
-        Requires `terms_approved`, `privacy_approved`, and `us_customer` to all be `true`, and requires
-        `terms_sha256` to match the server's configured `PW_TERMS` SHA-256 digest when policy enforcement
-        or `PW_TERMS` is configured. Permitted with a valid Bearer JWT whose `terms_approved` claim is `false`.
+        timestamp (`agreed_at`), the SHA-256 digest of the Terms of Use PDF (`terms_sha256`), and the
+        SHA-256 digest of the Privacy & Security Policy PDF (`privacy_sha256`).
+        Requires `terms_approved`, `privacy_approved`, and `us_adult_consumer_confirmed` to all be `true`,
+        and requires `terms_sha256` and `privacy_sha256` to match the server's configured `PW_TERMS` and
+        `PW_PRIVACY` SHA-256 digests when policy enforcement or those environment variables are configured.
+        Permitted with a valid Bearer JWT whose `terms_approved` claim is `false`.
       operationId: recordPolicyAgreement
       security:
         - BearerAuth: []
@@ -4444,8 +4446,9 @@ components:
       required:
         - terms_approved
         - privacy_approved
-        - us_customer
+        - us_adult_consumer_confirmed
         - terms_sha256
+        - privacy_sha256
       properties:
         terms_approved:
           type: boolean
@@ -4455,15 +4458,20 @@ components:
           type: boolean
           description: Confirmation that the user accepted the Privacy & Security Policy.
           example: true
-        us_customer:
+        us_adult_consumer_confirmed:
           type: boolean
-          description: Confirmation that the user is a customer in the United States.
+          description: Confirmation that the user is at least 18 years of age and a customer located in the United States.
           example: true
         terms_sha256:
           type: string
           pattern: '^[0-9a-f]{64}$'
           description: Lowercase hexadecimal SHA-256 checksum of the static `/terms-of-use.pdf` document presented to the user.
-          example: "b08f3d8b1cd44544888a78ed13316c0910725944bc46808ab542e36d9b2fd84c"
+          example: "4906a573260b73ad9c9c5b95c7492cca669ce4354e91a7ba4383a955d85bfb80"
+        privacy_sha256:
+          type: string
+          pattern: '^[0-9a-f]{64}$'
+          description: Lowercase hexadecimal SHA-256 checksum of the static `/privacy-and-security-policy.pdf` document presented to the user.
+          example: "a731e26873a4229a02f875965c59a4f7b5de6c029b7e24de6907ed5b9aa6a1a7"
 
     PolicyAgreementResponse:
       type: object
@@ -4471,9 +4479,10 @@ components:
         - id
         - user_id
         - terms_sha256
+        - privacy_sha256
         - terms_approved
         - privacy_approved
-        - us_customer
+        - us_adult_consumer_confirmed
         - active
         - client_ip
         - agreed_at
@@ -4491,14 +4500,18 @@ components:
         terms_sha256:
           type: string
           description: SHA-256 digest of the Terms of Use PDF approved by the user.
-          example: "b08f3d8b1cd44544888a78ed13316c0910725944bc46808ab542e36d9b2fd84c"
+          example: "4906a573260b73ad9c9c5b95c7492cca669ce4354e91a7ba4383a955d85bfb80"
+        privacy_sha256:
+          type: string
+          description: SHA-256 digest of the Privacy & Security Policy PDF approved by the user.
+          example: "a731e26873a4229a02f875965c59a4f7b5de6c029b7e24de6907ed5b9aa6a1a7"
         terms_approved:
           type: boolean
           example: true
         privacy_approved:
           type: boolean
           example: true
-        us_customer:
+        us_adult_consumer_confirmed:
           type: boolean
           example: true
         active:

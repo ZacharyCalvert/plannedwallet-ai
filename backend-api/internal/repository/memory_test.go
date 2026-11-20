@@ -793,12 +793,12 @@ func TestMemoryRepo_PolicyAgreementLedger(t *testing.T) {
 		t.Fatalf("expected ErrNotFound before any agreement, got %v", err)
 	}
 	_ = repo.CreatePolicyAgreement(ctx, &models.PolicyAgreement{
-		ID: "pa-1", UserID: "pa-u1", TermsSHA256: hash1, TermsApproved: true,
-		PrivacyApproved: true, USCustomer: true, Active: true, ClientIP: "198.51.100.7", AgreedAt: now,
+		ID: "pa-1", UserID: "pa-u1", TermsSHA256: hash1, PrivacySHA256: hash2, TermsApproved: true,
+		PrivacyApproved: true, USAdultConsumerConfirmed: true, Active: true, ClientIP: "198.51.100.7", AgreedAt: now,
 	})
 	_ = repo.CreatePolicyAgreement(ctx, &models.PolicyAgreement{
-		ID: "pa-2", UserID: "pa-u1", TermsSHA256: hash2, TermsApproved: true,
-		PrivacyApproved: true, USCustomer: true, Active: true, ClientIP: "198.51.100.8", AgreedAt: now.Add(time.Second),
+		ID: "pa-2", UserID: "pa-u1", TermsSHA256: hash2, PrivacySHA256: hash1, TermsApproved: true,
+		PrivacyApproved: true, USAdultConsumerConfirmed: true, Active: true, ClientIP: "198.51.100.8", AgreedAt: now.Add(time.Second),
 	})
 	active, err := repo.GetActivePolicyAgreement(ctx, "pa-u1")
 	if err != nil || active.ID != "pa-2" || active.ClientIP != "198.51.100.8" {

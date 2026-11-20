@@ -31,51 +31,67 @@ func validatePolicyAgreementFlags(req models.PolicyAgreementRequest) error {
 	if req.PrivacyApproved == nil || !*req.PrivacyApproved {
 		return NewAppError(http.StatusBadRequest, "POLICY_PRIVACY_NOT_APPROVED", "Privacy Policy must be approved.")
 	}
-	if req.USCustomer == nil || !*req.USCustomer {
-		return NewAppError(http.StatusBadRequest, "POLICY_US_CUSTOMER_REQUIRED", "You must confirm you are a customer in the United States.")
+	if req.USAdultConsumerConfirmed == nil || !*req.USAdultConsumerConfirmed {
+		return NewAppError(http.StatusBadRequest, "POLICY_US_ADULT_CONSUMER_REQUIRED", "You must confirm you are at least 18 years of age and a customer in the United States.")
 	}
 	return nil
 }
 
-func (c *Controller) validatePolicyAgreementRequest(req models.PolicyAgreementRequest) (string, error) {
-	if err := validatePolicyAgreementFlags(req); err != nil {
-		return "", err
-	}
-	sha := strings.ToLower(strings.TrimSpace(req.TermsSHA256))
+func validatePolicyDigest(raw, expected, invalidCode, mismatchCode, fieldLabel, docLabel string) (string, error) {
+	sha := strings.ToLower(strings.TrimSpace(raw))
 	if !IsValidSHA256Hex(sha) {
-		return "", NewAppError(http.StatusBadRequest, "INVALID_TERMS_HASH", "terms_sha256 must be a valid 64-character hex SHA-256 digest.")
+		return "", NewAppError(http.StatusBadRequest, invalidCode, fieldLabel+" must be a valid 64-character hex SHA-256 digest.")
 	}
-	if c.termsHash != "" && !strings.EqualFold(sha, c.termsHash) {
-		return "", NewAppError(http.StatusBadRequest, "TERMS_HASH_MISMATCH", "Provided terms_sha256 does not match the current Terms of Use policy.")
+	if expected != "" && !strings.EqualFold(sha, expected) {
+		return "", NewAppError(http.StatusBadRequest, mismatchCode, "Provided "+fieldLabel+" does not match the current "+docLabel+" policy.")
 	}
 	return sha, nil
 }
 
+func (c *Controller) validatePolicyAgreementRequest(req models.PolicyAgreementRequest) (string, string, error) {
+	if err := validatePolicyAgreementFlags(req); err != nil {
+		return "", "", err
+	}
+	termsSha, err := validatePolicyDigest(req.TermsSHA256, c.termsHash, "INVALID_TERMS_HASH", "TERMS_HASH_MISMATCH", "terms_sha256", "Terms of Use")
+	if err != nil {
+		return "", "", err
+	}
+	privacySha, err := validatePolicyDigest(req.PrivacySHA256, c.privacyHash, "INVALID_PRIVACY_HASH", "PRIVACY_HASH_MISMATCH", "privacy_sha256", "Privacy & Security")
+	if err != nil {
+		return "", "", err
+	}
+	return termsSha, privacySha, nil
+}
+
 func toPolicyAgreementResponse(a *models.PolicyAgreement) *models.PolicyAgreementResponse {
 	return &models.PolicyAgreementResponse{
-		ID:              a.ID,
-		UserID:          a.UserID,
-		TermsSHA256:     a.TermsSHA256,
-		TermsApproved:   a.TermsApproved,
-		PrivacyApproved: a.PrivacyApproved,
-		USCustomer:      a.USCustomer,
-		Active:          a.Active,
-		ClientIP:        a.ClientIP,
-		AgreedAt:        a.AgreedAt,
+		ID:                       a.ID,
+		UserID:                   a.UserID,
+		TermsSHA256:              a.TermsSHA256,
+		PrivacySHA256:            a.PrivacySHA256,
+		TermsApproved:            a.TermsApproved,
+		PrivacyApproved:          a.PrivacyApproved,
+		USAdultConsumerConfirmed: a.USAdultConsumerConfirmed,
+		Active:                   a.Active,
+		ClientIP:                 a.ClientIP,
+		AgreedAt:                 a.AgreedAt,
 	}
 }
 
-func agreementSatisfiesPolicy(a *models.PolicyAgreement, expectedHash string) bool {
+func agreementSatisfiesPolicy(a *models.PolicyAgreement, expectedTermsHash, expectedPrivacyHash string) bool {
 	if a == nil || !a.Active {
 		return false
 	}
-	if !a.TermsApproved || !a.PrivacyApproved || !a.USCustomer {
+	if !a.TermsApproved || !a.PrivacyApproved || !a.USAdultConsumerConfirmed {
 		return false
 	}
-	return expectedHash == "" || strings.EqualFold(a.TermsSHA256, expectedHash)
+	if expectedTermsHash != "" && !strings.EqualFold(a.TermsSHA256, expectedTermsHash) {
+		return false
+	}
+	return expectedPrivacyHash == "" || strings.EqualFold(a.PrivacySHA256, expectedPrivacyHash)
 }
 
-// IsUserPolicyApproved verifies an active ledger entry matching the current policy hash exists for userID.
+// IsUserPolicyApproved verifies an active ledger entry matching the current policy hashes exists for userID.
 func (c *Controller) IsUserPolicyApproved(ctx context.Context, userID string) (bool, error) {
 	active, err := c.repo.GetActivePolicyAgreement(ctx, userID)
 	if err != nil {
@@ -84,7 +100,7 @@ func (c *Controller) IsUserPolicyApproved(ctx context.Context, userID string) (b
 		}
 		return false, err
 	}
-	return agreementSatisfiesPolicy(active, c.termsHash), nil
+	return agreementSatisfiesPolicy(active, c.termsHash, c.privacyHash), nil
 }
 
 func (c *Controller) resolveTokenTermsApproved(ctx context.Context, userID string) (bool, error) {
@@ -94,7 +110,7 @@ func (c *Controller) resolveTokenTermsApproved(ctx context.Context, userID strin
 	return c.IsUserPolicyApproved(ctx, userID)
 }
 
-// RecordPolicyAgreement records an active policy and US-customer agreement in the ledger.
+// RecordPolicyAgreement records an active policy and 18+ US-customer agreement in the ledger.
 func (c *Controller) RecordPolicyAgreement(
 	ctx context.Context,
 	userID, targetUsername, clientIP string,
@@ -104,7 +120,7 @@ func (c *Controller) RecordPolicyAgreement(
 	if err != nil {
 		return nil, err
 	}
-	sha, err := c.validatePolicyAgreementRequest(req)
+	termsSha, privacySha, err := c.validatePolicyAgreementRequest(req)
 	if err != nil {
 		return nil, err
 	}
@@ -113,21 +129,22 @@ func (c *Controller) RecordPolicyAgreement(
 		ip = "unknown"
 	}
 	entry := &models.PolicyAgreement{
-		ID:              uuid.New().String(),
-		UserID:          user.ID,
-		TermsSHA256:     sha,
-		TermsApproved:   true,
-		PrivacyApproved: true,
-		USCustomer:      true,
-		Active:          true,
-		ClientIP:        ip,
-		AgreedAt:        time.Now().UTC(),
+		ID:                       uuid.New().String(),
+		UserID:                   user.ID,
+		TermsSHA256:              termsSha,
+		PrivacySHA256:            privacySha,
+		TermsApproved:            true,
+		PrivacyApproved:          true,
+		USAdultConsumerConfirmed: true,
+		Active:                   true,
+		ClientIP:                 ip,
+		AgreedAt:                 time.Now().UTC(),
 	}
 	if err := c.repo.CreatePolicyAgreement(ctx, entry); err != nil {
 		trace.LogError(ctx, err, "Failed to persist policy agreement for user %s", user.Username)
 		return nil, NewAppError(http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to record policy agreement.")
 	}
-	trace.LogInfo(ctx, "Recorded active policy agreement for user %s (ip=%s, sha256=%s)", user.Username, ip, sha)
+	trace.LogInfo(ctx, "Recorded active policy agreement for user %s (ip=%s, terms=%s, privacy=%s)", user.Username, ip, termsSha, privacySha)
 	return toPolicyAgreementResponse(entry), nil
 }
 

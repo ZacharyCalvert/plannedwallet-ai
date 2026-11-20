@@ -32,6 +32,14 @@ def test_terms_of_use_pdf_served_and_matches_pw_terms(raw_context: APIRequestCon
     assert digest == "4906a573260b73ad9c9c5b95c7492cca669ce4354e91a7ba4383a955d85bfb80"
 
 
+def test_privacy_policy_pdf_served_and_matches_pw_privacy(raw_context: APIRequestContext):
+    """Verify /privacy-and-security-policy.pdf is served as a valid PDF matching docker-compose PW_PRIVACY SHA-256."""
+    body = load_frontend_pdf_bytes(raw_context, "privacy-and-security-policy.pdf")
+    assert body.startswith(b"%PDF-"), "Expected valid PDF signature"
+    digest = hashlib.sha256(body).hexdigest()
+    assert digest == "a731e26873a4229a02f875965c59a4f7b5de6c029b7e24de6907ed5b9aa6a1a7"
+
+
 def test_get_version_endpoint(raw_context: APIRequestContext):
     """Verify GET /api/v1/version returns stamped build provenance metadata without caching."""
     res = raw_context.get(

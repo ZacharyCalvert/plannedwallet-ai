@@ -402,6 +402,7 @@ def test_policy_agreement_ledger_lifecycle_and_validation(
 ):
     """Verify policy_agreements ledger captures client IP, timestamp, SHA-256 validation, and cascade cleanup."""
     terms_sha256 = hashlib.sha256(load_frontend_pdf_bytes(raw_context, "terms-of-use.pdf")).hexdigest()
+    privacy_sha256 = hashlib.sha256(load_frontend_pdf_bytes(raw_context, "privacy-and-security-policy.pdf")).hexdigest()
 
     user_a = generate_user_data(prefix="pol_a")
     user_b = generate_user_data(prefix="pol_b")
@@ -420,32 +421,48 @@ def test_policy_agreement_ledger_lifecycle_and_validation(
     hdr_a = {"Authorization": f"Bearer {tok_a}"}
     hdr_b = {"Authorization": f"Bearer {tok_b}"}
 
-    # Mismatched terms_sha256 and missing US residency must fail cleanly with 400
+    # Mismatched terms_sha256, mismatched privacy_sha256, and missing 18+ US adult consumer confirmation must fail cleanly with 400
     bad_hash = api_context.post(
         f"/api/v1/users/{user_a['username']}/policy-agreements",
         data={
             "terms_approved": True,
             "privacy_approved": True,
-            "us_customer": True,
+            "us_adult_consumer_confirmed": True,
             "terms_sha256": "0" * 64,
+            "privacy_sha256": privacy_sha256,
         },
         headers=hdr_a,
     )
     assert bad_hash.status == 400
     assert bad_hash.json().get("error") == "TERMS_HASH_MISMATCH"
 
+    bad_privacy_hash = api_context.post(
+        f"/api/v1/users/{user_a['username']}/policy-agreements",
+        data={
+            "terms_approved": True,
+            "privacy_approved": True,
+            "us_adult_consumer_confirmed": True,
+            "terms_sha256": terms_sha256,
+            "privacy_sha256": "0" * 64,
+        },
+        headers=hdr_a,
+    )
+    assert bad_privacy_hash.status == 400
+    assert bad_privacy_hash.json().get("error") == "PRIVACY_HASH_MISMATCH"
+
     no_us = api_context.post(
         f"/api/v1/users/{user_a['username']}/policy-agreements",
         data={
             "terms_approved": True,
             "privacy_approved": True,
-            "us_customer": False,
+            "us_adult_consumer_confirmed": False,
             "terms_sha256": terms_sha256,
+            "privacy_sha256": privacy_sha256,
         },
         headers=hdr_a,
     )
     assert no_us.status == 400
-    assert no_us.json().get("error") == "POLICY_US_CUSTOMER_REQUIRED"
+    assert no_us.json().get("error") == "POLICY_US_ADULT_CONSUMER_REQUIRED"
 
     # Cross-user submission must return 403 FORBIDDEN
     cross_user = api_context.post(
@@ -453,8 +470,9 @@ def test_policy_agreement_ledger_lifecycle_and_validation(
         data={
             "terms_approved": True,
             "privacy_approved": True,
-            "us_customer": True,
+            "us_adult_consumer_confirmed": True,
             "terms_sha256": terms_sha256,
+            "privacy_sha256": privacy_sha256,
         },
         headers=hdr_a,
     )
@@ -466,17 +484,19 @@ def test_policy_agreement_ledger_lifecycle_and_validation(
         data={
             "terms_approved": True,
             "privacy_approved": True,
-            "us_customer": True,
+            "us_adult_consumer_confirmed": True,
             "terms_sha256": terms_sha256,
+            "privacy_sha256": privacy_sha256,
         },
         headers=hdr_a,
     )
     assert first.status == 201, f"Expected 201, got {first.status}: {first.text()}"
     rec1 = first.json()
     assert rec1["terms_sha256"] == terms_sha256
+    assert rec1["privacy_sha256"] == privacy_sha256
     assert rec1["terms_approved"] is True
     assert rec1["privacy_approved"] is True
-    assert rec1["us_customer"] is True
+    assert rec1["us_adult_consumer_confirmed"] is True
     assert rec1["active"] is True
     assert rec1.get("client_ip")
     assert rec1.get("agreed_at")
@@ -487,8 +507,9 @@ def test_policy_agreement_ledger_lifecycle_and_validation(
         data={
             "terms_approved": True,
             "privacy_approved": True,
-            "us_customer": True,
+            "us_adult_consumer_confirmed": True,
             "terms_sha256": terms_sha256,
+            "privacy_sha256": privacy_sha256,
         },
         headers=hdr_a,
     )

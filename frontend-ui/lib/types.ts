@@ -14,17 +14,19 @@ export interface UserProfile {
 export interface PolicyAgreementRequest {
   terms_approved: boolean;
   privacy_approved: boolean;
-  us_customer: boolean;
+  us_adult_consumer_confirmed: boolean;
   terms_sha256: string;
+  privacy_sha256: string;
 }
 
 export interface PolicyAgreement {
   id: string;
   user_id: string;
   terms_sha256: string;
+  privacy_sha256: string;
   terms_approved: boolean;
   privacy_approved: boolean;
-  us_customer: boolean;
+  us_adult_consumer_confirmed: boolean;
   active: boolean;
   client_ip: string;
   agreed_at: string;

@@ -50,6 +50,7 @@ type Controller struct {
 	requireCaptcha bool
 	enforcePolicy  bool
 	termsHash      string
+	privacyHash    string
 }
 
 func NewController(repo repository.Repository, authService *auth.Service) *Controller {
@@ -84,6 +85,16 @@ func (c *Controller) SetTermsHash(sha string) {
 // TermsHash returns the configured SHA-256 hex digest of the Terms of Use PDF.
 func (c *Controller) TermsHash() string {
 	return c.termsHash
+}
+
+// SetPrivacyHash sets the active SHA-256 hex digest of the Privacy & Security Policy PDF (PW_PRIVACY).
+func (c *Controller) SetPrivacyHash(sha string) {
+	c.privacyHash = strings.ToLower(strings.TrimSpace(sha))
+}
+
+// PrivacyHash returns the configured SHA-256 hex digest of the Privacy & Security Policy PDF.
+func (c *Controller) PrivacyHash() string {
+	return c.privacyHash
 }
 
 // HealthCheck verifies that the backing repository/database connection is active and responsive.

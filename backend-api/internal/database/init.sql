@@ -192,13 +192,18 @@ CREATE TABLE IF NOT EXISTS policy_agreements (
     id UUID PRIMARY KEY,
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     terms_sha256 VARCHAR(64) NOT NULL,
+    privacy_sha256 VARCHAR(64) NOT NULL DEFAULT '',
     terms_approved BOOLEAN NOT NULL DEFAULT FALSE,
     privacy_approved BOOLEAN NOT NULL DEFAULT FALSE,
-    us_customer BOOLEAN NOT NULL DEFAULT FALSE,
+    us_adult_consumer_confirmed BOOLEAN NOT NULL DEFAULT FALSE,
     active BOOLEAN NOT NULL DEFAULT TRUE,
     client_ip VARCHAR(64) NOT NULL,
     agreed_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+ALTER TABLE policy_agreements ADD COLUMN IF NOT EXISTS privacy_sha256 VARCHAR(64) NOT NULL DEFAULT '';
+ALTER TABLE policy_agreements ADD COLUMN IF NOT EXISTS us_adult_consumer_confirmed BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE policy_agreements DROP COLUMN IF EXISTS us_customer;
 
 CREATE INDEX IF NOT EXISTS idx_policy_agreements_user_active ON policy_agreements(user_id, active);
 CREATE INDEX IF NOT EXISTS idx_policy_agreements_user_agreed_at ON policy_agreements(user_id, agreed_at DESC);

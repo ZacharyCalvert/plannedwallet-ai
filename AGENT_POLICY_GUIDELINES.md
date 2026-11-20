@@ -276,21 +276,21 @@ After generating the PDFs, inspect every rendered page to ensure:
 
 ---
 
-## 6. Critical Post-Update Checksum Sync (`PW_TERMS`)
+## 6. Critical Post-Update Checksum Sync (`PW_TERMS` & `PW_PRIVACY`)
 
-Because `backend-api` enforces policy acceptance against the exact SHA-256 checksum of `frontend-ui/public/terms-of-use.pdf` (`PW_TERMS`), **regenerating `terms-of-use.pdf` changes its SHA-256 hash** and requires updating every `PW_TERMS` reference before merging:
+Because `backend-api` enforces policy acceptance against the exact SHA-256 checksums of `frontend-ui/public/terms-of-use.pdf` (`PW_TERMS`) and `frontend-ui/public/privacy-and-security-policy.pdf` (`PW_PRIVACY`), **regenerating either PDF changes its SHA-256 hash** and requires updating every `PW_TERMS` / `PW_PRIVACY` reference before merging:
 
-1. **Compute the new 64-character lowercase SHA-256 hex digest**:
+1. **Compute the new 64-character lowercase SHA-256 hex digests**:
    ```bash
-   shasum -a 256 frontend-ui/public/terms-of-use.pdf
+   shasum -a 256 frontend-ui/public/terms-of-use.pdf frontend-ui/public/privacy-and-security-policy.pdf
    ```
-2. **Update every repository reference holding the old hash**:
-   - `docker-compose.yml` (`PW_TERMS` default on `backend-api`)
-   - `.github/workflows/backend-api.yml` (`-e PW_TERMS=...` in `test-and-build`)
-   - `itests/test_features.py` (`assert digest == "..."` in `test_terms_of_use_pdf_served_and_matches_pw_terms`)
+2. **Update every repository reference holding the old hashes**:
+   - `docker-compose.yml` (`PW_TERMS` and `PW_PRIVACY` defaults on `backend-api`)
+   - `.github/workflows/backend-api.yml` (`-e PW_TERMS=...` and `-e PW_PRIVACY=...` in `test-and-build`)
+   - `itests/test_features.py` (`assert digest == "..."` in `test_terms_of_use_pdf_served_and_matches_pw_terms` and `test_privacy_policy_pdf_served_and_matches_pw_privacy`)
    - *(Optional / informational)* `.github/scripts/test_verify_ecs_taskdef_env.py`, `backend-api/schema.yml` examples, and handler unit test sample hashes if you wish to keep fixture hashes aligned.
 3. **Update Live AWS Environments (IaC / SSM / ECS Task Definition)**:
-   - Update `PW_TERMS` in `stage` and `prod` (Terraform / SSM Parameter Store) simultaneously with deploying the updated frontend so users are cleanly prompted to re-accept the updated Terms of Use (`403 POLICY_APPROVAL_REQUIRED` -> modal prompt -> `policy_agreements` new active row).
+   - Update `PW_TERMS` and `PW_PRIVACY` in `stage` and `prod` (Terraform / SSM Parameter Store) simultaneously with deploying the updated frontend so users are cleanly prompted to re-accept the updated policies (`403 POLICY_APPROVAL_REQUIRED` -> modal prompt -> `policy_agreements` new active row).
 4. **Verify End-to-End Before Committing**:
    ```bash
    make -C frontend-ui test     # verifies policyAgreement.test.ts SHA-256 computation

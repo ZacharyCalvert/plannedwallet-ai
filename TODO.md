@@ -59,9 +59,13 @@ Snapshot extraction of gold / silver / stocks / gas
 Add perspectives - graphical trending of net worth
 
 Production ready:
+- support email + support form -> "support@plannedwallet.com"
+- add "download all data" json and CSV zip exporter
 - legal disclaimer
+- Add aget of consent confirmation: "I confirm that I am at least 18 years of age, am a resident of the United States, and agree to the Terms of Use and Privacy & Security Policy."
 - Establish means to observe activity / record counts
 - Calculate space, size, cost (confirm limits for usage planning)
+- Regional Privacy Rights (CCPA/CPRA & GDPR): Even as a small app, if you have users in California, Europe, or states with comprehensive privacy laws (like Texas, Virginia, or Colorado), include sections detailing users' rights to access, export (portability), correct, and delete their data, along with an email address or form to submit those requests.
 
 Premium features:
 earmark (capture bill, mark it against an account over time)

@@ -296,11 +296,17 @@ func TestIsPolicyEnforcedAndValidateTermsHash(t *testing.T) {
 		t.Fatal("expected policy enforcement on when ENFORCE_POLICY=true")
 	}
 	valid := "B08F3D8B1CD44544888A78ED13316C0910725944BC46808AB542E36D9B2FD84C"
-	if got := validateTermsHash(valid, true); got != strings.ToLower(valid) {
+	if got := validatePolicyHash("PW_TERMS", valid, true); got != strings.ToLower(valid) {
 		t.Fatalf("expected lowercased valid PW_TERMS, got %q", got)
 	}
-	if got := validateTermsHash("", false); got != "" {
+	if got := validatePolicyHash("PW_PRIVACY", valid, true); got != strings.ToLower(valid) {
+		t.Fatalf("expected lowercased valid PW_PRIVACY, got %q", got)
+	}
+	if got := validatePolicyHash("PW_TERMS", "", false); got != "" {
 		t.Fatalf("expected empty PW_TERMS allowed when unenforced, got %q", got)
+	}
+	if got := validatePolicyHash("PW_PRIVACY", "", false); got != "" {
+		t.Fatalf("expected empty PW_PRIVACY allowed when unenforced, got %q", got)
 	}
 	if err := checkEnforcePolicyForProd("", true); err == nil {
 		t.Fatal("expected error when PRODUCTION_ENV=true and ENFORCE_POLICY is empty")

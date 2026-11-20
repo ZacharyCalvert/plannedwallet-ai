@@ -1000,8 +1000,10 @@ func TestPolicyAgreementLifecycleAndEnforcement(t *testing.T) {
 	ctrl, repo := setupController()
 	ctx := context.Background()
 	termsHash := strings.Repeat("c", 64)
+	privacyHash := strings.Repeat("e", 64)
 	ctrl.SetEnforcePolicy(true)
 	ctrl.SetTermsHash(termsHash)
+	ctrl.SetPrivacyHash(privacyHash)
 	bTrue, bFalse := true, false
 
 	u, _ := ctrl.RegisterUser(ctx, models.UserRegistrationRequest{Username: "policy_alice", Email: "pa@test.com", Password: "ValidPass123!"})
@@ -1015,20 +1017,25 @@ func TestPolicyAgreementLifecycleAndEnforcement(t *testing.T) {
 	}
 
 	_, err = ctrl.RecordPolicyAgreement(ctx, u.ID, "policy_alice", "203.0.113.42", models.PolicyAgreementRequest{
-		TermsApproved: &bTrue, PrivacyApproved: &bTrue, USCustomer: &bFalse, TermsSHA256: termsHash,
+		TermsApproved: &bTrue, PrivacyApproved: &bTrue, USAdultConsumerConfirmed: &bFalse, TermsSHA256: termsHash, PrivacySHA256: privacyHash,
 	})
 	assertAppErrorStatus(t, err, http.StatusBadRequest)
 
 	_, err = ctrl.RecordPolicyAgreement(ctx, u.ID, "policy_alice", "203.0.113.42", models.PolicyAgreementRequest{
-		TermsApproved: &bTrue, PrivacyApproved: &bTrue, USCustomer: &bTrue, TermsSHA256: strings.Repeat("d", 64),
+		TermsApproved: &bTrue, PrivacyApproved: &bTrue, USAdultConsumerConfirmed: &bTrue, TermsSHA256: strings.Repeat("d", 64), PrivacySHA256: privacyHash,
+	})
+	assertAppErrorStatus(t, err, http.StatusBadRequest)
+
+	_, err = ctrl.RecordPolicyAgreement(ctx, u.ID, "policy_alice", "203.0.113.42", models.PolicyAgreementRequest{
+		TermsApproved: &bTrue, PrivacyApproved: &bTrue, USAdultConsumerConfirmed: &bTrue, TermsSHA256: termsHash, PrivacySHA256: strings.Repeat("f", 64),
 	})
 	assertAppErrorStatus(t, err, http.StatusBadRequest)
 
 	agreed, err := ctrl.RecordPolicyAgreement(ctx, u.ID, "policy_alice", "203.0.113.42", models.PolicyAgreementRequest{
-		TermsApproved: &bTrue, PrivacyApproved: &bTrue, USCustomer: &bTrue, TermsSHA256: strings.ToUpper(termsHash),
+		TermsApproved: &bTrue, PrivacyApproved: &bTrue, USAdultConsumerConfirmed: &bTrue, TermsSHA256: strings.ToUpper(termsHash), PrivacySHA256: strings.ToUpper(privacyHash),
 	})
 	ok, _ := ctrl.IsUserPolicyApproved(ctx, u.ID)
-	if err != nil || !agreed.Active || agreed.ClientIP != "203.0.113.42" || !ok {
+	if err != nil || !agreed.Active || !agreed.USAdultConsumerConfirmed || agreed.PrivacySHA256 != privacyHash || agreed.ClientIP != "203.0.113.42" || !ok {
 		t.Fatalf("expected active agreement recorded, got %+v err=%v", agreed, err)
 	}
 	_ = repo.DeactivateAllPolicyAgreements(ctx)

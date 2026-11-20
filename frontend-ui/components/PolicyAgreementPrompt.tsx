@@ -2,7 +2,7 @@
 
 import { FormEvent, useState } from 'react';
 import { UserSession } from '../lib/types';
-import { fetchTermsPdfSha256 } from '../lib/policyAgreement';
+import { fetchPrivacyPdfSha256, fetchTermsPdfSha256 } from '../lib/policyAgreement';
 import { refreshToken, submitPolicyAgreement } from '../lib/api';
 
 interface PolicyAgreementPromptProps {
@@ -34,12 +34,16 @@ export function PolicyAgreementPrompt({
     setError('');
     setSubmitting(true);
     try {
-      const termsSha256 = await fetchTermsPdfSha256();
+      const [termsSha256, privacySha256] = await Promise.all([
+        fetchTermsPdfSha256(),
+        fetchPrivacyPdfSha256(),
+      ]);
       await submitPolicyAgreement(session.token, session.username, {
         terms_approved: true,
         privacy_approved: true,
-        us_customer: true,
+        us_adult_consumer_confirmed: true,
         terms_sha256: termsSha256,
+        privacy_sha256: privacySha256,
       });
       const nextToken = await refreshToken(session.username, session.token);
       onApproved(nextToken);
@@ -57,7 +61,7 @@ export function PolicyAgreementPrompt({
           <h2 className="policy-prompt-title">Policy &amp; Eligibility Acceptance Required</h2>
           <p className="policy-prompt-description">
             Before accessing or modifying account data, please review and agree to the current
-            Terms of Use and Privacy &amp; Security Policy, and confirm U.S. consumer eligibility.
+            Terms of Use and Privacy &amp; Security Policy, and confirm 18+ U.S. consumer eligibility.
           </p>
 
           <form onSubmit={handleSubmit} className="auth-form">
@@ -111,7 +115,7 @@ export function PolicyAgreementPrompt({
                   onChange={(e) => setUsCustomer(e.target.checked)}
                   disabled={submitting}
                 />
-                <span>I am a consumer in the United States.</span>
+                <span>I am at least 18 years of age and a consumer in the United States.</span>
               </label>
             </div>
 

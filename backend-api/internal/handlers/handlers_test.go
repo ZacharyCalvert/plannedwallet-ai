@@ -1142,7 +1142,7 @@ func TestGetAndDeleteUserEndpoint(t *testing.T) {
 	}
 }
 
-func setupPolicyTestRouter(termsHash string) (*gin.Engine, repository.Repository, *auth.Service) {
+func setupPolicyTestRouter(termsHash, privacyHash string) (*gin.Engine, repository.Repository, *auth.Service) {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
 	r.Use(trace.Middleware(), cors.Middleware(), gin.Recovery())
@@ -1152,6 +1152,7 @@ func setupPolicyTestRouter(termsHash string) (*gin.Engine, repository.Repository
 	ctrl := controller.NewController(repo, authService)
 	ctrl.SetEnforcePolicy(true)
 	ctrl.SetTermsHash(termsHash)
+	ctrl.SetPrivacyHash(privacyHash)
 	handlers.NewHandler(ctrl, authService).RegisterRoutes(r)
 	return r, repo, authService
 }
@@ -1168,8 +1169,9 @@ func assertTokenTermsClaim(t *testing.T, svc *auth.Service, token string, expect
 }
 
 func TestPolicyAgreementAndEnforcementEndpoints(t *testing.T) {
-	hash := "b08f3d8b1cd44544888a78ed13316c0910725944bc46808ab542e36d9b2fd84c"
-	r, repo, svc := setupPolicyTestRouter(hash)
+	termsHash := "b08f3d8b1cd44544888a78ed13316c0910725944bc46808ab542e36d9b2fd84c"
+	privacyHash := "a731e26873a4229a02f875965c59a4f7b5de6c029b7e24de6907ed5b9aa6a1a7"
+	r, repo, svc := setupPolicyTestRouter(termsHash, privacyHash)
 	tok := registerAndGetToken(t, r, "pol_u", "polu@example.com", "Password123!")
 	assertTokenTermsClaim(t, svc, tok, false)
 
@@ -1177,11 +1179,15 @@ func TestPolicyAgreementAndEnforcementEndpoints(t *testing.T) {
 	if wBlocked.Code != http.StatusForbidden || !strings.Contains(wBlocked.Body.String(), "POLICY_APPROVAL_REQUIRED") {
 		t.Fatalf("expected 403 POLICY_APPROVAL_REQUIRED, got %d: %s", wBlocked.Code, wBlocked.Body.String())
 	}
-	badBody := map[string]any{"terms_approved": true, "privacy_approved": true, "us_customer": true, "terms_sha256": strings.Repeat("0", 64)}
-	if wBad := doAuthedJSON(t, r, http.MethodPost, "/api/v1/users/pol_u/policy-agreements", tok, badBody); wBad.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400 on mismatched SHA-256, got %d: %s", wBad.Code, wBad.Body.String())
+	badTerms := map[string]any{"terms_approved": true, "privacy_approved": true, "us_adult_consumer_confirmed": true, "terms_sha256": strings.Repeat("0", 64), "privacy_sha256": privacyHash}
+	if wBad := doAuthedJSON(t, r, http.MethodPost, "/api/v1/users/pol_u/policy-agreements", tok, badTerms); wBad.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 on mismatched terms SHA-256, got %d: %s", wBad.Code, wBad.Body.String())
 	}
-	goodBody := map[string]any{"terms_approved": true, "privacy_approved": true, "us_customer": true, "terms_sha256": hash}
+	badPrivacy := map[string]any{"terms_approved": true, "privacy_approved": true, "us_adult_consumer_confirmed": true, "terms_sha256": termsHash, "privacy_sha256": strings.Repeat("0", 64)}
+	if wBad := doAuthedJSON(t, r, http.MethodPost, "/api/v1/users/pol_u/policy-agreements", tok, badPrivacy); wBad.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 on mismatched privacy SHA-256, got %d: %s", wBad.Code, wBad.Body.String())
+	}
+	goodBody := map[string]any{"terms_approved": true, "privacy_approved": true, "us_adult_consumer_confirmed": true, "terms_sha256": termsHash, "privacy_sha256": privacyHash}
 	if wOK := doAuthedJSON(t, r, http.MethodPost, "/api/v1/users/pol_u/policy-agreements", tok, goodBody); wOK.Code != http.StatusCreated {
 		t.Fatalf("expected 201 recording policy agreement, got %d: %s", wOK.Code, wOK.Body.String())
 	}
@@ -1202,9 +1208,9 @@ func TestPolicyAgreementAndEnforcementEndpoints(t *testing.T) {
 	}
 }
 
-func postPolicyWithOriginViewerIP(r *gin.Engine, tok, username, hash, headerVal string) models.PolicyAgreementResponse {
+func postPolicyWithOriginViewerIP(r *gin.Engine, tok, username, termsHash, privacyHash, headerVal string) models.PolicyAgreementResponse {
 	payload, _ := json.Marshal(map[string]any{
-		"terms_approved": true, "privacy_approved": true, "us_customer": true, "terms_sha256": hash,
+		"terms_approved": true, "privacy_approved": true, "us_adult_consumer_confirmed": true, "terms_sha256": termsHash, "privacy_sha256": privacyHash,
 	})
 	req := newTestRequest(http.MethodPost, "/api/v1/users/"+username+"/policy-agreements", bytes.NewReader(payload))
 	req.RemoteAddr = "10.0.0.12:443"
@@ -1219,7 +1225,8 @@ func postPolicyWithOriginViewerIP(r *gin.Engine, tok, username, hash, headerVal 
 }
 
 func TestRecordPolicyAgreement_ResolvesOriginViewerIP(t *testing.T) {
-	hash := "b08f3d8b1cd44544888a78ed13316c0910725944bc46808ab542e36d9b2fd84c"
+	termsHash := "b08f3d8b1cd44544888a78ed13316c0910725944bc46808ab542e36d9b2fd84c"
+	privacyHash := "a731e26873a4229a02f875965c59a4f7b5de6c029b7e24de6907ed5b9aa6a1a7"
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
 	var verifiedOrigin bool
@@ -1233,28 +1240,29 @@ func TestRecordPolicyAgreement_ResolvesOriginViewerIP(t *testing.T) {
 	captcha.SetCustomStore(captcha.NewRepoStore(repo))
 	svc := auth.NewService("test-secret-key-12345", auth.DefaultExpirationSeconds)
 	ctrl := controller.NewController(repo, svc)
-	ctrl.SetTermsHash(hash)
+	ctrl.SetTermsHash(termsHash)
+	ctrl.SetPrivacyHash(privacyHash)
 	handlers.NewHandler(ctrl, svc).RegisterRoutes(r)
 
 	tok := registerAndGetToken(t, r, "ip_user", "ip@example.com", "Password123!")
-	if got := postPolicyWithOriginViewerIP(r, tok, "ip_user", hash, "198.51.100.99"); got.ClientIP != "10.0.0.12" {
+	if got := postPolicyWithOriginViewerIP(r, tok, "ip_user", termsHash, privacyHash, "198.51.100.99"); got.ClientIP != "10.0.0.12" {
 		t.Fatalf("expected spoofed CloudFront-Viewer-Address ignored when origin unverified, got %q", got.ClientIP)
 	}
 	verifiedOrigin = true
-	if got := postPolicyWithOriginViewerIP(r, tok, "ip_user", hash, "198.51.100.99:54321"); got.ClientIP != "198.51.100.99" {
+	if got := postPolicyWithOriginViewerIP(r, tok, "ip_user", termsHash, privacyHash, "198.51.100.99:54321"); got.ClientIP != "198.51.100.99" {
 		t.Fatalf("expected CloudFront-Viewer-Address IPv4 used when origin verified, got %q", got.ClientIP)
 	}
-	if got := postPolicyWithOriginViewerIP(r, tok, "ip_user", hash, "2001:db8::42"); got.ClientIP != "2001:db8::42" {
+	if got := postPolicyWithOriginViewerIP(r, tok, "ip_user", termsHash, privacyHash, "2001:db8::42"); got.ClientIP != "2001:db8::42" {
 		t.Fatalf("expected CloudFront-Viewer-Address IPv6 used when origin verified, got %q", got.ClientIP)
 	}
-	if got := postPolicyWithOriginViewerIP(r, tok, "ip_user", hash, "not-an-ip"); got.ClientIP != "10.0.0.12" {
+	if got := postPolicyWithOriginViewerIP(r, tok, "ip_user", termsHash, privacyHash, "not-an-ip"); got.ClientIP != "10.0.0.12" {
 		t.Fatalf("expected fallback to RemoteAddr on malformed CloudFront-Viewer-Address, got %q", got.ClientIP)
 	}
 
 	// Fallback to X-Forwarded-For when CloudFront-Viewer-Address is absent and proxy is trusted
 	_ = r.SetTrustedProxies([]string{"10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"})
 	payload, _ := json.Marshal(map[string]any{
-		"terms_approved": true, "privacy_approved": true, "us_customer": true, "terms_sha256": hash,
+		"terms_approved": true, "privacy_approved": true, "us_adult_consumer_confirmed": true, "terms_sha256": termsHash, "privacy_sha256": privacyHash,
 	})
 	reqXFF := newTestRequest(http.MethodPost, "/api/v1/users/ip_user/policy-agreements", bytes.NewReader(payload))
 	reqXFF.RemoteAddr = "172.31.10.5:443"

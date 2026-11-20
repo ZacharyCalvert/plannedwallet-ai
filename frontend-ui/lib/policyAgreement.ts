@@ -2,6 +2,7 @@ import type { ApiErrorBody } from './maintenance.ts';
 
 export const POLICY_APPROVAL_ERROR_CODE = 'POLICY_APPROVAL_REQUIRED';
 export const TERMS_PDF_URL = '/terms-of-use.pdf';
+export const PRIVACY_PDF_URL = '/privacy-and-security-policy.pdf';
 
 const SHA256_K = new Uint32Array([
   0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
@@ -116,13 +117,27 @@ export async function computeBufferSha256Hex(buffer: ArrayBuffer | Uint8Array): 
   return sha256HexFallback(bytes);
 }
 
-export async function fetchTermsPdfSha256(
+export async function fetchPdfSha256(
+  url: string,
+  label: string,
   fetcher: typeof fetch = fetch
 ): Promise<string> {
-  const res = await fetcher(TERMS_PDF_URL, { cache: 'no-store' });
+  const res = await fetcher(url, { cache: 'no-store' });
   if (!res.ok) {
-    throw new Error('Unable to download Terms of Use PDF for verification.');
+    throw new Error(`Unable to download ${label} PDF for verification.`);
   }
   const buf = await res.arrayBuffer();
   return computeBufferSha256Hex(buf);
+}
+
+export async function fetchTermsPdfSha256(
+  fetcher: typeof fetch = fetch
+): Promise<string> {
+  return fetchPdfSha256(TERMS_PDF_URL, 'Terms of Use', fetcher);
+}
+
+export async function fetchPrivacyPdfSha256(
+  fetcher: typeof fetch = fetch
+): Promise<string> {
+  return fetchPdfSha256(PRIVACY_PDF_URL, 'Privacy & Security Policy', fetcher);
 }

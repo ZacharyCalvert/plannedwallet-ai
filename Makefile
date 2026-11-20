@@ -65,3 +65,5 @@ pdfs:
 	itests/.venv/bin/python scripts/pdf-generation/generate_pdfs.py
 	@echo "Updated PW_TERMS SHA-256:"
 	@shasum -a 256 frontend-ui/public/terms-of-use.pdf
+	@echo "Updated PW_PRIVACY SHA-256:"
+	@shasum -a 256 frontend-ui/public/privacy-and-security-policy.pdf

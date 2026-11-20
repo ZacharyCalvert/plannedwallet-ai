@@ -134,16 +134,17 @@ def validate_production_guards(env_vars: dict, target_env: str, errors: list):
     else:
         print("[+] ENFORCE_POLICY      : CONFIGURED (value: 'true')")
 
-    terms_entry = env_vars.get("PW_TERMS")
-    terms_val = str((terms_entry or {}).get("value") or "").strip()
-    if not terms_entry or not terms_val:
-        errors.append("Missing mandatory environment variable when PRODUCTION_ENV=true: 'PW_TERMS'")
-        print("[-] PW_TERMS            : MISSING (SHA-256 hex digest required in production)")
-    elif not terms_entry.get("is_secret") and not is_valid_sha256_hex(terms_val):
-        errors.append("PW_TERMS must be a valid 64-character hexadecimal SHA-256 digest")
-        print("[-] PW_TERMS            : INVALID (Must be 64-char SHA-256 hex)")
-    else:
-        print("[+] PW_TERMS            : CONFIGURED")
+    for policy_env in ("PW_TERMS", "PW_PRIVACY"):
+        entry = env_vars.get(policy_env)
+        val = str((entry or {}).get("value") or "").strip()
+        if not entry or not val:
+            errors.append(f"Missing mandatory environment variable when PRODUCTION_ENV=true: '{policy_env}'")
+            print(f"[-] {policy_env:20s}: MISSING (SHA-256 hex digest required in production)")
+        elif not entry.get("is_secret") and not is_valid_sha256_hex(val):
+            errors.append(f"{policy_env} must be a valid 64-character hexadecimal SHA-256 digest")
+            print(f"[-] {policy_env:20s}: INVALID (Must be 64-char SHA-256 hex)")
+        else:
+            print(f"[+] {policy_env:20s}: CONFIGURED")
 
     ssl_key, ssl_entry = find_entry(env_vars, "POSTGRES_SSLMODE")
     ssl_val = str((ssl_entry or {}).get("value") or "").strip().lower()

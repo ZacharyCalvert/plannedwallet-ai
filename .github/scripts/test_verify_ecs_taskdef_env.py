@@ -11,6 +11,7 @@ import verify_ecs_taskdef_env as vet  # noqa: E402
 
 
 VALID_TERMS_HASH = "b08f3d8b1cd44544888a78ed13316c0910725944bc46808ab542e36d9b2fd84c"
+VALID_PRIVACY_HASH = "a731e26873a4229a02f875965c59a4f7b5de6c029b7e24de6907ed5b9aa6a1a7"
 
 
 def sample_ecs_task_def(**env_overrides):
@@ -20,6 +21,7 @@ def sample_ecs_task_def(**env_overrides):
         "PRODUCTION_ENV": "true",
         "ENFORCE_POLICY": "true",
         "PW_TERMS": VALID_TERMS_HASH,
+        "PW_PRIVACY": VALID_PRIVACY_HASH,
         "POSTGRES_HOST": "psql-pw-stage.abc123.us-east-2.rds.amazonaws.com",
         "POSTGRES_DB": "plannedwallet",
         "POSTGRES_SSLMODE": "require",

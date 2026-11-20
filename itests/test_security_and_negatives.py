@@ -420,9 +420,16 @@ def test_sql_injection_protects_accounts_logins_recovery_and_ledgers(
     hdr_a = {"Authorization": f"Bearer {tok_a_res.json()['access_token']}"}
 
     terms_sha256 = hashlib.sha256(load_frontend_pdf_bytes(raw_context, "terms-of-use.pdf")).hexdigest()
+    privacy_sha256 = hashlib.sha256(load_frontend_pdf_bytes(raw_context, "privacy-and-security-policy.pdf")).hexdigest()
     pol_res = api_context.post(
         f"/api/v1/users/{victim['username']}/policy-agreements",
-        data={"terms_approved": True, "privacy_approved": True, "us_customer": True, "terms_sha256": terms_sha256},
+        data={
+            "terms_approved": True,
+            "privacy_approved": True,
+            "us_adult_consumer_confirmed": True,
+            "terms_sha256": terms_sha256,
+            "privacy_sha256": privacy_sha256,
+        },
         headers=hdr_a,
     )
     assert pol_res.status == 201
@@ -500,7 +507,7 @@ def test_sql_injection_protects_accounts_logins_recovery_and_ledgers(
         assert api_context.get(f"/api/v1/users/{payload}/policy-agreements", headers=hdr_b).status in (400, 403, 404)
         assert api_context.post(
             f"/api/v1/users/{payload}/policy-agreements",
-            data={"terms_approved": True, "privacy_approved": True, "us_customer": True, "terms_sha256": payload},
+            data={"terms_approved": True, "privacy_approved": True, "us_adult_consumer_confirmed": True, "terms_sha256": payload, "privacy_sha256": payload},
             headers=hdr_b,
         ).status in (400, 403, 404)
         assert api_context.post(
@@ -531,7 +538,13 @@ def test_sql_injection_protects_accounts_logins_recovery_and_ledgers(
     # User B injecting SQL in own policy-agreements terms_sha256 must fail validation (400) without harming policy_agreements
     b_pol_sqli = api_context.post(
         f"/api/v1/users/{attacker['username']}/policy-agreements",
-        data={"terms_approved": True, "privacy_approved": True, "us_customer": True, "terms_sha256": "'; DROP TABLE policy_agreements; --"},
+        data={
+            "terms_approved": True,
+            "privacy_approved": True,
+            "us_adult_consumer_confirmed": True,
+            "terms_sha256": "'; DROP TABLE policy_agreements; --",
+            "privacy_sha256": privacy_sha256,
+        },
         headers=hdr_b,
     )
     assert b_pol_sqli.status == 400

@@ -203,13 +203,14 @@ Multi-user sharing and role-based permissions (`read`, `edit`, `admin`) for pers
 - **Indexes**: `idx_perspective_access_perspective_id`, `idx_perspective_access_user_id`
 
 ### 1.17 `policy_agreements`
-Immutable-style ledger recording when users accepted the Privacy Policy, Terms of Use, and US customer confirmation.
+Immutable-style ledger recording when users accepted the Privacy Policy, Terms of Use, and 18+ US adult consumer confirmation.
 - `id` (UUID, Primary Key)
 - `user_id` (UUID, Not Null, FK -> `users(id)` ON DELETE CASCADE)
 - `terms_sha256` (VARCHAR(64), Not Null) - SHA-256 hex digest of the Terms of Use PDF presented to the user (must match `PW_TERMS` when policy enforcement is active)
+- `privacy_sha256` (VARCHAR(64), Not Null) - SHA-256 hex digest of the Privacy & Security Policy PDF presented to the user (must match `PW_PRIVACY` when policy enforcement is active)
 - `terms_approved` (BOOLEAN, Not Null)
 - `privacy_approved` (BOOLEAN, Not Null)
-- `us_customer` (BOOLEAN, Not Null) - Confirmation of `"I am a customer in the United States"`
+- `us_adult_consumer_confirmed` (BOOLEAN, Not Null) - Affirmative confirmation that the user is at least 18 years of age and a customer located in the United States
 - `active` (BOOLEAN, Not Null, Default TRUE) - Can be flagged `FALSE` across existing rows when policies change to require re-approval
 - `client_ip` (VARCHAR(45), Not Null) - Client IP captured at agreement time
 - `agreed_at` (TIMESTAMPTZ, Not Null, Default NOW())
