@@ -283,3 +283,73 @@ def test_account_rejects_five_or_more_digits(api_context: APIRequestContext):
         assert patch_bad.json().get("error") == "PROHIBITED_SENSITIVE_DIGITS"
 
 
+def test_bulk_create_checking_records_limits_and_permissions(api_context: APIRequestContext):
+    """Verify bulk record creation enforces the 1,000-record hard limit, read-only permissions, and atomic persistence."""
+    _, owner_token = create_authenticated_user(api_context)
+    owner_headers = {"Authorization": f"Bearer {owner_token}"}
+    account = create_checking_account(api_context, owner_headers)
+    account_id = account["id"]
+
+    reader_user, reader_token = create_authenticated_user(api_context)
+    reader_headers = {"Authorization": f"Bearer {reader_token}"}
+    grant_res = api_context.post(
+        f"/api/v1/accounts/{account_id}/access",
+        data={"user_id": reader_user["id"], "access_level": "read"},
+        headers=owner_headers,
+    )
+    assert grant_res.status in (200, 201), f"Grant read access failed: {grant_res.text()}"
+
+    def make_batch(count: int) -> list[dict]:
+        return [
+            {
+                "value": -1.50,
+                "date_sent": "2026-11-10",
+                "entity": f"Corner Grocery {i}",
+                "description": f"Batch item {i}",
+            }
+            for i in range(count)
+        ]
+
+    # 1. Empty batch rejected
+    res_empty = api_context.post(
+        f"/api/v1/accounts/{account_id}/records/bulk",
+        data={"records": []},
+        headers=owner_headers,
+    )
+    assert res_empty.status == 400, f"Expected 400 for empty batch, got {res_empty.status}: {res_empty.text()}"
+    assert res_empty.json().get("error") == "INVALID_BULK_RECORDS"
+
+    # 2. Over 1,000 records rejected with 400 BULK_LIMIT_EXCEEDED
+    res_over = api_context.post(
+        f"/api/v1/accounts/{account_id}/records/bulk",
+        data={"records": make_batch(1001)},
+        headers=owner_headers,
+    )
+    assert res_over.status == 400, f"Expected 400 for 1001 records, got {res_over.status}: {res_over.text()}"
+    assert res_over.json().get("error") == "BULK_LIMIT_EXCEEDED"
+
+    # 3. Read-only user rejected with 403 Forbidden
+    res_read = api_context.post(
+        f"/api/v1/accounts/{account_id}/records/bulk",
+        data={"records": make_batch(5)},
+        headers=reader_headers,
+    )
+    assert res_read.status == 403, f"Expected 403 for read-only user, got {res_read.status}: {res_read.text()}"
+
+    # 4. Exact 1,000 records accepted and persisted atomically
+    res_ok = api_context.post(
+        f"/api/v1/accounts/{account_id}/records/bulk",
+        data={"records": make_batch(1000)},
+        headers=owner_headers,
+    )
+    assert res_ok.status == 201, f"Expected 201 for 1000 records, got {res_ok.status}: {res_ok.text()}"
+    body = res_ok.json()
+    assert body["created_count"] == 1000
+    assert len(body["records"]) == 1000
+
+    # 5. Verify GET /records returns all 1,000 records
+    list_res = api_context.get(f"/api/v1/accounts/{account_id}/records", headers=owner_headers)
+    assert list_res.status == 200
+    assert len(list_res.json()) == 1000
+
+

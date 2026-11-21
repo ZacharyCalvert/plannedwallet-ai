@@ -275,6 +275,7 @@ All HTTP requests require the `X-Client-ID` header. Protected endpoints require 
 
 ### 3.5 Checking Records & Categories
 - `POST /api/v1/accounts/{accountId}/records`: Add transaction record (with optional `category_id`).
+- `POST /api/v1/accounts/{accountId}/records/bulk`: Atomically bulk-insert up to **1,000** transaction records per request (hard limit of 1,000; rejects 0 with `INVALID_BULK_RECORDS` and >1,000 with `BULK_LIMIT_EXCEEDED`).
 - `GET /api/v1/accounts/{accountId}/records`: List transaction records with cumulative running balances.
 - `GET /api/v1/accounts/{accountId}/records/categories`: Get expense totals grouped by category (for pie chart visualization).
 - `GET /api/v1/accounts/{accountId}/records/{recordId}`: Get single transaction record.

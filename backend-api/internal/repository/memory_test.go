@@ -846,5 +846,27 @@ func TestMemoryRepo_RecoveryKeyLedgerAndRotation(t *testing.T) {
 	}
 }
 
+func TestMemoryRepo_CreateCheckingRecordsBulk(t *testing.T) {
+	repo := repository.NewMemoryRepository()
+	ctx := context.Background()
+	now := time.Now().UTC()
+
+	records := []*models.CheckingRecord{
+		{ID: "bulk-1", AccountID: "acc-b1", Value: -10.5, DateSent: "2026-11-01", Entity: "Store A", CreatedAt: now, UpdatedAt: now},
+		{ID: "bulk-2", AccountID: "acc-b1", Value: 25.0, DateSent: "2026-11-02", Entity: "Store B", CreatedAt: now, UpdatedAt: now},
+	}
+	if err := repo.CreateCheckingRecordsBulk(ctx, records); err != nil {
+		t.Fatalf("CreateCheckingRecordsBulk failed: %v", err)
+	}
+
+	got, err := repo.ListCheckingRecords(ctx, "acc-b1", nil, nil, nil)
+	if err != nil {
+		t.Fatalf("ListCheckingRecords failed: %v", err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("expected 2 records, got %d", len(got))
+	}
+}
+
 
 

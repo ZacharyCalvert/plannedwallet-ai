@@ -10,7 +10,7 @@ import {
   detectRowCollisions,
 } from '../lib/csvParser';
 import {
-  createAccountRecord,
+  createAccountRecordsBulk,
   fetchAccountRecords,
   fetchCategories,
   createCategory,
@@ -19,7 +19,8 @@ import {
   resolveAndCreateMissingCategories,
   normalizeCategoryKey,
 } from '../lib/accountCategories';
-import { AccountRecord, Category } from '../lib/types';
+import { chunkItemsForBulkUpload } from '../lib/bulkUpload';
+import { AccountRecord, Category, CreateRecordRequest } from '../lib/types';
 
 interface CsvUploadModalProps {
   isOpen: boolean;
@@ -35,21 +36,19 @@ interface CsvUploadModalProps {
 
 type ModalStage = 'select' | 'review' | 'importing' | 'complete';
 
-async function uploadRecordRow(
-  token: string,
-  accountId: string,
+function buildRecordPayload(
   row: ParsedCsvRow,
   effectiveAmount: number,
   categoryId: string | null
-): Promise<void> {
-  await createAccountRecord(token, accountId, {
+): CreateRecordRequest {
+  return {
     value: effectiveAmount,
     date_sent: row.dateSent,
     date_cleared: row.dateCleared,
     category_id: categoryId,
     entity: row.recipient,
     description: row.description || undefined,
-  });
+  };
 }
 
 export default function CsvUploadModal({
@@ -74,7 +73,12 @@ export default function CsvUploadModal({
   const [categories, setCategories] = useState<Category[]>(existingCategories || []);
 
   // Import progress
-  const [progress, setProgress] = useState<{ current: number; total: number }>({ current: 0, total: 0 });
+  const [progress, setProgress] = useState<{
+    current: number;
+    total: number;
+    batchCurrent: number;
+    batchTotal: number;
+  }>({ current: 0, total: 0, batchCurrent: 0, batchTotal: 0 });
   const [importSummary, setImportSummary] = useState<{ success: number; failed: number }>({ success: 0, failed: 0 });
   const [failedRows, setFailedRows] = useState<{ row: number; reason: string }[]>([]);
 
@@ -117,7 +121,7 @@ export default function CsvUploadModal({
     setSelectedRows({});
     setSignsInverted(false);
     setParseError(null);
-    setProgress({ current: 0, total: 0 });
+    setProgress({ current: 0, total: 0, batchCurrent: 0, batchTotal: 0 });
     setImportSummary({ success: 0, failed: 0 });
     setFailedRows([]);
   };
@@ -239,8 +243,9 @@ export default function CsvUploadModal({
 
     if (rowsToImport.length === 0 || rowsToImport.length > MAX_BULK_UPLOAD_RECORDS) return;
 
+    const batches = chunkItemsForBulkUpload(rowsToImport);
     setStage('importing');
-    setProgress({ current: 0, total: rowsToImport.length });
+    setProgress({ current: 0, total: rowsToImport.length, batchCurrent: 0, batchTotal: batches.length });
 
     let successCount = 0;
     let failCount = 0;
@@ -271,22 +276,41 @@ export default function CsvUploadModal({
       return;
     }
 
-    for (let i = 0; i < rowsToImport.length; i++) {
-      const row = rowsToImport[i];
-      setProgress({ current: i + 1, total: rowsToImport.length });
-      const catKey = normalizeCategoryKey(row.category);
-      const categoryId = catKey ? (categoryIdMap.get(catKey) ?? null) : null;
+    let processedCount = 0;
+    for (let bIdx = 0; bIdx < batches.length; bIdx++) {
+      const batch = batches[bIdx];
+      setProgress({
+        current: processedCount,
+        total: rowsToImport.length,
+        batchCurrent: bIdx + 1,
+        batchTotal: batches.length,
+      });
+
+      const payload = batch.map((row) => {
+        const catKey = normalizeCategoryKey(row.category);
+        const categoryId = catKey ? (categoryIdMap.get(catKey) ?? null) : null;
+        return buildRecordPayload(row, getEffectiveAmount(row), categoryId);
+      });
 
       try {
-        await uploadRecordRow(token, accountId, row, getEffectiveAmount(row), categoryId);
-        successCount++;
+        const bulkRes = await createAccountRecordsBulk(token, accountId, payload);
+        successCount += bulkRes.created_count ?? batch.length;
       } catch (err: unknown) {
-        failCount++;
+        failCount += batch.length;
+        const message = err instanceof Error ? err.message : 'Unknown network or API error';
         fails.push({
-          row: row.rowNumber,
-          reason: err instanceof Error ? err.message : 'Unknown network or API error',
+          row: batch[0].rowNumber,
+          reason: `Batch ${bIdx + 1} (${batch.length} records): ${message}`,
         });
       }
+
+      processedCount += batch.length;
+      setProgress({
+        current: processedCount,
+        total: rowsToImport.length,
+        batchCurrent: bIdx + 1,
+        batchTotal: batches.length,
+      });
     }
 
     setImportSummary({ success: successCount, failed: failCount });
@@ -611,7 +635,8 @@ export default function CsvUploadModal({
           <div className="csv-progress-stage">
             <h3 className="progress-title">Importing Records to Planned Wallet...</h3>
             <p className="progress-subtitle">
-              Delivering record {progress.current} of {progress.total} via API
+              Inserted {progress.current.toLocaleString()} of {progress.total.toLocaleString()} records
+              {progress.batchTotal > 0 ? ` (Batch ${progress.batchCurrent} of ${progress.batchTotal})` : ''}
             </p>
 
             <div className="progress-bar-container">

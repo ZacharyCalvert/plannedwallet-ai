@@ -1415,4 +1415,55 @@ func TestAccountCreationAndPatchRejectsFiveOrMoreDigits(t *testing.T) {
 	}
 }
 
+func TestBulkCreateCheckingRecordsHandler(t *testing.T) {
+	r, _ := setupTestRouter()
+	tok := registerAndGetToken(t, r, "bulk_h_u", "bulkh@example.com", "Password123!")
+
+	wAcc := doAuthedJSON(t, r, http.MethodPost, "/api/v1/accounts", tok, map[string]string{
+		"name": "Bulk Handler Checking", "type": "checking", "description": "Bulk HTTP test",
+	})
+	if wAcc.Code != http.StatusCreated {
+		t.Fatalf("expected 201 creating account, got %d", wAcc.Code)
+	}
+	var acc models.AccountResponse
+	_ = json.Unmarshal(wAcc.Body.Bytes(), &acc)
+
+	// Valid bulk request
+	val := -12.34
+	wOK := doAuthedJSON(t, r, http.MethodPost, "/api/v1/accounts/"+acc.ID+"/records/bulk", tok, models.CheckingRecordBulkCreateRequest{
+		Records: []models.CheckingRecordCreateRequest{
+			{Value: &val, DateSent: "2026-11-10", Entity: "Coffee Shop", Description: "Latte"},
+			{Value: &val, DateSent: "2026-11-11", Entity: "Corner Grocery", Description: "Lunch"},
+		},
+	})
+	if wOK.Code != http.StatusCreated {
+		t.Fatalf("expected 201 for bulk create, got %d: %s", wOK.Code, wOK.Body.String())
+	}
+	var bulkRes models.CheckingRecordBulkCreateResponse
+	_ = json.Unmarshal(wOK.Body.Bytes(), &bulkRes)
+	if bulkRes.CreatedCount != 2 || len(bulkRes.Records) != 2 {
+		t.Fatalf("expected 2 created records, got %+v", bulkRes)
+	}
+
+	// Over 1000 limit rejected
+	over := make([]models.CheckingRecordCreateRequest, models.MaxBulkCheckingRecords+1)
+	for i := range over {
+		over[i] = models.CheckingRecordCreateRequest{Value: &val, DateSent: "2026-11-10", Entity: "Market"}
+	}
+	wOver := doAuthedJSON(t, r, http.MethodPost, "/api/v1/accounts/"+acc.ID+"/records/bulk", tok, models.CheckingRecordBulkCreateRequest{
+		Records: over,
+	})
+	if wOver.Code != http.StatusBadRequest || !strings.Contains(wOver.Body.String(), "BULK_LIMIT_EXCEEDED") {
+		t.Fatalf("expected 400 BULK_LIMIT_EXCEEDED, got %d: %s", wOver.Code, wOver.Body.String())
+	}
+
+	// Invalid date rejected
+	wBadDate := doAuthedJSON(t, r, http.MethodPost, "/api/v1/accounts/"+acc.ID+"/records/bulk", tok, models.CheckingRecordBulkCreateRequest{
+		Records: []models.CheckingRecordCreateRequest{{Value: &val, DateSent: "11/10/2026", Entity: "Market"}},
+	})
+	if wBadDate.Code != http.StatusBadRequest || !strings.Contains(wBadDate.Body.String(), "INVALID_DATE_SENT") {
+		t.Fatalf("expected 400 INVALID_DATE_SENT, got %d: %s", wBadDate.Code, wBadDate.Body.String())
+	}
+}
+
 

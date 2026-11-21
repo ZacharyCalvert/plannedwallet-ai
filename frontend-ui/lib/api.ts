@@ -361,6 +361,26 @@ export async function createAccountRecord(
   return res.json();
 }
 
+export async function createAccountRecordsBulk(
+  token: string,
+  accountId: string,
+  records: CreateRecordRequest[]
+): Promise<{ created_count: number; records: AccountRecord[] }> {
+  const res = await tracedFetch(`/api/v1/accounts/${encodeURIComponent(accountId)}/records/bulk`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ records }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || 'Failed to bulk create records');
+  }
+  return res.json();
+}
+
 export async function updateAccountRecord(
   token: string,
   accountId: string,

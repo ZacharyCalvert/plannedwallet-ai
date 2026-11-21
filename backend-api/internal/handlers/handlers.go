@@ -322,6 +322,48 @@ func (h *Handler) CreateCheckingRecord(c *gin.Context) {
 	c.JSON(http.StatusCreated, res)
 }
 
+// CreateCheckingRecordsBulk handles POST /api/v1/accounts/{accountId}/records/bulk
+func (h *Handler) CreateCheckingRecordsBulk(c *gin.Context) {
+	userID, ok := h.getUserID(c)
+	if !ok {
+		return
+	}
+	accountID := c.Param("accountId")
+
+	var req models.CheckingRecordBulkCreateRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		h.sendError(c, http.StatusBadRequest, "BAD_REQUEST", err.Error())
+		return
+	}
+
+	if code, msg, ok := validateBulkRecordDates(req.Records); !ok {
+		h.sendError(c, http.StatusBadRequest, code, msg)
+		return
+	}
+
+	res, err := h.ctrl.CreateCheckingRecordsBulk(c.Request.Context(), userID, accountID, req)
+	if err != nil {
+		h.handleError(c, err)
+		return
+	}
+
+	c.JSON(http.StatusCreated, res)
+}
+
+func validateBulkRecordDates(records []models.CheckingRecordCreateRequest) (string, string, bool) {
+	for _, item := range records {
+		if err := parseDate(item.DateSent); err != nil {
+			return "INVALID_DATE_SENT", "date_sent must be formatted as YYYY-MM-DD.", false
+		}
+		if item.DateCleared != nil && *item.DateCleared != "" {
+			if err := parseDate(*item.DateCleared); err != nil {
+				return "INVALID_DATE_CLEARED", "date_cleared must be formatted as YYYY-MM-DD.", false
+			}
+		}
+	}
+	return "", "", true
+}
+
 // ListCheckingRecords handles GET /api/v1/accounts/{accountId}/records
 func (h *Handler) ListCheckingRecords(c *gin.Context) {
 	userID, ok := h.getUserID(c)
@@ -545,6 +587,7 @@ func (h *Handler) registerAccountRoutes(p *gin.RouterGroup) {
 	p.DELETE("/accounts/:accountId/access/:userId", h.RevokeAccountAccess)
 
 	p.POST("/accounts/:accountId/records", h.CreateCheckingRecord)
+	p.POST("/accounts/:accountId/records/bulk", h.CreateCheckingRecordsBulk)
 	p.GET("/accounts/:accountId/records", h.ListCheckingRecords)
 	p.GET("/accounts/:accountId/records/categories", h.GetAccountCategorySummary)
 	p.GET("/accounts/:accountId/records/:recordId", h.GetCheckingRecord)

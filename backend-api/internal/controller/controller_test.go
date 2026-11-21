@@ -1166,4 +1166,52 @@ func TestAccountProhibitedSensitiveDigits(t *testing.T) {
 	assertAppErrorStatus(t, errPatchDesc, http.StatusBadRequest)
 }
 
+func TestCreateCheckingRecordsBulk_LimitsAndPermissions(t *testing.T) {
+	ctrl, _ := setupController()
+	ctx := context.Background()
+
+	owner, _ := ctrl.RegisterUser(ctx, models.UserRegistrationRequest{
+		Username: "bulk_owner", Email: "bulk_owner@example.com", Password: "Password123!",
+	})
+	reader, _ := ctrl.RegisterUser(ctx, models.UserRegistrationRequest{
+		Username: "bulk_reader", Email: "bulk_reader@example.com", Password: "Password123!",
+	})
+	acc, _ := ctrl.CreateAccount(ctx, owner.ID, models.AccountCreationRequest{
+		Name: "Bulk Checking", Type: "checking", Description: "Bulk test account",
+	})
+	_, _ = ctrl.GrantAccountAccess(ctx, owner.ID, acc.ID, reader.ID, models.AccessLevelRead)
+
+	// 0 records rejected
+	_, errEmpty := ctrl.CreateCheckingRecordsBulk(ctx, owner.ID, acc.ID, models.CheckingRecordBulkCreateRequest{
+		Records: []models.CheckingRecordCreateRequest{},
+	})
+	assertAppErrorStatus(t, errEmpty, http.StatusBadRequest)
+
+	// 1001 records rejected
+	tooMany := make([]models.CheckingRecordCreateRequest, models.MaxBulkCheckingRecords+1)
+	val := -5.0
+	for i := range tooMany {
+		tooMany[i] = models.CheckingRecordCreateRequest{Value: &val, DateSent: "2026-11-01", Entity: "Grocery"}
+	}
+	_, errOver := ctrl.CreateCheckingRecordsBulk(ctx, owner.ID, acc.ID, models.CheckingRecordBulkCreateRequest{Records: tooMany})
+	assertAppErrorStatus(t, errOver, http.StatusBadRequest)
+
+	// Read-only user rejected with 403
+	_, errRead := ctrl.CreateCheckingRecordsBulk(ctx, reader.ID, acc.ID, models.CheckingRecordBulkCreateRequest{
+		Records: tooMany[:1],
+	})
+	assertAppErrorStatus(t, errRead, http.StatusForbidden)
+
+	// Exact 1000 records accepted
+	res, errOK := ctrl.CreateCheckingRecordsBulk(ctx, owner.ID, acc.ID, models.CheckingRecordBulkCreateRequest{
+		Records: tooMany[:models.MaxBulkCheckingRecords],
+	})
+	if errOK != nil {
+		t.Fatalf("expected 1000 records to succeed, got %v", errOK)
+	}
+	if res.CreatedCount != models.MaxBulkCheckingRecords || len(res.Records) != models.MaxBulkCheckingRecords {
+		t.Fatalf("expected 1000 created records, got count=%d len=%d", res.CreatedCount, len(res.Records))
+	}
+}
+
 

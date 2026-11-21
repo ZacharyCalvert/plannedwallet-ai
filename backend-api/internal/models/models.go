@@ -203,6 +203,9 @@ type CheckingRecord struct {
 	UpdatedAt         time.Time `json:"updated_at"`
 }
 
+// MaxBulkCheckingRecords is the hard maximum number of records accepted in a single bulk upload request.
+const MaxBulkCheckingRecords = 1000
+
 // CheckingRecordCreateRequest represents payload to create a checking record.
 type CheckingRecordCreateRequest struct {
 	Value       *float64 `json:"value" binding:"required"`
@@ -211,6 +214,17 @@ type CheckingRecordCreateRequest struct {
 	CategoryID  *string  `json:"category_id"`
 	Entity      string   `json:"entity" binding:"required,min=1,max=255"`
 	Description string   `json:"description" binding:"max=500"`
+}
+
+// CheckingRecordBulkCreateRequest represents payload to bulk create checking records (max 1000).
+type CheckingRecordBulkCreateRequest struct {
+	Records []CheckingRecordCreateRequest `json:"records" binding:"required"`
+}
+
+// CheckingRecordBulkCreateResponse represents the result of a bulk checking record creation.
+type CheckingRecordBulkCreateResponse struct {
+	CreatedCount int                      `json:"created_count"`
+	Records      []CheckingRecordResponse `json:"records"`
 }
 
 // CheckingRecordUpdateRequest represents payload to fully update a checking record.

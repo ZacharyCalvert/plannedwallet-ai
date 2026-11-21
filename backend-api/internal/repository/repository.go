@@ -39,6 +39,7 @@ type Repository interface {
 
 	// Checking Record operations
 	CreateCheckingRecord(ctx context.Context, record *models.CheckingRecord) error
+	CreateCheckingRecordsBulk(ctx context.Context, records []*models.CheckingRecord) error
 	GetCheckingRecordByID(ctx context.Context, accountID, recordID string) (*models.CheckingRecord, error)
 	ListCheckingRecords(ctx context.Context, accountID string, cleared *bool, startDate, endDate *string) ([]*models.CheckingRecord, error)
 	UpdateCheckingRecord(ctx context.Context, record *models.CheckingRecord) error

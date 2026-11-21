@@ -146,6 +146,11 @@ export interface CreateRecordRequest {
   description?: string;
 }
 
+export interface BulkCreateRecordsResponse {
+  created_count: number;
+  records: AccountRecord[];
+}
+
 export interface AccountSnapshot {
   id: string;
   account_id: string;

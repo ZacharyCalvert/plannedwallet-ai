@@ -286,6 +286,31 @@ func (p *PostgresRepository) CreateCheckingRecord(ctx context.Context, record *m
 	return err
 }
 
+func (p *PostgresRepository) CreateCheckingRecordsBulk(ctx context.Context, records []*models.CheckingRecord) error {
+	if len(records) == 0 {
+		return nil
+	}
+	tx, err := p.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	stmt, err := tx.PrepareContext(ctx, `INSERT INTO checking_records (id, account_id, category_id, reconcile_report_id, value, date_sent, date_cleared, entity, description, created_at, updated_at)
+	          VALUES ($1, $2, $3, $4, $5, $6::date, $7::date, $8, $9, $10, $11)`)
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+
+	for _, r := range records {
+		if _, err := stmt.ExecContext(ctx, r.ID, r.AccountID, r.CategoryID, r.ReconcileReportID, r.Value, r.DateSent, r.DateCleared, r.Entity, r.Description, r.CreatedAt, r.UpdatedAt); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
+}
+
 func scanCheckingRecord(scanner interface{ Scan(...interface{}) error }) (*models.CheckingRecord, error) {
 	var r models.CheckingRecord
 	var categoryID, reconcileReportID, dateCleared sql.NullString

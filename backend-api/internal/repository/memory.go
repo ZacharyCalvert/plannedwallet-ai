@@ -488,6 +488,17 @@ func (m *MemoryRepository) CreateCheckingRecord(_ context.Context, record *model
 	return nil
 }
 
+func (m *MemoryRepository) CreateCheckingRecordsBulk(_ context.Context, records []*models.CheckingRecord) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	for _, record := range records {
+		copied := *record
+		m.checkingRecords[record.ID] = &copied
+	}
+	return nil
+}
+
 func (m *MemoryRepository) GetCheckingRecordByID(_ context.Context, accountID, recordID string) (*models.CheckingRecord, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
