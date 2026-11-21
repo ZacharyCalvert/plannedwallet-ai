@@ -164,7 +164,12 @@
 .badge-credit-card,
 .badge-credit_card,
 .badge-account-type {
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  white-space: nowrap;
+  flex-shrink: 0;
   padding: 0.15rem 0.5rem;
   border-radius: 9999px;
   font-size: 0.75rem;
@@ -305,6 +310,7 @@
 .account-title-row {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 0.75rem;
   margin-bottom: 0.35rem;
 }

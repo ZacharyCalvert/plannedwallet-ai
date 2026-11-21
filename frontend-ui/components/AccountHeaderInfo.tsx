@@ -7,6 +7,7 @@ import {
   ACCOUNT_DIGITS_WARNING_TEXT,
   hasAccountDigitsWarning,
 } from '../lib/accountValidation';
+import { downloadAccountCsv } from '../lib/exportData';
 
 type EditableField = 'name' | 'description';
 
@@ -28,6 +29,7 @@ export function AccountHeaderInfo({
   const [editingField, setEditingField] = useState<EditableField | null>(null);
   const [draftValue, setDraftValue] = useState('');
   const [saving, setSaving] = useState(false);
+  const [downloading, setDownloading] = useState(false);
   const [editError, setEditError] = useState('');
 
   const inputRef = useRef<HTMLInputElement>(null);
@@ -105,6 +107,19 @@ export function AccountHeaderInfo({
     }
   };
 
+  const handleDownloadClick = async () => {
+    if (downloading) return;
+    setEditError('');
+    setDownloading(true);
+    try {
+      await downloadAccountCsv(token, account);
+    } catch (err: unknown) {
+      setEditError(err instanceof Error ? err.message : 'Failed to export account data.');
+    } finally {
+      setDownloading(false);
+    }
+  };
+
   const resolvedBadgeClass =
     badgeClassName || `badge-${(account.type || '').toLowerCase().replace(/\s+/g, '-')}`;
 
@@ -134,6 +149,16 @@ export function AccountHeaderInfo({
           </h2>
         )}
         <span className={`badge-account-type ${resolvedBadgeClass}`}>{account.type}</span>
+        <button
+          type="button"
+          className="btn-secondary btn-sm ml-2"
+          onClick={() => void handleDownloadClick()}
+          disabled={downloading}
+          title="Download all entered data for this account as CSV"
+          aria-label="Download Data"
+        >
+          {downloading ? 'Exporting...' : 'Download Data'}
+        </button>
         <button
           type="button"
           className="btn-danger-outline btn-sm ml-2"

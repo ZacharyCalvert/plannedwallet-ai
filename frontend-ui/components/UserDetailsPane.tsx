@@ -1,19 +1,22 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { RotateRecoveryKeyResponse, UserProfile, UserSession } from '../lib/types';
+import { Account, RotateRecoveryKeyResponse, UserProfile, UserSession } from '../lib/types';
 import { deleteUserAccount, fetchUserProfile, rotateRecoveryKey } from '../lib/api';
 import { clampPasswordToMaxBytes, MAX_PASSWORD_BYTES } from '../lib/passwordLimit';
+import { downloadAllAccountsZip } from '../lib/exportData';
 import { RecoveryPhraseSetup } from './RecoveryPhraseSetup';
 
 interface UserDetailsPaneProps {
   session: UserSession;
+  accounts: Account[];
   onUserDeleted: () => void;
   onBackToAccounts: () => void;
 }
 
 export function UserDetailsPane({
   session,
+  accounts,
   onUserDeleted,
   onBackToAccounts,
 }: UserDetailsPaneProps) {
@@ -29,6 +32,8 @@ export function UserDetailsPane({
   const [rotating, setRotating] = useState(false);
   const [rotateError, setRotateError] = useState('');
   const [rotatedResult, setRotatedResult] = useState<RotateRecoveryKeyResponse | null>(null);
+  const [downloadingAll, setDownloadingAll] = useState(false);
+  const [downloadAllError, setDownloadAllError] = useState('');
 
   useEffect(() => {
     let cancelled = false;
@@ -65,6 +70,19 @@ export function UserDetailsPane({
     } catch (err: unknown) {
       setDeleteError(err instanceof Error ? err.message : 'Failed to delete user account');
       setDeleting(false);
+    }
+  };
+
+  const handleDownloadAll = async () => {
+    if (downloadingAll || accounts.length === 0) return;
+    setDownloadAllError('');
+    setDownloadingAll(true);
+    try {
+      await downloadAllAccountsZip(session.token, accounts);
+    } catch (err: unknown) {
+      setDownloadAllError(err instanceof Error ? err.message : 'Failed to export all account data.');
+    } finally {
+      setDownloadingAll(false);
     }
   };
 
@@ -143,6 +161,29 @@ export function UserDetailsPane({
               onClick={handleOpenRotate}
             >
               Rotate Recovery Phrase
+            </button>
+          </div>
+
+          <div className="user-security-zone">
+            <div>
+              <h3>Export Account Data</h3>
+              <p className="text-muted font-sm">
+                Download a ZIP archive containing one CSV file per account with all entered data.
+              </p>
+              {downloadAllError && <p className="text-danger font-sm mt-2">{downloadAllError}</p>}
+            </div>
+            <button
+              type="button"
+              className="btn-secondary btn-sm"
+              onClick={() => void handleDownloadAll()}
+              disabled={downloadingAll || accounts.length === 0}
+              title={
+                accounts.length === 0
+                  ? 'No accounts available to export'
+                  : 'Download a ZIP archive with one CSV file per account'
+              }
+            >
+              {downloadingAll ? 'Preparing Zip...' : 'Download All Data'}
             </button>
           </div>
 

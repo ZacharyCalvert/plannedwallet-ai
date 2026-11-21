@@ -331,6 +331,7 @@ export function Dashboard({ session, onUserDeleted }: DashboardProps) {
             element={
               <UserDetailsPane
                 session={session}
+                accounts={accounts}
                 onUserDeleted={onUserDeleted}
                 onBackToAccounts={handleCancelCreate}
               />
