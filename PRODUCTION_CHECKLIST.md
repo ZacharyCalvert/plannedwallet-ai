@@ -24,9 +24,9 @@ The backend API supports a unified boolean environment variable: `PRODUCTION_ENV
    - When `PRODUCTION_ENV=true`, `REQUIRE_CAPTCHA` is automatically enforced as `true`, regardless of whether `REQUIRE_CAPTCHA` was explicitly set.
    - All user registration requests must include and pass a valid visual CAPTCHA verification challenge.
 
-5. **Restricted Reverse Proxy Trust (`10.*.*.*`)**:
-   - Gin is configured with `r.SetTrustedProxies([]string{"10.0.0.0/8"})`.
-   - Only reverse proxies, Ingress controllers, or application load balancers residing within the internal RFC 1918 `10.0.0.0/8` private network (`10.*.*.*`) are permitted to forward client headers (`X-Forwarded-For`, `X-Real-IP`). External or untrusted proxy headers are rejected.
+5. **Restricted Reverse Proxy Trust (Private VPC CIDRs)**:
+   - Gin is configured with `r.SetTrustedProxies([]string{"10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "127.0.0.0/8", "::1/128"})`.
+   - Only internal VPC proxies/load balancers within RFC 1918 private networks or loopback are permitted to forward `X-Forwarded-For` / `X-Real-IP` during `c.ClientIP()` fallback. When `CloudFront-Viewer-Address` is forwarded by CloudFront and `X-Origin-Verify` is verified, [`resolveClientIP`](backend-api/internal/handlers/policy.go) uses `CloudFront-Viewer-Address` directly before falling back to `c.ClientIP()`.
 
 6. **Decoupled Database Schema Migrations**:
    - In `PRODUCTION_ENV=true`, the application **skips** executing `database/init.sql` on startup.
@@ -37,9 +37,9 @@ The backend API supports a unified boolean environment variable: `PRODUCTION_ENV
    - Every incoming request (except OPTIONS preflight and `/api/health` / `/health`) must carry the `X-Origin-Verify` header matching `EXPECTED_ORIGIN_SECRET` using constant-time comparison (`crypto/subtle.ConstantTimeCompare`). Direct requests bypassing CloudFront or originating from unauthorized proxies are immediately rejected with `403 Forbidden` (`INVALID_PROXY_HEADER`).
    - Verified CloudFront requests also authorize [`resolveClientIP`](backend-api/internal/handlers/policy.go) to record the client IP from `CloudFront-Viewer-Address` (validated with `net.ParseIP`) instead of edge/proxy container IPs.
 
-8. **Policy Ledger & Terms of Use Checksum Enforcement (`ENFORCE_POLICY` / `PW_TERMS`)**:
-   - When `PRODUCTION_ENV=true`, **`ENFORCE_POLICY` MUST be explicitly set to `"true"`** and **`PW_TERMS`** MUST be configured with the exact 64-character SHA-256 hex digest of the live `frontend-ui/public/terms-of-use.pdf` asset; otherwise the process **terminates immediately on startup** (`log.Fatalf`).
-   - Signed-in users without an active `policy_agreements` row matching `PW_TERMS`, Privacy Policy acceptance, and U.S. consumer confirmation receive a JWT with `terms_approved: false` and receive `403 POLICY_APPROVAL_REQUIRED` on data routes until they submit `POST /api/v1/users/{username}/policy-agreements` and refresh their JWT.
+8. **Policy Ledger & Document Checksum Enforcement (`ENFORCE_POLICY` / `PW_TERMS` / `PW_PRIVACY`)**:
+   - When `PRODUCTION_ENV=true`, **`ENFORCE_POLICY` MUST be explicitly set to `"true"`**, **`PW_TERMS`** MUST be configured with the exact 64-character SHA-256 hex digest of the live `frontend-ui/public/terms-of-use.pdf` asset, and **`PW_PRIVACY`** MUST be configured with the exact 64-character SHA-256 hex digest of the live `frontend-ui/public/privacy-and-security-policy.pdf` asset; otherwise the process **terminates immediately on startup** (`log.Fatalf`).
+   - Signed-in users without an active `policy_agreements` row matching `PW_TERMS`, `PW_PRIVACY`, and 18+ U.S. adult consumer confirmation (`us_adult_consumer_confirmed`) receive a JWT with `terms_approved: false` and receive `403 POLICY_APPROVAL_REQUIRED` on data routes until they submit `POST /api/v1/users/{username}/policy-agreements` and refresh their JWT.
 
 ---
 
@@ -54,8 +54,9 @@ The backend API supports a unified boolean environment variable: `PRODUCTION_ENV
 | `JWT_EXPIRATION_SECONDS`| Integer | `900` | `900` | Expiration lifetime of authentication tokens in seconds (15 minutes default). |
 | `EXPECTED_ORIGIN_SECRET` | String | *None* | *48-char CloudFront Origin Secret* | Required when `PRODUCTION_ENV=true`. Enforces constant-time comparison against `X-Origin-Verify` and authorizes `CloudFront-Viewer-Address` capture. |
 | `REQUIRE_CAPTCHA` | Boolean | `false` | `true` (auto in prod) | Enforces CAPTCHA verification on user registration. |
-| `ENFORCE_POLICY` | Boolean | `false` | `true` (required in prod) | **Must be `"true"` when `PRODUCTION_ENV=true`**. Enforces active `policy_agreements` approval matching `PW_TERMS` and U.S. consumer confirmation before allowing data access. |
+| `ENFORCE_POLICY` | Boolean | `false` | `true` (required in prod) | **Must be `"true"` when `PRODUCTION_ENV=true`**. Enforces active `policy_agreements` approval matching `PW_TERMS`, `PW_PRIVACY`, and 18+ U.S. adult consumer confirmation before allowing data access. |
 | `PW_TERMS` | String | *None* | *64-char SHA-256 hex* | Required when `PRODUCTION_ENV=true` or `ENFORCE_POLICY=true`. Exact SHA-256 hex checksum of `frontend-ui/public/terms-of-use.pdf`. |
+| `PW_PRIVACY` | String | *None* | *64-char SHA-256 hex* | Required when `PRODUCTION_ENV=true` or `ENFORCE_POLICY=true`. Exact SHA-256 hex checksum of `frontend-ui/public/privacy-and-security-policy.pdf`. |
 | `PW_READONLY` | Boolean | `false` | `false` (`true` during maintenance) | Enables read-only maintenance mode (`read_only` feature flag and `503 READ_ONLY_MODE` on mutations while keeping login and token refresh working). |
 | `CORS_ALLOWED_CLIENTS` | String | `*.plannedwallet.com` | `https://app.example.com` | Comma-separated list of allowed origin URLs and hostnames. Requests from unlisted origins receive `403 Forbidden`. |
 | `POSTGRES_HOST` | String | `localhost` | *RDS Primary Endpoint* | Hostname of the Amazon RDS PostgreSQL 16 instance (`DB_HOST` alias also supported). |
@@ -180,7 +181,7 @@ Before promoting a release to production, verify each of the following items:
 - [ ] **Database migrations (`init.sql`) have executed** via ephemeral ECS Fargate `RunTask` (`ECS_MIGRATION_TASK_DEFINITION`) before backend deploy.
 - [ ] **In-memory fallback is disabled** (verified via `PRODUCTION_ENV=true`).
 - [ ] **`REQUIRE_CAPTCHA` is enabled** (verified via `PRODUCTION_ENV=true`).
-- [ ] **Gin trusted proxies are configured** to VPC internal ranges (`10.0.0.0/8`).
+- [ ] **Gin trusted proxies are configured** to VPC internal ranges (`10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`) and CloudFront's Origin Request Policy forwards `CloudFront-Viewer-Address`.
 - [ ] **`SIGTERM` graceful shutdown is active** with ECS task draining.
 - [ ] **Periodic CAPTCHA cleanup job is scheduled** to run every 5–15 minutes.
 - [ ] **AWS WAF v2 rate limiting is enabled at CloudFront** for login, recovery, registration, and CAPTCHA endpoints.
