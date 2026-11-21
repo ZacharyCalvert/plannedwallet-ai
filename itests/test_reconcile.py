@@ -82,12 +82,12 @@ def test_reconcile_report_negative_cases(api_context: APIRequestContext):
 
     sav = api_context.post(
         "/api/v1/accounts",
-        data={"name": f"Savings_{uuid.uuid4().hex[:6]}", "type": "savings", "description": "Reserve savings"},
+        data={"name": f"Savings_{uuid.uuid4().hex[:4]}", "type": "savings", "description": "Reserve savings"},
         headers=owner_headers,
     ).json()
     snap = api_context.post(
         "/api/v1/accounts",
-        data={"name": f"Snap_{uuid.uuid4().hex[:6]}", "type": "snapshot", "description": "Snapshot account"},
+        data={"name": f"Snap_{uuid.uuid4().hex[:4]}", "type": "snapshot", "description": "Snapshot account"},
         headers=owner_headers,
     ).json()
 
@@ -182,7 +182,7 @@ def test_reconcile_report_deletion_unlinks_and_unlocks_record(api_context: APIRe
 
     acc = api_context.post(
         "/api/v1/accounts",
-        data={"name": f"Checking_{uuid.uuid4().hex[:6]}", "type": "checking", "description": "Delete reconcile test"},
+        data={"name": f"Checking_{uuid.uuid4().hex[:4]}", "type": "checking", "description": "Delete reconcile test"},
         headers=headers,
     ).json()
 

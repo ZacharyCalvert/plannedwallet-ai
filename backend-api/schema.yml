@@ -744,7 +744,7 @@ paths:
                 $ref: '#/components/schemas/AccountResponse'
         '400':
           summary: Bad request
-          description: Invalid account type, missing name, or missing description.
+          description: Invalid account type, missing name/description, or name/description containing 5 or more digits (`PROHIBITED_SENSITIVE_DIGITS`).
           content:
             application/json:
               schema:
@@ -866,7 +866,7 @@ paths:
                 $ref: '#/components/schemas/AccountResponse'
         '400':
           summary: Bad request
-          description: Missing patch fields, invalid/oversized name or description, disallowed fields, or missing X-Client-ID header.
+          description: Missing patch fields, invalid/oversized name or description, 5 or more digits in name/description (`PROHIBITED_SENSITIVE_DIGITS`), disallowed fields, or missing X-Client-ID header.
           content:
             application/json:
               schema:
@@ -4539,7 +4539,7 @@ components:
           type: string
           minLength: 1
           maxLength: 100
-          description: User-facing display name for the account in the UI.
+          description: User-facing display name for the account in the UI. Must contain at most 4 digits (`0-9`) to prevent storing account, routing, credit card, or Social Security numbers.
           example: "Everyday Checking"
         type:
           $ref: '#/components/schemas/AccountType'
@@ -4547,7 +4547,7 @@ components:
           type: string
           minLength: 1
           maxLength: 255
-          description: Human-readable description or label for the account.
+          description: Human-readable description or label for the account. Must contain at most 4 digits (`0-9`) to prevent storing account, routing, credit card, or Social Security numbers.
           example: "Primary Everyday Checking Account"
 
     AccountPatchRequest:
@@ -4559,13 +4559,13 @@ components:
           type: string
           minLength: 1
           maxLength: 100
-          description: Updated user-facing display name for the account.
+          description: Updated user-facing display name for the account. Must contain at most 4 digits (`0-9`).
           example: "Household Checking"
         description:
           type: string
           minLength: 1
           maxLength: 255
-          description: Updated human-readable description or label for the account.
+          description: Updated human-readable description or label for the account. Must contain at most 4 digits (`0-9`).
           example: "Shared monthly household bills and expenses"
 
     AccountResponse:

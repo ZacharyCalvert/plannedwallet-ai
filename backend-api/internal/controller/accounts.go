@@ -15,25 +15,60 @@ import (
 	"github.com/plannedwallet/internal/trace"
 )
 
+const maxAccountFieldDigits = 4
+
+func countDigits(s string) int {
+	count := 0
+	for _, r := range s {
+		if r >= '0' && r <= '9' {
+			count++
+		}
+	}
+	return count
+}
+
+func validateNoProhibitedDigits(val, fieldLabel string) error {
+	if countDigits(val) > maxAccountFieldDigits {
+		return NewAppError(
+			http.StatusBadRequest,
+			"PROHIBITED_SENSITIVE_DIGITS",
+			fmt.Sprintf("%s cannot contain 5 or more digits (Planned Wallet prohibits storing account, routing, credit card, or Social Security numbers).", fieldLabel),
+		)
+	}
+	return nil
+}
+
+func normalizeAccountType(raw string) string {
+	accType := strings.TrimSpace(raw)
+	switch accType {
+	case "credit_card":
+		return "credit card"
+	case "assets":
+		return "asset"
+	default:
+		return accType
+	}
+}
+
 func validateAccountRequest(req models.AccountCreationRequest) (string, string, string, error) {
 	name := strings.TrimSpace(req.Name)
-	accType := strings.TrimSpace(req.Type)
+	accType := normalizeAccountType(req.Type)
 	description := strings.TrimSpace(req.Description)
 
-	if accType == "credit_card" {
-		accType = "credit card"
-	}
-	if accType == "assets" {
-		accType = "asset"
-	}
 	if name == "" {
 		return "", "", "", NewAppError(http.StatusBadRequest, "MISSING_NAME", "Account name cannot be empty.")
+	}
+	if err := validateNoProhibitedDigits(name, "Account name"); err != nil {
+		return "", "", "", err
 	}
 	if !models.ValidAccountTypes[accType] {
 		return "", "", "", NewAppError(http.StatusBadRequest, "INVALID_ACCOUNT_TYPE", "Invalid account type provided.")
 	}
 	if description == "" {
 		return "", "", "", NewAppError(http.StatusBadRequest, "MISSING_DESCRIPTION", "Account description cannot be empty.")
+	}
+	if err := validateNoProhibitedDigits(description, "Account description"); err != nil {
+		return "", "", "", err
 	}
 	return name, accType, description, nil
 }
@@ -98,6 +133,9 @@ func validateTrimmedField(raw string, maxRunes int, missingCode, invalidCode, fi
 	}
 	if len([]rune(val)) > maxRunes {
 		return "", NewAppError(http.StatusBadRequest, invalidCode, fmt.Sprintf("%s must not exceed %d characters.", fieldLabel, maxRunes))
+	}
+	if err := validateNoProhibitedDigits(val, fieldLabel); err != nil {
+		return "", err
 	}
 	return val, nil
 }

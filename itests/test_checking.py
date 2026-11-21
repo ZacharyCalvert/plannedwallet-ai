@@ -29,7 +29,7 @@ def create_authenticated_user(api_context: APIRequestContext) -> tuple[dict, str
 def create_checking_account(api_context: APIRequestContext, headers: dict) -> dict:
     """Helper to create a checking account."""
     payload = {
-        "name": f"Checking_{uuid.uuid4().hex[:6]}",
+        "name": f"Checking_{uuid.uuid4().hex[:4]}",
         "type": "checking",
         "description": "Primary checking account for integration test",
     }
@@ -82,7 +82,7 @@ def test_account_deletion_and_recreation(api_context: APIRequestContext):
     _, token_a = create_authenticated_user(api_context)
     headers_a = {"Authorization": f"Bearer {token_a}"}
 
-    account_name = f"Everyday_Checking_{uuid.uuid4().hex[:6]}"
+    account_name = f"Everyday_Checking_{uuid.uuid4().hex[:4]}"
     create_payload = {
         "name": account_name,
         "type": "checking",
@@ -136,7 +136,7 @@ def test_account_patch_name_and_description(api_context: APIRequestContext):
     outsider_hdr = {"Authorization": f"Bearer {outsider_token}"}
 
     # 1. Create account and seed a checking record
-    orig_name = f"Primary_Checking_{uuid.uuid4().hex[:6]}"
+    orig_name = f"Primary_Checking_{uuid.uuid4().hex[:4]}"
     create_res = api_context.post(
         "/api/v1/accounts",
         data={"name": orig_name, "type": "checking", "description": "Original checking description"},
@@ -147,7 +147,7 @@ def test_account_patch_name_and_description(api_context: APIRequestContext):
     record = add_checking_record(api_context, account_id, owner_hdr)
 
     # 2a. Owner updates name only (description stays intact)
-    renamed = f"Household_Checking_{uuid.uuid4().hex[:6]}"
+    renamed = f"Household_Checking_{uuid.uuid4().hex[:4]}"
     patch_res = api_context.patch(
         f"/api/v1/accounts/{account_id}",
         data={"name": f"  {renamed}  "},
@@ -170,7 +170,7 @@ def test_account_patch_name_and_description(api_context: APIRequestContext):
     assert patch_desc_res.json()["description"] == "Updated checking description"
 
     # 2c. Owner updates both name and description together
-    final_name = f"Operating_Checking_{uuid.uuid4().hex[:6]}"
+    final_name = f"Operating_Checking_{uuid.uuid4().hex[:4]}"
     final_desc = "Combined monthly bills and household spending"
     patch_both_res = api_context.patch(
         f"/api/v1/accounts/{account_id}",
@@ -228,7 +228,7 @@ def test_account_patch_name_and_description(api_context: APIRequestContext):
 
     assert api_context.patch(f"/api/v1/accounts/{account_id}", data={"name": "Reader"}, headers=reader_hdr).status == 403
 
-    editor_name = f"Editor_Renamed_{uuid.uuid4().hex[:6]}"
+    editor_name = f"Editor_Renamed_{uuid.uuid4().hex[:4]}"
     editor_res = api_context.patch(
         f"/api/v1/accounts/{account_id}",
         data={"name": editor_name, "description": "Edited by shared editor"},
@@ -237,5 +237,49 @@ def test_account_patch_name_and_description(api_context: APIRequestContext):
     assert editor_res.status == 200, f"Expected 200 for editor patch, got {editor_res.status}: {editor_res.text()}"
     assert editor_res.json()["name"] == editor_name
     assert editor_res.json()["description"] == "Edited by shared editor"
+
+
+def test_account_rejects_five_or_more_digits(api_context: APIRequestContext):
+    """Ensure account creation and edits allow up to 4 digits but reject 5+ digits."""
+    _, token = create_authenticated_user(api_context)
+    headers = {"Authorization": f"Bearer {token}"}
+
+    # 4 digits in name and 4 digits in description must succeed
+    ok_res = api_context.post(
+        "/api/v1/accounts",
+        data={
+            "name": "Rewards Card 1234",
+            "type": "credit card",
+            "description": "Ending 9876",
+        },
+        headers=headers,
+    )
+    assert ok_res.status == 201, f"Expected 201 for 4-digit fields, got {ok_res.status}: {ok_res.text()}"
+    account_id = ok_res.json()["id"]
+
+    # 5+ digits in name or description must be rejected on POST
+    bad_creates = [
+        {"name": "Checking 12345", "type": "checking", "description": "Everyday checking"},
+        {"name": "Card 4111-2222-3333-4444", "type": "credit card", "description": "Primary card"},
+        {"name": "Everyday Checking", "type": "checking", "description": "Routing 012345678"},
+        {"name": "Personal Savings", "type": "savings", "description": "SSN 123-45-6789"},
+    ]
+    for payload in bad_creates:
+        res = api_context.post("/api/v1/accounts", data=payload, headers=headers)
+        assert res.status == 400, f"Expected 400 for {payload}, got {res.status}: {res.text()}"
+        assert res.json().get("error") == "PROHIBITED_SENSITIVE_DIGITS"
+
+    # 4 digits allowed on PATCH; 5+ digits rejected on PATCH
+    patch_ok = api_context.patch(
+        f"/api/v1/accounts/{account_id}",
+        data={"name": "Rewards 4321"},
+        headers=headers,
+    )
+    assert patch_ok.status == 200, f"Expected 200 for 4-digit PATCH, got {patch_ok.status}: {patch_ok.text()}"
+
+    for bad_patch in ({"name": "Card 12345"}, {"description": "Acct 98-765"}):
+        patch_bad = api_context.patch(f"/api/v1/accounts/{account_id}", data=bad_patch, headers=headers)
+        assert patch_bad.status == 400, f"Expected 400 for {bad_patch}, got {patch_bad.status}: {patch_bad.text()}"
+        assert patch_bad.json().get("error") == "PROHIBITED_SENSITIVE_DIGITS"
 
 

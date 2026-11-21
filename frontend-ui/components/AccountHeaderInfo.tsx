@@ -3,6 +3,10 @@
 import { useState, useRef, useEffect, KeyboardEvent } from 'react';
 import { Account } from '../lib/types';
 import { patchAccount } from '../lib/api';
+import {
+  ACCOUNT_DIGITS_WARNING_TEXT,
+  hasAccountDigitsWarning,
+} from '../lib/accountValidation';
 
 type EditableField = 'name' | 'description';
 
@@ -162,6 +166,13 @@ export function AccountHeaderInfo({
         >
           {account.description}
         </p>
+      )}
+
+      {editingField !== null && hasAccountDigitsWarning(draftValue) && (
+        <div className="warning-banner mt-2" role="alert">
+          <span className="warning-icon" aria-hidden="true">⚠️</span>
+          <span>{ACCOUNT_DIGITS_WARNING_TEXT}</span>
+        </div>
       )}
 
       {editError && (

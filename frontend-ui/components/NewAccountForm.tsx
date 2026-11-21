@@ -3,6 +3,10 @@
 import { useState } from 'react';
 import { createAccount } from '../lib/api';
 import { Account } from '../lib/types';
+import {
+  ACCOUNT_DIGITS_WARNING_TEXT,
+  hasAccountDigitsWarning,
+} from '../lib/accountValidation';
 
 interface NewAccountFormProps {
   token: string;
@@ -37,6 +41,12 @@ export function NewAccountForm({ token, onSuccess, onCancel }: NewAccountFormPro
         <h3>Create New Account</h3>
       </div>
       {error && <div className="alert-error">{error}</div>}
+      {(hasAccountDigitsWarning(name) || hasAccountDigitsWarning(description)) && (
+        <div className="warning-banner mb-3" role="alert">
+          <span className="warning-icon" aria-hidden="true">⚠️</span>
+          <span>{ACCOUNT_DIGITS_WARNING_TEXT}</span>
+        </div>
+      )}
       <form onSubmit={handleSubmit}>
         <div className="form-group">
           <label htmlFor="account-type">Account Type</label>

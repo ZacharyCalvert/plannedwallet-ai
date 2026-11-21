@@ -1384,4 +1384,35 @@ func TestPasswordExceeding72BytesReturns400InvalidPassword(t *testing.T) {
 	}
 }
 
+func TestAccountCreationAndPatchRejectsFiveOrMoreDigits(t *testing.T) {
+	r, _ := setupTestRouter()
+	tok := registerAndGetToken(t, r, "digits_h_u", "digitsh@example.com", "Password123!")
+
+	// 4 digits accepted
+	wOK := doAuthedJSON(t, r, http.MethodPost, "/api/v1/accounts", tok, map[string]string{
+		"name": "Rewards 1234", "type": "credit card", "description": "Ending 9876",
+	})
+	if wOK.Code != http.StatusCreated {
+		t.Fatalf("expected 201 for 4-digit account name/desc, got %d: %s", wOK.Code, wOK.Body.String())
+	}
+	var created models.AccountResponse
+	_ = json.Unmarshal(wOK.Body.Bytes(), &created)
+
+	// 5 digits rejected on POST
+	wBadPost := doAuthedJSON(t, r, http.MethodPost, "/api/v1/accounts", tok, map[string]string{
+		"name": "Card 12345", "type": "credit card", "description": "Personal",
+	})
+	if wBadPost.Code != http.StatusBadRequest || !strings.Contains(wBadPost.Body.String(), "PROHIBITED_SENSITIVE_DIGITS") {
+		t.Fatalf("expected 400 PROHIBITED_SENSITIVE_DIGITS on POST, got %d: %s", wBadPost.Code, wBadPost.Body.String())
+	}
+
+	// 5 digits rejected on PATCH
+	wBadPatch := doAuthedJSON(t, r, http.MethodPatch, "/api/v1/accounts/"+created.ID, tok, map[string]string{
+		"description": "Routing 12345",
+	})
+	if wBadPatch.Code != http.StatusBadRequest || !strings.Contains(wBadPatch.Body.String(), "PROHIBITED_SENSITIVE_DIGITS") {
+		t.Fatalf("expected 400 PROHIBITED_SENSITIVE_DIGITS on PATCH, got %d: %s", wBadPatch.Code, wBadPatch.Body.String())
+	}
+}
+
 

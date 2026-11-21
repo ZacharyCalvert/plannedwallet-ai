@@ -1128,4 +1128,42 @@ func TestRecoverAccount_RejectsElevenOfTwelveWordsAndReorderedPhrase(t *testing.
 	}
 }
 
+func TestAccountProhibitedSensitiveDigits(t *testing.T) {
+	ctrl, _ := setupController()
+	ctx := context.Background()
+	u, _ := ctrl.RegisterUser(ctx, models.UserRegistrationRequest{Username: "digits_u", Email: "digits@test.com", Password: "ValidPass123!"})
+
+	// 4 digits in name and 4 digits in description must succeed
+	acc, err := ctrl.CreateAccount(ctx, u.ID, models.AccountCreationRequest{
+		Name: "Card 1234", Type: "credit card", Description: "Ending 5678",
+	})
+	if err != nil {
+		t.Fatalf("expected 4 digits to be allowed on CreateAccount, got %v", err)
+	}
+
+	// 5 digits in name or description must be rejected on CreateAccount
+	_, errBadName := ctrl.CreateAccount(ctx, u.ID, models.AccountCreationRequest{
+		Name: "Acct 12345", Type: "checking", Description: "Personal",
+	})
+	assertAppErrorStatus(t, errBadName, http.StatusBadRequest)
+
+	_, errBadDesc := ctrl.CreateAccount(ctx, u.ID, models.AccountCreationRequest{
+		Name: "Personal Checking", Type: "checking", Description: "SSN 123-45-6789",
+	})
+	assertAppErrorStatus(t, errBadDesc, http.StatusBadRequest)
+
+	// 4 digits allowed on PatchAccount, 5 digits rejected on PatchAccount
+	okName := "Checking 4321"
+	if _, err := ctrl.PatchAccount(ctx, u.ID, acc.ID, models.AccountPatchRequest{Name: &okName}); err != nil {
+		t.Fatalf("expected 4 digits allowed on PatchAccount, got %v", err)
+	}
+	badName := "Checking 12-345"
+	_, errPatchName := ctrl.PatchAccount(ctx, u.ID, acc.ID, models.AccountPatchRequest{Name: &badName})
+	assertAppErrorStatus(t, errPatchName, http.StatusBadRequest)
+
+	badDesc := "Routing 012345678"
+	_, errPatchDesc := ctrl.PatchAccount(ctx, u.ID, acc.ID, models.AccountPatchRequest{Description: &badDesc})
+	assertAppErrorStatus(t, errPatchDesc, http.StatusBadRequest)
+}
+
 

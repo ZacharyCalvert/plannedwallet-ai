@@ -17,9 +17,9 @@ Stores registered user accounts with encrypted credentials and TOTP secrets.
 Stores financial accounts owned by an administrator/owner user.
 - `id` (UUID, Primary Key)
 - `admin_id` (UUID, Not Null, FK -> `users(id)` ON DELETE CASCADE)
-- `name` (VARCHAR(100), Not Null)
+- `name` (VARCHAR(100), Not Null) - Must contain at most 4 digits (`0-9`) to prevent storing account, routing, credit card, or Social Security numbers
 - `type` (VARCHAR(50), Not Null) - Account type: `checking`, `savings`, `credit card`, `asset`, `snapshot`
-- `description` (VARCHAR(255), Not Null)
+- `description` (VARCHAR(255), Not Null) - Must contain at most 4 digits (`0-9`)
 - `created_at` (TIMESTAMPTZ, Not Null, Default NOW())
 - `updated_at` (TIMESTAMPTZ, Not Null, Default NOW())
 
