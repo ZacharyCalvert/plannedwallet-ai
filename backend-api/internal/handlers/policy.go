@@ -68,11 +68,28 @@ func parseHeaderClientIP(raw string) string {
 	if trimmed == "" {
 		return ""
 	}
+	if host, _, err := net.SplitHostPort(trimmed); err == nil {
+		if ip := net.ParseIP(strings.TrimSpace(host)); ip != nil {
+			return ip.String()
+		}
+	}
 	if ip := net.ParseIP(trimmed); ip != nil {
 		return ip.String()
 	}
-	if host, _, err := net.SplitHostPort(trimmed); err == nil {
-		if ip := net.ParseIP(strings.TrimSpace(host)); ip != nil {
+	return ""
+}
+
+func isPublicRoutableIP(ip net.IP) bool {
+	return ip != nil && !ip.IsPrivate() && !ip.IsLoopback() && !ip.IsLinkLocalUnicast() && !ip.IsLinkLocalMulticast() && !ip.IsUnspecified()
+}
+
+func parseXForwardedForIP(raw string) string {
+	for _, part := range strings.Split(raw, ",") {
+		parsed := parseHeaderClientIP(part)
+		if parsed == "" {
+			continue
+		}
+		if ip := net.ParseIP(parsed); isPublicRoutableIP(ip) {
 			return ip.String()
 		}
 	}
@@ -82,6 +99,9 @@ func parseHeaderClientIP(raw string) string {
 func resolveClientIP(c *gin.Context) string {
 	if c.GetBool("originVerified") {
 		if ip := parseHeaderClientIP(c.GetHeader("CloudFront-Viewer-Address")); ip != "" {
+			return ip
+		}
+		if ip := parseXForwardedForIP(c.GetHeader("X-Forwarded-For")); ip != "" {
 			return ip
 		}
 	}
