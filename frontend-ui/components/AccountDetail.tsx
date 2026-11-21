@@ -10,7 +10,9 @@ import { AccountBalanceTrendGraph } from './AccountBalanceTrendGraph';
 import { AccountCategoryPieChart } from './AccountCategoryPieChart';
 import { AccountCategoriesTab } from './AccountCategoriesTab';
 import { AccountReconcileTab } from './AccountReconcileTab';
+import { RecordSearchModal } from './RecordSearchModal';
 import { findLastCategoryForRecipient } from '../lib/accountCategories';
+import { isSearchHotkeyEvent } from '../lib/recordSearch';
 import { getAmountColorClass } from '../lib/bills';
 import {
   fetchAccountRecords,
@@ -188,9 +190,22 @@ export function AccountDetail({
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState('');
   const [csvModalOpen, setCsvModalOpen] = useState(false);
+  const [searchModalOpen, setSearchModalOpen] = useState(false);
   const [deleteTxModalOpen, setDeleteTxModalOpen] = useState(false);
   const [deletingTx, setDeletingTx] = useState(false);
   const [deleteTxError, setDeleteTxError] = useState('');
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (isSearchHotkeyEvent(e, target?.tagName, target?.isContentEditable)) {
+        e.preventDefault();
+        setSearchModalOpen(true);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   const resetForm = () => {
     setSelectedRecordId(null);
@@ -552,6 +567,15 @@ export function AccountDetail({
           onClick={() => selectTab('reconcile')}
         >
           Reconcile
+        </button>
+
+        <button
+          type="button"
+          className="snapshot-tab-button record-search-tab-btn"
+          onClick={() => setSearchModalOpen(true)}
+          title="Search and edit records (/, Cmd/Ctrl+F, or Cmd/Ctrl+K)"
+        >
+          Search (/)
         </button>
       </div>
 
@@ -1001,6 +1025,18 @@ export function AccountDetail({
           </div>
         </div>
       )}
+      <RecordSearchModal
+        isOpen={searchModalOpen}
+        onClose={() => setSearchModalOpen(false)}
+        token={token}
+        accountId={account.id}
+        accountType={account.type}
+        records={records}
+        categories={categories}
+        onRecordUpdated={(updated) =>
+          setRecords((prev) => prev.map((r) => (r.id === updated.id ? updated : r)))
+        }
+      />
     </div>
   );
 }
