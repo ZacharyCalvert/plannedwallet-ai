@@ -64,6 +64,17 @@ func (h *Handler) PolicyEnforcementMiddleware() gin.HandlerFunc {
 	}
 }
 
+func parseUnbracketedIPv6Port(trimmed string) string {
+	idx := strings.LastIndex(trimmed, ":")
+	if idx <= 0 {
+		return ""
+	}
+	if ip := net.ParseIP(trimmed[:idx]); ip != nil {
+		return ip.String()
+	}
+	return ""
+}
+
 func parseHeaderClientIP(raw string) string {
 	trimmed := strings.TrimSpace(raw)
 	if trimmed == "" {
@@ -77,7 +88,7 @@ func parseHeaderClientIP(raw string) string {
 	if ip := net.ParseIP(trimmed); ip != nil {
 		return ip.String()
 	}
-	return ""
+	return parseUnbracketedIPv6Port(trimmed)
 }
 
 func isPublicRoutableIP(ip net.IP) bool {
@@ -97,12 +108,31 @@ func parseXForwardedForIP(raw string) string {
 	return ""
 }
 
+func parseForwardedHeaderIP(raw string) string {
+	for _, entry := range strings.Split(raw, ",") {
+		for _, param := range strings.Split(entry, ";") {
+			kv := strings.SplitN(strings.TrimSpace(param), "=", 2)
+			if len(kv) != 2 || !strings.EqualFold(strings.TrimSpace(kv[0]), "for") {
+				continue
+			}
+			val := strings.Trim(strings.TrimSpace(kv[1]), `"`)
+			if ip := net.ParseIP(parseHeaderClientIP(val)); isPublicRoutableIP(ip) {
+				return ip.String()
+			}
+		}
+	}
+	return ""
+}
+
 func resolveClientIP(c *gin.Context) string {
 	if c.GetBool("originVerified") {
 		if ip := parseHeaderClientIP(c.GetHeader("CloudFront-Viewer-Address")); ip != "" {
 			return ip
 		}
 		if ip := parseXForwardedForIP(c.GetHeader("X-Forwarded-For")); ip != "" {
+			return ip
+		}
+		if ip := parseForwardedHeaderIP(c.GetHeader("Forwarded")); ip != "" {
 			return ip
 		}
 	}

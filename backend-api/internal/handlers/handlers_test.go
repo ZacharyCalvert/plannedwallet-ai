@@ -1255,6 +1255,9 @@ func TestRecordPolicyAgreement_ResolvesOriginViewerIP(t *testing.T) {
 	if got := postPolicyWithOriginViewerIP(r, tok, "ip_user", termsHash, privacyHash, "2001:db8::42"); got.ClientIP != "2001:db8::42" {
 		t.Fatalf("expected CloudFront-Viewer-Address IPv6 used when origin verified, got %q", got.ClientIP)
 	}
+	if got := postPolicyWithOriginViewerIP(r, tok, "ip_user", termsHash, privacyHash, "2600:1700:15d0:4d60:283b:5aa1:2bb4:df0f:60834"); got.ClientIP != "2600:1700:15d0:4d60:283b:5aa1:2bb4:df0f" {
+		t.Fatalf("expected CloudFront-Viewer-Address unbracketed IPv6+port parsed cleanly, got %q", got.ClientIP)
+	}
 	if got := postPolicyWithOriginViewerIP(r, tok, "ip_user", termsHash, privacyHash, "not-an-ip"); got.ClientIP != "10.0.0.12" {
 		t.Fatalf("expected fallback to RemoteAddr on malformed CloudFront-Viewer-Address, got %q", got.ClientIP)
 	}
@@ -1275,6 +1278,20 @@ func TestRecordPolicyAgreement_ResolvesOriginViewerIP(t *testing.T) {
 	_ = json.Unmarshal(wXFF.Body.Bytes(), &outXFF)
 	if outXFF.ClientIP != "203.0.113.77" {
 		t.Fatalf("expected X-Forwarded-For fallback public IP '203.0.113.77', got %q", outXFF.ClientIP)
+	}
+
+	// Fallback to RFC 7239 Forwarded header when CloudFront-Viewer-Address and X-Forwarded-For are absent
+	reqFwd := newTestRequest(http.MethodPost, "/api/v1/users/ip_user/policy-agreements", bytes.NewReader(payload))
+	reqFwd.RemoteAddr = "10.10.1.123:56344"
+	reqFwd.Header.Set("Content-Type", "application/json")
+	reqFwd.Header.Set("Authorization", "Bearer "+tok)
+	reqFwd.Header.Set("Forwarded", "for=2600:1700:15d0:4d60:283b:5aa1:2bb4:df0f,for=15.158.51.111;host=example.execute-api.us-east-2.amazonaws.com;proto=https")
+	wFwd := httptest.NewRecorder()
+	r.ServeHTTP(wFwd, reqFwd)
+	var outFwd models.PolicyAgreementResponse
+	_ = json.Unmarshal(wFwd.Body.Bytes(), &outFwd)
+	if outFwd.ClientIP != "2600:1700:15d0:4d60:283b:5aa1:2bb4:df0f" {
+		t.Fatalf("expected Forwarded fallback IPv6 '2600:1700:15d0:4d60:283b:5aa1:2bb4:df0f', got %q", outFwd.ClientIP)
 	}
 }
 
