@@ -9,6 +9,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/plannedwallet/internal/models"
+	"github.com/plannedwallet/internal/trace"
 )
 
 func isPolicyExemptPath(method, path string) bool {
@@ -108,6 +109,23 @@ func resolveClientIP(c *gin.Context) string {
 	return c.ClientIP()
 }
 
+// TEMP_IP_DEBUG: remove once 10.x ledger IP issue is resolved
+func logTempClientIPDebug(c *gin.Context, resolvedIP string) {
+	trace.LogInfo(
+		c.Request.Context(),
+		"TEMP_IP_DEBUG resolved=%q originVerified=%v remoteAddr=%q clientIP=%q cfViewerAddr=%q xff=%q xRealIP=%q forwarded=%q trueClientIP=%q",
+		resolvedIP,
+		c.GetBool("originVerified"),
+		c.Request.RemoteAddr,
+		c.ClientIP(),
+		c.GetHeader("CloudFront-Viewer-Address"),
+		c.GetHeader("X-Forwarded-For"),
+		c.GetHeader("X-Real-IP"),
+		c.GetHeader("Forwarded"),
+		c.GetHeader("True-Client-IP"),
+	)
+}
+
 // RecordPolicyAgreement handles POST /api/v1/users/{username}/policy-agreements
 func (h *Handler) RecordPolicyAgreement(c *gin.Context) {
 	userID, ok := h.getUserID(c)
@@ -126,7 +144,10 @@ func (h *Handler) RecordPolicyAgreement(c *gin.Context) {
 		return
 	}
 
-	res, err := h.ctrl.RecordPolicyAgreement(c.Request.Context(), userID, username, resolveClientIP(c), req)
+	resolvedIP := resolveClientIP(c)
+	logTempClientIPDebug(c, resolvedIP) // TEMP_IP_DEBUG: remove once 10.x ledger IP issue is resolved
+
+	res, err := h.ctrl.RecordPolicyAgreement(c.Request.Context(), userID, username, resolvedIP, req)
 	if err != nil {
 		h.handleError(c, err)
 		return
