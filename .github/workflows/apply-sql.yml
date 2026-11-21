@@ -1,5 +1,5 @@
 name: Apply Database Migrations (AWS RDS PostgreSQL)
-run-name: "Apply Database Migrations [${{ (github.event_name == 'workflow_dispatch' && inputs.environment == 'prod') && 'prod' || 'stage' }}] (${{ github.event_name }})"
+run-name: "Apply Database Migrations [${{ ((github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_call') && inputs.environment == 'prod') && 'prod' || 'stage' }}] (${{ github.event_name }})"
 
 on:
   push:
@@ -17,6 +17,13 @@ on:
         options:
           - stage
           - prod
+  workflow_call:
+    inputs:
+      environment:
+        description: 'Target deployment environment'
+        required: false
+        default: 'stage'
+        type: string
 
 permissions:
   id-token: write

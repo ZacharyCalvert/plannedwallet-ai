@@ -1,0 +1,52 @@
+name: Deploy All (Migrations, Backend API & Frontend UI)
+run-name: "Deploy All [${{ inputs.environment }}] (${{ github.actor }})"
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Target deployment environment'
+        required: true
+        default: 'prod'
+        type: choice
+        options:
+          - prod
+          - stage
+      run_migrations:
+        description: 'Run database migrations before deploying backend and frontend'
+        required: true
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+  packages: write
+  id-token: write
+
+jobs:
+  apply-sql:
+    name: Apply Database Migrations (${{ inputs.environment }})
+    if: github.ref == 'refs/heads/main' && github.actor == 'ZacharyCalvert' && inputs.run_migrations
+    uses: ./.github/workflows/apply-sql.yml
+    with:
+      environment: ${{ inputs.environment }}
+    secrets: inherit
+
+  backend-api:
+    name: Backend API CI/CD (${{ inputs.environment }})
+    needs: [apply-sql]
+    if: ${{ always() && github.ref == 'refs/heads/main' && github.actor == 'ZacharyCalvert' && (needs.apply-sql.result == 'success' || needs.apply-sql.result == 'skipped') }}
+    uses: ./.github/workflows/backend-api.yml
+    with:
+      environment: ${{ inputs.environment }}
+      run_migrations: false
+    secrets: inherit
+
+  frontend-ui:
+    name: Frontend UI CI/CD (${{ inputs.environment }})
+    needs: [backend-api]
+    if: github.ref == 'refs/heads/main' && github.actor == 'ZacharyCalvert'
+    uses: ./.github/workflows/frontend-ui.yml
+    with:
+      environment: ${{ inputs.environment }}
+    secrets: inherit

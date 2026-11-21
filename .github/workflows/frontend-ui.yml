@@ -1,5 +1,5 @@
 name: Frontend UI CI/CD
-run-name: "Frontend UI CI/CD [${{ (github.event_name == 'workflow_dispatch' && inputs.environment == 'prod') && 'prod' || 'stage' }}] (${{ github.event_name }})"
+run-name: "Frontend UI CI/CD [${{ ((github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_call') && inputs.environment == 'prod') && 'prod' || 'stage' }}] (${{ github.event_name }})"
 
 on:
   push:
@@ -18,6 +18,13 @@ on:
         options:
           - stage
           - prod
+  workflow_call:
+    inputs:
+      environment:
+        description: 'Target deployment environment'
+        required: false
+        default: 'stage'
+        type: string
 
 permissions:
   contents: read
@@ -144,13 +151,13 @@ jobs:
           cache-from: type=gha
 
   deploy-static:
-    name: Deploy Static to AWS S3 & CloudFront (${{ (github.event_name == 'workflow_dispatch' && inputs.environment == 'prod') && 'prod' || 'stage' }})
+    name: Deploy Static to AWS S3 & CloudFront (${{ ((github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_call') && inputs.environment == 'prod') && 'prod' || 'stage' }})
     needs: test-and-build
     if: github.ref == 'refs/heads/main' && github.actor == 'ZacharyCalvert'
     runs-on: ubuntu-latest
-    environment: ${{ (github.event_name == 'workflow_dispatch' && inputs.environment == 'prod') && 'prod' || 'stage' }}
+    environment: ${{ ((github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_call') && inputs.environment == 'prod') && 'prod' || 'stage' }}
     concurrency:
-      group: deployment-${{ (github.event_name == 'workflow_dispatch' && inputs.environment == 'prod') && 'prod' || 'stage' }}
+      group: deployment-${{ ((github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_call') && inputs.environment == 'prod') && 'prod' || 'stage' }}
       cancel-in-progress: false
 
     steps:

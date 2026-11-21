@@ -1,5 +1,5 @@
 name: Backend API CI/CD
-run-name: "Backend API CI/CD [${{ (github.event_name == 'workflow_dispatch' && inputs.environment == 'prod') && 'prod' || 'stage' }}] (${{ github.event_name }})"
+run-name: "Backend API CI/CD [${{ ((github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_call') && inputs.environment == 'prod') && 'prod' || 'stage' }}] (${{ github.event_name }})"
 
 on:
   push:
@@ -24,6 +24,18 @@ on:
         required: true
         type: boolean
         default: true
+  workflow_call:
+    inputs:
+      environment:
+        description: 'Target deployment environment'
+        required: false
+        default: 'stage'
+        type: string
+      run_migrations:
+        description: 'Execute ephemeral database migration job before deploying'
+        required: false
+        default: true
+        type: boolean
 
 permissions:
   contents: read
@@ -175,13 +187,13 @@ jobs:
           cache-from: type=gha
 
   deploy-backend:
-    name: Deploy Backend to AWS ECS Fargate (${{ (github.event_name == 'workflow_dispatch' && inputs.environment == 'prod') && 'prod' || 'stage' }})
+    name: Deploy Backend to AWS ECS Fargate (${{ ((github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_call') && inputs.environment == 'prod') && 'prod' || 'stage' }})
     needs: test-and-build
     if: github.ref == 'refs/heads/main' && github.actor == 'ZacharyCalvert'
     runs-on: ubuntu-latest
-    environment: ${{ (github.event_name == 'workflow_dispatch' && inputs.environment == 'prod') && 'prod' || 'stage' }}
+    environment: ${{ ((github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_call') && inputs.environment == 'prod') && 'prod' || 'stage' }}
     concurrency:
-      group: deployment-${{ (github.event_name == 'workflow_dispatch' && inputs.environment == 'prod') && 'prod' || 'stage' }}
+      group: deployment-${{ ((github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_call') && inputs.environment == 'prod') && 'prod' || 'stage' }}
       cancel-in-progress: false
 
     steps:
