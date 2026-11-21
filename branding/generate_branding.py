@@ -342,9 +342,14 @@ def main():
         browser = p.chromium.launch()
         page = browser.new_page()
 
-        # 1. Multi-size favicon.ico (16, 32, 48)
-        ico_entries = [(sz, render_svg_png(page, svg_text, sz)) for sz in (16, 32, 48)]
-        (BRANDING_DIR / "favicon.ico").write_bytes(pack_ico(ico_entries))
+        # 1. Multi-size favicon.ico (16, 32, 48) + PNG favicons & Apple Touch Icon for Safari
+        png_16 = render_svg_png(page, svg_text, 16)
+        png_32 = render_svg_png(page, svg_text, 32)
+        png_48 = render_svg_png(page, svg_text, 48)
+        (BRANDING_DIR / "favicon.ico").write_bytes(pack_ico([(16, png_16), (32, png_32), (48, png_48)]))
+        (BRANDING_DIR / "icon-16x16.png").write_bytes(png_16)
+        (BRANDING_DIR / "icon-32x32.png").write_bytes(png_32)
+        (BRANDING_DIR / "apple-touch-icon.png").write_bytes(render_svg_png(page, svg_text, 180))
 
         # 2. High-res YouTube Avatar / Icon Preview (800x800)
         avatar_png = render_svg_png(page, svg_text, 800)
@@ -363,7 +368,7 @@ def main():
         browser.close()
 
     print("Generated branding assets in branding/:")
-    for name in ("planned-wallet-icon.svg", "favicon.ico", "youtube-avatar.png", "linkedin-banner.png", "youtube-banner.png"):
+    for name in ("planned-wallet-icon.svg", "favicon.ico", "icon-16x16.png", "icon-32x32.png", "apple-touch-icon.png", "youtube-avatar.png", "linkedin-banner.png", "youtube-banner.png"):
         path = BRANDING_DIR / name
         print(f"  {path.name} ({path.stat().st_size} bytes)")
 
