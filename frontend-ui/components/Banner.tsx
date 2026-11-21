@@ -32,8 +32,17 @@ export function Banner({ username, onUserClick, onSignOut, readOnly = false }: B
       )}
       <header className="banner">
         <div className="banner-logo">
-          <span className="banner-icon">💼</span>
-          <span className="banner-title">Planned Wallet</span>
+          <img
+            src="/planned-wallet-icon.svg"
+            alt="Planned Wallet"
+            className="banner-icon"
+            width={36}
+            height={36}
+          />
+          <div className="banner-brand">
+            <span className="banner-title">Planned Wallet</span>
+            <span className="banner-tagline">Every Account. Zero Bank Logins.</span>
+          </div>
         </div>
         {username && onSignOut && (
           <div className="banner-user">

@@ -135,5 +135,7 @@ All account endpoints enforce permissions via the `account_access` table:
      - `internal/repository/memory_test.go`: Validate `MemoryRepository` CRUD, uniqueness/conflict semantics, cascading/nullification behavior, and multi-user visibility.
      - `internal/controller/*_test.go`: Validate business logic, access control, error codes, and edge cases.
      - `internal/handlers/*_test.go`: Validate HTTP routing, request binding, status codes, query parameter validation, and JSON response shapes.
+9. **Maintain Data Export Parity (`Download Data` & `Download All Data`)**:
+   - Whenever adding a new account type, account-scoped entity, or user-entered field, update both the per-account CSV export (`Download Data`) and the full-account ZIP archive export (`Download All Data`) in `frontend-ui/lib/exportData.ts` (along with its unit tests in `frontend-ui/lib/exportData.test.ts`) so users can always export all entered account data.
 
 

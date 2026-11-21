@@ -63,13 +63,30 @@ body {
 }
 
 .banner-icon {
-  font-size: 1.5rem;
+  width: 2.25rem;
+  height: 2.25rem;
+  display: block;
+  flex-shrink: 0;
+}
+
+.banner-brand {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.2;
 }
 
 .banner-title {
   font-size: 1.25rem;
   font-weight: 700;
   letter-spacing: -0.025em;
+}
+
+.banner-tagline {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: #94a3b8;
+  letter-spacing: 0.01em;
+  margin-top: 0.15rem;
 }
 
 .banner-user {
