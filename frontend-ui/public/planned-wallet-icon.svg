@@ -7,20 +7,32 @@
     </linearGradient>
 
     <!-- Warm Cognac / Saddle Brown Leather -->
-    <linearGradient id="walletBodyGrad" x1="0" y1="0" x2="0.2" y2="1">
-      <stop offset="0%" stop-color="#b4693e" />
-      <stop offset="55%" stop-color="#8b4a26" />
-      <stop offset="100%" stop-color="#6b361a" />
+    <linearGradient id="walletBackGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#6b361a" />
+      <stop offset="100%" stop-color="#4a220d" />
     </linearGradient>
 
-    <linearGradient id="walletFlapGrad" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0%" stop-color="#c97a4b" />
-      <stop offset="100%" stop-color="#9a532c" />
+    <linearGradient id="wingLeftGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#be7143" />
+      <stop offset="55%" stop-color="#965029" />
+      <stop offset="100%" stop-color="#763b1c" />
     </linearGradient>
 
-    <linearGradient id="claspGrad" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0%" stop-color="#a85d34" />
-      <stop offset="100%" stop-color="#783b1c" />
+    <linearGradient id="centerPanelGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#a85c32" />
+      <stop offset="55%" stop-color="#834421" />
+      <stop offset="100%" stop-color="#663217" />
+    </linearGradient>
+
+    <linearGradient id="wingRightGrad" x1="1" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#be7143" />
+      <stop offset="55%" stop-color="#965029" />
+      <stop offset="100%" stop-color="#763b1c" />
+    </linearGradient>
+
+    <linearGradient id="pocketGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#7d3f1e" />
+      <stop offset="100%" stop-color="#5d2c12" />
     </linearGradient>
 
     <!-- Financial Trend Gradient -->
@@ -29,41 +41,53 @@
       <stop offset="50%" stop-color="#34d399" />
       <stop offset="100%" stop-color="#10b981" />
     </linearGradient>
-
-    <linearGradient id="trendAreaGrad" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#10b981" stop-opacity="0.38" />
-      <stop offset="100%" stop-color="#2563eb" stop-opacity="0.02" />
-    </linearGradient>
   </defs>
 
   <!-- Rounded App Icon Container -->
   <rect x="2" y="2" width="124" height="124" rx="28" fill="url(#bgGrad)" stroke="#334155" stroke-width="2" />
 
   <!-- Subtle Glow Behind Graph -->
-  <circle cx="76" cy="40" r="30" fill="#2563eb" opacity="0.16" />
+  <circle cx="72" cy="36" r="30" fill="#2563eb" opacity="0.16" />
 
-  <!-- Rising Financial Trend Area & Bars -->
-  <rect x="34" y="42" width="10" height="18" rx="2" fill="#2563eb" opacity="0.55" />
-  <rect x="50" y="34" width="10" height="26" rx="2" fill="#3b82f6" opacity="0.7" />
-  <rect x="66" y="25" width="10" height="35" rx="2" fill="#10b981" opacity="0.85" />
+  <!-- Rising Financial Trend Bars -->
+  <rect x="34" y="40" width="10" height="18" rx="2" fill="#2563eb" opacity="0.55" />
+  <rect x="50" y="32" width="10" height="26" rx="2" fill="#3b82f6" opacity="0.72" />
+  <rect x="66" y="23" width="10" height="35" rx="2" fill="#10b981" opacity="0.88" />
 
   <!-- Trend Line + Arrow -->
-  <path d="M 28 48 L 46 38 L 62 42 L 88 20" fill="none" stroke="url(#trendLineGrad)" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" />
-  <path d="M 78 20 L 89 19 L 87 30" fill="none" stroke="#10b981" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" />
+  <path d="M 28 46 L 46 36 L 62 40 L 88 18" fill="none" stroke="url(#trendLineGrad)" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" />
+  <path d="M 78 18 L 89 17 L 87 28" fill="none" stroke="#10b981" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" />
 
-  <!-- Brown Leather Wallet Back Edge -->
-  <rect x="24" y="48" width="76" height="52" rx="11" fill="#5c2d14" />
+  <!-- Trifold Wallet: Back Billfold Rim -->
+  <path d="M 20 53 C 20 48.5 23.5 45 28 45 L 100 45 C 104.5 45 108 48.5 108 53 L 108 98 C 108 102.5 104.5 106 100 106 L 28 106 C 23.5 106 20 102.5 20 98 Z" fill="url(#walletBackGrad)" stroke="#5c2d14" stroke-width="1" />
 
-  <!-- Main Brown Leather Wallet Body -->
-  <rect x="22" y="53" width="80" height="52" rx="11" fill="url(#walletBodyGrad)" stroke="#d48c62" stroke-opacity="0.35" stroke-width="1.5" />
+  <!-- Trifold Center Spine Panel -->
+  <rect x="44" y="51" width="40" height="55" rx="3" fill="url(#centerPanelGrad)" stroke="#d48c62" stroke-opacity="0.28" stroke-width="1.2" />
 
-  <!-- Top Leather Flap Accent -->
-  <path d="M 22 64 C 22 57.9 26.9 53 33 53 L 91 53 C 97.1 53 102 57.9 102 64 L 102 66 L 22 66 Z" fill="url(#walletFlapGrad)" opacity="0.85" />
+  <!-- Trifold Left Fold Panel -->
+  <path d="M 18 57 C 18 52.6 21.6 49 26 49 L 44 51 L 44 106 L 26 104 C 21.6 104 18 100.4 18 96 Z" fill="url(#wingLeftGrad)" stroke="#d48c62" stroke-opacity="0.35" stroke-width="1.2" />
 
-  <!-- Subtle Leather Stitching -->
-  <rect x="27" y="58" width="70" height="42" rx="8" fill="none" stroke="#fde68a" stroke-opacity="0.38" stroke-width="1.4" stroke-dasharray="3.5 3.5" />
+  <!-- Trifold Right Fold Panel -->
+  <path d="M 84 51 L 102 49 C 106.4 49 110 52.6 110 57 L 110 96 C 110 100.4 106.4 104 102 104 L 84 106 Z" fill="url(#wingRightGrad)" stroke="#d48c62" stroke-opacity="0.35" stroke-width="1.2" />
 
-  <!-- Wallet Clasp / Strap -->
-  <rect x="76" y="70" width="30" height="20" rx="6" fill="url(#claspGrad)" stroke="#d48c62" stroke-opacity="0.45" stroke-width="1.4" />
-  <circle cx="86" cy="80" r="4" fill="#fbbf24" stroke="#78350f" stroke-width="1" />
+  <!-- Fold Crease Shadows & Highlights -->
+  <line x1="44" y1="51" x2="44" y2="106" stroke="#3b1908" stroke-width="2" stroke-opacity="0.7" />
+  <line x1="45.5" y1="52" x2="45.5" y2="105" stroke="#e29e74" stroke-width="1" stroke-opacity="0.25" />
+  <line x1="84" y1="51" x2="84" y2="106" stroke="#3b1908" stroke-width="2" stroke-opacity="0.7" />
+  <line x1="82.5" y1="52" x2="82.5" y2="105" stroke="#e29e74" stroke-width="1" stroke-opacity="0.25" />
+
+  <!-- Left Panel Card Slots + Subtle Card Edge -->
+  <rect x="22" y="58" width="18" height="7" rx="1.5" fill="#e2e8f0" opacity="0.88" />
+  <path d="M 21 63 L 41 64.5 L 41 75 L 21 74 Z" fill="url(#pocketGrad)" stroke="#d48c62" stroke-opacity="0.3" stroke-width="1" />
+  <path d="M 21 77 L 41 78.5 L 41 89 L 21 88 Z" fill="url(#pocketGrad)" stroke="#d48c62" stroke-opacity="0.3" stroke-width="1" />
+
+  <!-- Center Panel Subtle Pocket -->
+  <rect x="48" y="61" width="32" height="36" rx="3" fill="url(#pocketGrad)" opacity="0.55" stroke="#d48c62" stroke-opacity="0.25" stroke-width="1" />
+
+  <!-- Right Panel ID / Card Window -->
+  <rect x="87" y="59" width="19" height="36" rx="3" fill="url(#pocketGrad)" stroke="#d48c62" stroke-opacity="0.32" stroke-width="1" />
+  <rect x="90" y="63" width="13" height="20" rx="2" fill="#0f172a" opacity="0.35" stroke="#94a3b8" stroke-opacity="0.35" stroke-width="0.9" />
+
+  <!-- Perimeter Leather Stitching -->
+  <path d="M 22 96 L 22 57 C 22 54.5 24 52.8 26.5 53 L 41 54.5 M 48 54.5 L 80 54.5 M 87 54.5 L 101.5 53 C 104 52.8 106 54.5 106 57 L 106 96 C 106 98.5 104 100.2 101.5 100 L 87 101.5 M 80 101.5 L 48 101.5 M 41 101.5 L 26.5 100 C 24 100.2 22 98.5 22 96" fill="none" stroke="#fde68a" stroke-opacity="0.36" stroke-width="1.3" stroke-dasharray="3.2 3.2" />
 </svg>
