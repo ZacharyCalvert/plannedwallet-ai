@@ -5,6 +5,7 @@ import { Routes, Route, Navigate, useNavigate, useParams, useMatch } from 'react
 import {
   Account,
   Category,
+  Perspective,
   RecurringTransaction,
   RecurringTransactionRequest,
   UserSession,
@@ -15,12 +16,15 @@ import {
   deleteRecurringTransaction,
   fetchAccounts,
   fetchCategories,
+  fetchPerspectives,
   fetchRecurringTransactions,
   updateRecurringTransaction,
 } from '../lib/api';
 import { getLocalTodayIso } from '../lib/bills';
 import { AccountsPane } from './AccountsPane';
 import { NewAccountForm } from './NewAccountForm';
+import { NewPerspectiveForm } from './NewPerspectiveForm';
+import { PerspectiveDetail } from './PerspectiveDetail';
 import { AccountDetail } from './AccountDetail';
 import { SnapshotAccountDetail } from './SnapshotAccountDetail';
 import { AssetAccountDetail } from './AssetAccountDetail';
@@ -133,6 +137,7 @@ function DashboardIndex({ accounts, accountsLoaded }: { accounts: Account[]; acc
 export function Dashboard({ session, onUserDeleted }: DashboardProps) {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [accountsLoaded, setAccountsLoaded] = useState(false);
+  const [perspectives, setPerspectives] = useState<Perspective[]>([]);
   const [recurringTransactions, setRecurringTransactions] = useState<RecurringTransaction[]>([]);
   const [billsActivated, setBillsActivated] = useState(false);
   const [incomesActivated, setIncomesActivated] = useState(false);
@@ -143,10 +148,14 @@ export function Dashboard({ session, onUserDeleted }: DashboardProps) {
   const [accountRefreshVersions, setAccountRefreshVersions] = useState<Record<string, number>>({});
   const navigate = useNavigate();
   const accountMatch = useMatch('/accounts/:accountId/*');
+  const perspectiveMatch = useMatch('/perspectives/:perspectiveId');
   const billsMatch = useMatch('/bills');
   const incomesMatch = useMatch('/incomes');
   const matchedId = accountMatch?.params.accountId;
   const selectedId = matchedId && matchedId !== 'new' ? matchedId : null;
+  const matchedPerspectiveId = perspectiveMatch?.params.perspectiveId;
+  const selectedPerspectiveId =
+    matchedPerspectiveId && matchedPerspectiveId !== 'new' ? matchedPerspectiveId : null;
   const bills = recurringTransactions.filter((tx) => tx.amount < 0);
   const incomes = recurringTransactions.filter((tx) => tx.amount > 0);
   const showBills = bills.length > 0 || billsActivated || Boolean(billsMatch);
@@ -184,6 +193,14 @@ export function Dashboard({ session, onUserDeleted }: DashboardProps) {
       })
       .catch(() => {
         // Categories load failure handled gracefully
+      });
+
+    fetchPerspectives(session.token)
+      .then((list) => {
+        if (!cancelled) setPerspectives(list);
+      })
+      .catch(() => {
+        // Perspectives load failure handled gracefully
       });
 
     return () => {
@@ -303,6 +320,10 @@ export function Dashboard({ session, onUserDeleted }: DashboardProps) {
         selectedId={selectedId}
         onSelectAccount={(acc) => navigate(`/accounts/${acc.id}`)}
         onNewAccountClick={() => navigate('/accounts/new')}
+        perspectives={perspectives}
+        selectedPerspectiveId={selectedPerspectiveId}
+        onSelectPerspective={(p) => navigate(`/perspectives/${p.id}`)}
+        onNewPerspectiveClick={() => navigate('/perspectives/new')}
         showBills={showBills}
         billsSelected={Boolean(billsMatch)}
         billsCount={bills.length}
@@ -345,6 +366,49 @@ export function Dashboard({ session, onUserDeleted }: DashboardProps) {
                 onSuccess={handleCreated}
                 onCancel={handleCancelCreate}
               />
+            }
+          />
+          <Route
+            path="/perspectives/new"
+            element={
+              <NewPerspectiveForm
+                token={session.token}
+                accounts={accounts}
+                recurringTransactions={recurringTransactions}
+                onSuccess={(created) => {
+                  setPerspectives((prev) => [created, ...prev]);
+                  navigate(`/perspectives/${created.id}`);
+                }}
+                onCancel={handleCancelCreate}
+              />
+            }
+          />
+          <Route
+            path="/perspectives/:perspectiveId"
+            element={
+              selectedPerspectiveId ? (
+                <PerspectiveDetail
+                  perspectiveId={selectedPerspectiveId}
+                  token={session.token}
+                  allAccounts={accounts}
+                  allRecurringTransactions={recurringTransactions}
+                  categories={categories}
+                  onPerspectiveUpdated={(updated) =>
+                    setPerspectives((prev) => prev.map((p) => (p.id === updated.id ? updated : p)))
+                  }
+                  onPerspectiveDeleted={(deletedId) => {
+                    const remaining = perspectives.filter((p) => p.id !== deletedId);
+                    setPerspectives(remaining);
+                    if (remaining.length > 0) {
+                      navigate(`/perspectives/${remaining[0].id}`, { replace: true });
+                    } else {
+                      handleCancelCreate();
+                    }
+                  }}
+                />
+              ) : (
+                <Navigate to="/" replace />
+              )
             }
           />
           <Route

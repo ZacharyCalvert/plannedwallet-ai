@@ -1118,3 +1118,92 @@
   gap: 0.5rem;
   align-items: center;
 }
+
+/* Perspectives UI */
+.accounts-section-divider {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+  margin: 0.75rem 0.25rem 0.25rem;
+}
+
+.badge-perspective {
+  background: rgba(124, 58, 237, 0.14);
+  color: #6d28d9;
+}
+
+.perspective-checkbox-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: 0.5rem;
+}
+
+.perspective-checkbox-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.45rem 0.65rem;
+  border: 1px solid var(--border);
+  border-radius: 0.45rem;
+  background: var(--bg-secondary, #f8fafc);
+  cursor: pointer;
+  font-size: 0.875rem;
+}
+
+.perspective-settings-checks {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.perspective-header-metrics {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.perspective-metric-box {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.perspective-chart-card {
+  background: #ffffff;
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  padding: 1rem;
+}
+
+.perspective-trend-svg {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.perspective-axis-label {
+  font-size: 11px;
+  fill: #64748b;
+}
+
+.perspective-runway-card {
+  background: #ffffff;
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  padding: 1rem 1.25rem;
+}
+
+.perspective-runway-summary {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.perspective-whatif-box {
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--border);
+}

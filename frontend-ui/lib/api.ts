@@ -23,6 +23,11 @@ import {
   CreateRecordRequest,
   CreateSnapshotRequest,
   CreateStoreRecordRequest,
+  Perspective,
+  PerspectiveCreateRequest,
+  PerspectiveSettings,
+  PerspectiveSettingsInput,
+  PerspectiveView,
   PolicyAgreement,
   PolicyAgreementRequest,
   ReconcileReport,
@@ -1208,4 +1213,182 @@ export async function applyRecurringTransactionToAccount(
     throw new Error(err.message || 'Failed to apply recurring transaction to account');
   }
   return res.json();
+}
+
+export async function fetchPerspectives(token: string): Promise<Perspective[]> {
+  const res = await tracedFetch('/api/v1/perspectives', {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) {
+    throw new Error('Failed to fetch perspectives');
+  }
+  const data = await res.json();
+  return Array.isArray(data) ? data : [];
+}
+
+export async function createPerspective(
+  token: string,
+  data: PerspectiveCreateRequest
+): Promise<Perspective> {
+  const res = await tracedFetch('/api/v1/perspectives', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || 'Failed to create perspective');
+  }
+  return res.json();
+}
+
+export async function fetchPerspectiveView(
+  token: string,
+  perspectiveId: string
+): Promise<PerspectiveView> {
+  const res = await tracedFetch(`/api/v1/perspectives/${encodeURIComponent(perspectiveId)}/view`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || 'Failed to fetch perspective view');
+  }
+  return res.json();
+}
+
+export async function updatePerspective(
+  token: string,
+  perspectiveId: string,
+  data: { name: string; description: string }
+): Promise<Perspective> {
+  const res = await tracedFetch(`/api/v1/perspectives/${encodeURIComponent(perspectiveId)}`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || 'Failed to update perspective');
+  }
+  return res.json();
+}
+
+export async function updatePerspectiveSettings(
+  token: string,
+  perspectiveId: string,
+  data: PerspectiveSettingsInput
+): Promise<PerspectiveSettings> {
+  const res = await tracedFetch(
+    `/api/v1/perspectives/${encodeURIComponent(perspectiveId)}/settings`,
+    {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(data),
+    }
+  );
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || 'Failed to update perspective settings');
+  }
+  return res.json();
+}
+
+export async function deletePerspective(token: string, perspectiveId: string): Promise<void> {
+  const res = await tracedFetch(`/api/v1/perspectives/${encodeURIComponent(perspectiveId)}`, {
+    method: 'DELETE',
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || 'Failed to delete perspective');
+  }
+}
+
+export async function linkPerspectiveAccount(
+  token: string,
+  perspectiveId: string,
+  accountId: string
+): Promise<void> {
+  const res = await tracedFetch(
+    `/api/v1/perspectives/${encodeURIComponent(perspectiveId)}/accounts`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ account_id: accountId }),
+    }
+  );
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || 'Failed to link account to perspective');
+  }
+}
+
+export async function unlinkPerspectiveAccount(
+  token: string,
+  perspectiveId: string,
+  accountId: string
+): Promise<void> {
+  const res = await tracedFetch(
+    `/api/v1/perspectives/${encodeURIComponent(perspectiveId)}/accounts/${encodeURIComponent(accountId)}`,
+    {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${token}` },
+    }
+  );
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || 'Failed to unlink account from perspective');
+  }
+}
+
+export async function linkPerspectiveRecurringTransaction(
+  token: string,
+  perspectiveId: string,
+  recurringTransactionId: string
+): Promise<void> {
+  const res = await tracedFetch(
+    `/api/v1/perspectives/${encodeURIComponent(perspectiveId)}/recurring-transactions`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ recurring_transaction_id: recurringTransactionId }),
+    }
+  );
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || 'Failed to link recurring transaction to perspective');
+  }
+}
+
+export async function unlinkPerspectiveRecurringTransaction(
+  token: string,
+  perspectiveId: string,
+  recurringId: string
+): Promise<void> {
+  const res = await tracedFetch(
+    `/api/v1/perspectives/${encodeURIComponent(perspectiveId)}/recurring-transactions/${encodeURIComponent(recurringId)}`,
+    {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${token}` },
+    }
+  );
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || 'Failed to unlink recurring transaction from perspective');
+  }
 }

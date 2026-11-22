@@ -1,13 +1,17 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { Account } from '../lib/types';
+import { Account, Perspective } from '../lib/types';
 
 interface AccountsPaneProps {
   accounts: Account[];
   selectedId: string | null;
   onSelectAccount: (account: Account) => void;
   onNewAccountClick: () => void;
+  perspectives?: Perspective[];
+  selectedPerspectiveId?: string | null;
+  onSelectPerspective?: (perspective: Perspective) => void;
+  onNewPerspectiveClick?: () => void;
   showBills?: boolean;
   billsSelected?: boolean;
   billsCount?: number;
@@ -25,6 +29,10 @@ export function AccountsPane({
   selectedId,
   onSelectAccount,
   onNewAccountClick,
+  perspectives = [],
+  selectedPerspectiveId = null,
+  onSelectPerspective,
+  onNewPerspectiveClick,
   showBills = false,
   billsSelected = false,
   billsCount = 0,
@@ -43,7 +51,8 @@ export function AccountsPane({
 
   const canOfferBills = !showBills && Boolean(onAddBillsClick);
   const canOfferIncomes = !showIncomes && Boolean(onAddIncomesClick);
-  const hasMenuChoices = canOfferBills || canOfferIncomes;
+  const canOfferPerspective = Boolean(onNewPerspectiveClick);
+  const hasMenuChoices = canOfferBills || canOfferIncomes || canOfferPerspective;
 
   useEffect(() => {
     if (!hasMenuChoices) {
@@ -98,7 +107,12 @@ export function AccountsPane({
     onAddIncomesClick?.();
   };
 
-  const plusTitle = hasMenuChoices ? 'Add Account, Bills, or Income' : 'Create New Account';
+  const handleChoosePerspective = () => {
+    setAddMenuOpen(false);
+    onNewPerspectiveClick?.();
+  };
+
+  const plusTitle = hasMenuChoices ? 'Add Account, Perspective, Bills, or Income' : 'Create New Account';
 
   const renderAddPopup = (rail = false) =>
     addMenuOpen && hasMenuChoices ? (
@@ -115,6 +129,16 @@ export function AccountsPane({
         >
           Account
         </button>
+        {canOfferPerspective && (
+          <button
+            type="button"
+            className="add-choice-item"
+            role="menuitem"
+            onClick={handleChoosePerspective}
+          >
+            Perspective
+          </button>
+        )}
         {canOfferBills && (
           <button
             type="button"
@@ -241,6 +265,9 @@ export function AccountsPane({
               );
             })
           )}
+          {((showBills && onSelectBills) || (showIncomes && onSelectIncomes)) && (
+            <div className="accounts-section-divider">Recurring Transactions</div>
+          )}
           {showBills && onSelectBills && (
             <button
               type="button"
@@ -270,6 +297,25 @@ export function AccountsPane({
               </div>
               <p className="account-card-desc">Recurring income &amp; reminders</p>
             </button>
+          )}
+          {perspectives.length > 0 && onSelectPerspective && (
+            <>
+              <div className="accounts-section-divider">Perspectives</div>
+              {perspectives.map((p) => (
+                <button
+                  key={p.id}
+                  type="button"
+                  className={`account-card account-card-perspective ${selectedPerspectiveId === p.id ? 'selected' : ''}`}
+                  onClick={() => onSelectPerspective(p)}
+                >
+                  <div className="account-card-header">
+                    <span className="account-card-name">{p.name}</span>
+                    <span className="badge-account-type badge-perspective">perspective</span>
+                  </div>
+                  <p className="account-card-desc">{p.description || 'Aggregated viewing window'}</p>
+                </button>
+              ))}
+            </>
           )}
         </div>
       )}

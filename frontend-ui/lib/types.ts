@@ -151,6 +151,64 @@ export interface BulkCreateRecordsResponse {
   records: AccountRecord[];
 }
 
+export interface PerspectiveSettings {
+  id: string;
+  perspective_id: string;
+  show_financial_trend: boolean;
+  show_categories: boolean;
+  calculate_average_daily_spend: boolean;
+  track_ruined_date: boolean;
+  custom_daily_spend?: number | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PerspectiveSettingsInput {
+  show_financial_trend?: boolean;
+  show_categories?: boolean;
+  track_ruined_date?: boolean;
+  custom_daily_spend?: number | null;
+}
+
+export interface Perspective {
+  id: string;
+  user_id: string;
+  name: string;
+  description: string;
+  access_level: string;
+  settings?: PerspectiveSettings;
+  account_ids?: string[];
+  recurring_transaction_ids?: string[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PerspectiveCreateRequest {
+  name: string;
+  description?: string;
+  account_ids?: string[];
+  recurring_transaction_ids?: string[];
+  settings?: PerspectiveSettingsInput;
+}
+
+export interface PerspectiveTrendPoint {
+  date: string;
+  total_value: number;
+  account_values?: Record<string, number>;
+}
+
+export interface PerspectiveView {
+  perspective: Perspective;
+  settings: PerspectiveSettings;
+  accounts: Account[];
+  recurring_transactions?: RecurringTransaction[];
+  current_total_value: number;
+  trend?: PerspectiveTrendPoint[];
+  average_daily_spend?: number | null;
+  ruined_date?: string | null;
+  days_until_ruined?: number | null;
+}
+
 export interface AccountSnapshot {
   id: string;
   account_id: string;

@@ -45,12 +45,12 @@ Medium priority:
 - [x] UI text search (find record by keyword)
 - [x] UI amount search
 - [x] Bulk fix categories
-perspectives
- : net worth
- : budgeting and expense pies
-Total net worth calculation / trending
+- [x] perspectives
+- [x] net worth
+- [x] budgeting and expense pies
+- [x] Total net worth calculation / trending
 one time use bill (future schedule, 1 time use)
-add income category
+- [x] add income category
 create batch job for data grabs (indexes/prices, captcha cleanup)
 - [x] Monthly bill additions / automation
 - [x] cleanup UI
