@@ -80,8 +80,8 @@ jobs:
             echo "::error::Automated or workflow_call migration is strictly restricted to 'main' (got '$FULL_REF')."
             exit 1
           fi
-          if [ "$EVENT_NAME" = "push" ] && [ "$TARGET_ENV" != "stage" ]; then
-            echo "Error: Automated push triggers are strictly restricted to the stage environment."
+          if [ "$EVENT_NAME" = "push" ] && [[ "$FULL_REF" != refs/tags/* ]] && [ "$TARGET_ENV" != "stage" ]; then
+            echo "Error: Automated branch push triggers are strictly restricted to the stage environment."
             exit 1
           fi
 
