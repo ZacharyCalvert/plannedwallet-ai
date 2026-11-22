@@ -58,7 +58,7 @@ func TestVersionEndpoint(t *testing.T) {
 	if err := json.Unmarshal(w.Body.Bytes(), &res); err != nil {
 		t.Fatalf("failed to decode version response: %v", err)
 	}
-	if res.GitHubRun == "" || res.BuildDate == "" || res.GitSHA == "" {
+	if res.GitHubRun == "" || res.BuildDate == "" || res.GitSHA == "" || res.Tag == "" {
 		t.Fatalf("expected populated version fields, got %+v", res)
 	}
 }

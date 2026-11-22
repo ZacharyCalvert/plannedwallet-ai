@@ -71,6 +71,11 @@ jobs:
           echo "github_run=${{ github.run_number }}-${{ github.run_id }}" >> "$GITHUB_OUTPUT"
           echo "build_date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
           echo "git_sha=${{ github.sha }}" >> "$GITHUB_OUTPUT"
+          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            echo "tag=${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=untagged" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Build Docker image for testing
         uses: docker/build-push-action@v7
@@ -83,6 +88,8 @@ jobs:
             GITHUB_RUN=${{ steps.build_meta.outputs.github_run }}
             BUILD_DATE=${{ steps.build_meta.outputs.build_date }}
             GIT_SHA=${{ steps.build_meta.outputs.git_sha }}
+            TAG=${{ steps.build_meta.outputs.tag }}
+            TAG=${{ steps.build_meta.outputs.tag }}
           cache-from: type=gha
           cache-to: type=gha,mode=min
 
@@ -184,6 +191,7 @@ jobs:
             GITHUB_RUN=${{ steps.build_meta.outputs.github_run }}
             BUILD_DATE=${{ steps.build_meta.outputs.build_date }}
             GIT_SHA=${{ steps.build_meta.outputs.git_sha }}
+            TAG=${{ steps.build_meta.outputs.tag }}
           cache-from: type=gha
 
   deploy-backend:
@@ -272,6 +280,10 @@ jobs:
           GITHUB_RUN="${{ github.run_number }}-${{ github.run_id }}"
           BUILD_DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           GIT_SHA="${{ github.sha }}"
+          TAG="untagged"
+          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            TAG="${{ github.ref_name }}"
+          fi
           IMAGE_TAG="${GIT_SHA}"
           if aws ecr describe-images \
             --region "${AWS_REGION}" \
@@ -285,15 +297,17 @@ jobs:
           echo "DEPLOYED_GITHUB_RUN=${GITHUB_RUN}" >> "$GITHUB_ENV"
           echo "DEPLOYED_BUILD_DATE=${BUILD_DATE}" >> "$GITHUB_ENV"
           echo "DEPLOYED_GIT_SHA=${GIT_SHA}" >> "$GITHUB_ENV"
+          echo "DEPLOYED_TAG=${TAG}" >> "$GITHUB_ENV"
           echo "image_uri=${IMAGE_URI}" >> "$GITHUB_OUTPUT"
 
-          echo "Building linux/amd64 image: $IMAGE_URI (run=$GITHUB_RUN, date=$BUILD_DATE, sha=$GIT_SHA)..."
+          echo "Building linux/amd64 image: $IMAGE_URI (run=$GITHUB_RUN, date=$BUILD_DATE, sha=$GIT_SHA, tag=$TAG)..."
           docker build \
             --platform linux/amd64 \
             --file backend-api/Dockerfile \
             --build-arg "GITHUB_RUN=${GITHUB_RUN}" \
             --build-arg "BUILD_DATE=${BUILD_DATE}" \
             --build-arg "GIT_SHA=${GIT_SHA}" \
+            --build-arg "TAG=${TAG}" \
             --tag "$IMAGE_URI" \
             ./backend-api
 
@@ -377,7 +391,7 @@ jobs:
           LAST_RESPONSE="<no response>"
 
           echo "Verifying deployed version at $VERSION_URL (timeout: ${TIMEOUT_SECONDS}s)"
-          echo "Expected: github_run='${DEPLOYED_GITHUB_RUN}', build_date='${DEPLOYED_BUILD_DATE}', git_sha='${DEPLOYED_GIT_SHA}'"
+          echo "Expected: github_run='${DEPLOYED_GITHUB_RUN}', build_date='${DEPLOYED_BUILD_DATE}', git_sha='${DEPLOYED_GIT_SHA}', tag='${DEPLOYED_TAG}'"
 
           while true; do
             BODY=$(curl -sS --max-time 5 \
@@ -389,7 +403,7 @@ jobs:
               LAST_RESPONSE="$BODY"
             fi
 
-            if python3 -c "import json, sys; d = json.loads(sys.argv[1]); sys.exit(0 if d.get('github_run') == sys.argv[2] and d.get('build_date') == sys.argv[3] and d.get('git_sha') == sys.argv[4] else 1)" "$BODY" "${DEPLOYED_GITHUB_RUN}" "${DEPLOYED_BUILD_DATE}" "${DEPLOYED_GIT_SHA}" 2>/dev/null; then
+            if python3 -c "import json, sys; d = json.loads(sys.argv[1]); sys.exit(0 if d.get('github_run') == sys.argv[2] and d.get('build_date') == sys.argv[3] and d.get('git_sha') == sys.argv[4] and d.get('tag') == sys.argv[5] else 1)" "$BODY" "${DEPLOYED_GITHUB_RUN}" "${DEPLOYED_BUILD_DATE}" "${DEPLOYED_GIT_SHA}" "${DEPLOYED_TAG}" 2>/dev/null; then
               ELAPSED=$(( $(date +%s) - START_TIME ))
               echo "Deploy verification PASSED in ${ELAPSED}s: ${LAST_RESPONSE}"
               exit 0

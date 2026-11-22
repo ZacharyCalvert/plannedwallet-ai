@@ -11,6 +11,7 @@ var (
 	GitHubRun = "local"
 	BuildDate = "unknown"
 	GitSHA    = "unknown"
+	Tag       = "untagged"
 )
 
 func valueOrDefault(val, fallback string) string {
@@ -27,5 +28,6 @@ func Current() models.VersionResponse {
 		GitHubRun: valueOrDefault(GitHubRun, "local"),
 		BuildDate: valueOrDefault(BuildDate, "unknown"),
 		GitSHA:    valueOrDefault(GitSHA, "unknown"),
+		Tag:       valueOrDefault(Tag, "untagged"),
 	}
 }

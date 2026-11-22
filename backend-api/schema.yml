@@ -6052,6 +6052,7 @@ components:
         - github_run
         - build_date
         - git_sha
+        - tag
       properties:
         github_run:
           type: string
@@ -6065,6 +6066,10 @@ components:
           type: string
           description: Full Git commit SHA stamped at compile time.
           example: "0123456789abcdef0123456789abcdef01234567"
+        tag:
+          type: string
+          description: Git tag name stamped at compile time, or "untagged" when not built from a tag.
+          example: "v1.2.0"
           example: ["read_only"]
 
     RecurringSchedule:

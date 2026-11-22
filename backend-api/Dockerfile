@@ -12,8 +12,9 @@ COPY . .
 ARG GITHUB_RUN=local
 ARG BUILD_DATE=unknown
 ARG GIT_SHA=unknown
+ARG TAG=untagged
 RUN CGO_ENABLED=0 GOOS=linux go build \
-    -ldflags="-w -s -X github.com/plannedwallet/internal/version.GitHubRun=${GITHUB_RUN} -X github.com/plannedwallet/internal/version.BuildDate=${BUILD_DATE} -X github.com/plannedwallet/internal/version.GitSHA=${GIT_SHA}" \
+    -ldflags="-w -s -X github.com/plannedwallet/internal/version.GitHubRun=${GITHUB_RUN} -X github.com/plannedwallet/internal/version.BuildDate=${BUILD_DATE} -X github.com/plannedwallet/internal/version.GitSHA=${GIT_SHA} -X github.com/plannedwallet/internal/version.Tag=${TAG}" \
     -o /app/server .
 
 # Deployment stage

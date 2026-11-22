@@ -693,6 +693,7 @@ type VersionResponse struct {
 	GitHubRun string `json:"github_run"`
 	BuildDate string `json:"build_date"`
 	GitSHA    string `json:"git_sha"`
+	Tag       string `json:"tag"`
 }
 
 // PolicyAgreement represents a ledger entry capturing user acceptance of Terms, Privacy Policy, and US adult consumer eligibility.
