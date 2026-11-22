@@ -54,6 +54,7 @@ func seedDefaultCategories(cats map[string]*models.Category) {
 		{"00000000-0000-4000-8000-000000000005", "Healthcare"},
 		{"00000000-0000-4000-8000-000000000006", "Insurance"},
 		{"00000000-0000-4000-8000-000000000007", "Debt"},
+		{"00000000-0000-4000-8000-000000000008", "Income"},
 	}
 	now := time.Now().UTC()
 	for _, d := range defaults {

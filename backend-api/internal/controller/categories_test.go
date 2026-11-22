@@ -31,8 +31,8 @@ func TestDefaultCategoriesAndUserIsolation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ListCategories failed: %v", err)
 	}
-	if len(cats) != 7 {
-		t.Fatalf("expected 7 default categories, got %d", len(cats))
+	if len(cats) != 8 {
+		t.Fatalf("expected 8 default categories, got %d", len(cats))
 	}
 
 	created, err := ctrl.CreateCategory(ctx, u1.ID, models.CategoryCreateRequest{Name: "Dining Out"})
@@ -47,8 +47,8 @@ func TestDefaultCategoriesAndUserIsolation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ListCategories for u2 failed: %v", err)
 	}
-	if len(u2Cats) != 7 {
-		t.Fatalf("expected u2 to see only 7 default categories, got %d", len(u2Cats))
+	if len(u2Cats) != 8 {
+		t.Fatalf("expected u2 to see only 8 default categories, got %d", len(u2Cats))
 	}
 
 	if _, err := ctrl.CreateCategory(ctx, u1.ID, models.CategoryCreateRequest{Name: "dining out"}); err == nil {
@@ -87,12 +87,12 @@ func TestCategorySharedAccountVisibilityAndDeletion(t *testing.T) {
 	}
 
 	sharedCats, _ := ctrl.ListCategories(ctx, sharedUser.ID)
-	if len(sharedCats) != 8 {
-		t.Fatalf("expected shared user to see 8 categories (7 default + 1 shared), got %d", len(sharedCats))
+	if len(sharedCats) != 9 {
+		t.Fatalf("expected shared user to see 9 categories (8 default + 1 shared), got %d", len(sharedCats))
 	}
 	outsiderCats, _ := ctrl.ListCategories(ctx, outsider.ID)
-	if len(outsiderCats) != 7 {
-		t.Fatalf("expected outsider to see 7 categories, got %d", len(outsiderCats))
+	if len(outsiderCats) != 8 {
+		t.Fatalf("expected outsider to see 8 categories, got %d", len(outsiderCats))
 	}
 
 	if err := ctrl.DeleteCategory(ctx, sharedUser.ID, custom.ID); err == nil {

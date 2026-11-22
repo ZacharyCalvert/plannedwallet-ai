@@ -10,11 +10,12 @@ DEFAULT_CATEGORY_NAMES = {
     "Healthcare",
     "Insurance",
     "Debt",
+    "Income",
 }
 
 
 def test_default_categories_and_crud_lifecycle(api_context: APIRequestContext):
-    """Verify 7 default categories exist, cannot be deleted, and custom categories support CRUD + nullification."""
+    """Verify 8 default categories exist, cannot be deleted, and custom categories support CRUD + nullification."""
     _, token = create_authenticated_user(api_context)
     _, other_token = create_authenticated_user(api_context)
     headers = {"Authorization": f"Bearer {token}"}

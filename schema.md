@@ -37,7 +37,7 @@ Enforces multi-user access control and sharing permissions.
 ### 1.4 `categories`
 Stores transaction categories for `checking`, `savings`, and `credit card` records.
 - `id` (UUID, Primary Key)
-- `user_id` (UUID, Nullable, FK -> `users(id)` ON DELETE CASCADE) - `NULL` for global default categories (`Housing`, `Transportation`, `Groceries`, `Utilities`, `Healthcare`, `Insurance`, `Debt`)
+- `user_id` (UUID, Nullable, FK -> `users(id)` ON DELETE CASCADE) - `NULL` for global default categories (`Housing`, `Transportation`, `Groceries`, `Utilities`, `Healthcare`, `Insurance`, `Debt`, `Income`)
 - `name` (VARCHAR(100), Not Null)
 - `created_at` (TIMESTAMPTZ, Not Null, Default NOW())
 - `updated_at` (TIMESTAMPTZ, Not Null, Default NOW())

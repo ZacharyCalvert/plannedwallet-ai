@@ -516,8 +516,8 @@ func TestMemoryRepo_CategoryDefaultsAndUniqueness(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ListCategoriesForUser failed: %v", err)
 	}
-	if len(cats) != 7 {
-		t.Fatalf("expected 7 seeded default categories, got %d", len(cats))
+	if len(cats) != 8 {
+		t.Fatalf("expected 8 seeded default categories, got %d", len(cats))
 	}
 
 	c1 := &models.Category{ID: "cat-1", UserID: &u1, Name: "Dining", CreatedAt: now, UpdatedAt: now}
@@ -561,8 +561,8 @@ func TestMemoryRepo_DeleteCategoryNullifiesRecordsAndSharedVisibility(t *testing
 	if err != nil {
 		t.Fatalf("ListCategoriesForUser failed: %v", err)
 	}
-	if len(sharedCats) != 8 {
-		t.Fatalf("expected shared user to see 8 categories, got %d", len(sharedCats))
+	if len(sharedCats) != 9 {
+		t.Fatalf("expected shared user to see 9 categories, got %d", len(sharedCats))
 	}
 
 	if err := repo.DeleteCategory(ctx, cat.ID); err != nil {

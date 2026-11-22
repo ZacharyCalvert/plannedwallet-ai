@@ -41,8 +41,8 @@ func TestCategoriesCRUDHandlers(t *testing.T) {
 	}
 	var cats []models.CategoryResponse
 	_ = json.Unmarshal(wList.Body.Bytes(), &cats)
-	if len(cats) != 7 {
-		t.Fatalf("expected 7 default categories, got %d", len(cats))
+	if len(cats) != 8 {
+		t.Fatalf("expected 8 default categories, got %d", len(cats))
 	}
 
 	// Default category cannot be deleted

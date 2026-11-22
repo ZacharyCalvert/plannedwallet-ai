@@ -74,6 +74,7 @@ func TestInitSQLEmbedded_Categories(t *testing.T) {
 		"'Healthcare'",
 		"'Insurance'",
 		"'Debt'",
+		"'Income'",
 	}
 	for _, snippet := range expectedSnippets {
 		if !strings.Contains(initSQL, snippet) {
