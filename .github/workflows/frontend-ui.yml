@@ -153,7 +153,7 @@ jobs:
   deploy-static:
     name: Deploy Static to AWS S3 & CloudFront (${{ ((github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_call') && inputs.environment == 'prod') && 'prod' || 'stage' }})
     needs: test-and-build
-    if: github.ref == 'refs/heads/main' && github.actor == 'ZacharyCalvert'
+    if: github.actor == 'ZacharyCalvert' && (github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main' || (github.event_name == 'workflow_call' && startsWith(github.ref, 'refs/tags/')))
     runs-on: ubuntu-latest
     environment: ${{ ((github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_call') && inputs.environment == 'prod') && 'prod' || 'stage' }}
     concurrency:
@@ -171,17 +171,35 @@ jobs:
           fi
           echo "Authorization confirmed for operator: ZacharyCalvert."
 
+      - name: Checkout history for tag ancestry verification
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
       - name: Validate target environment and branch
         env:
           EVENT_NAME: ${{ github.event_name }}
           INPUT_ENV: ${{ inputs.environment }}
           BRANCH: ${{ github.ref_name }}
+          FULL_REF: ${{ github.ref }}
+          TARGET_SHA: ${{ github.sha }}
         run: |
           echo "Triggered by event: $EVENT_NAME"
-          echo "Triggered on branch: $BRANCH"
+          echo "Triggered on ref: $FULL_REF ($BRANCH)"
           echo "Input Environment: $INPUT_ENV"
-          if [ "$BRANCH" != "main" ]; then
-            echo "Error: deploy-static is strictly restricted to run ONLY from the 'main' branch."
+          if [[ "$FULL_REF" == refs/tags/* ]]; then
+            git fetch origin main
+            TAG_COMMIT="$(git rev-parse "${TARGET_SHA}^{commit}")"
+            if ! git merge-base --is-ancestor "$TAG_COMMIT" origin/main; then
+              echo "::error::Tag '$BRANCH' ($TAG_COMMIT) is NOT in 'main'. Tag deployments are strictly restricted to commits in main."
+              exit 1
+            fi
+            echo "Verified release tag '$BRANCH' ($TAG_COMMIT) is an ancestor of origin/main."
+          elif [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            echo "Manual workflow_dispatch authorized for actor 'ZacharyCalvert' on ref '$FULL_REF'."
+          elif [ "$BRANCH" != "main" ]; then
+            echo "Error: Automated or workflow_call deploy-static is strictly restricted to run ONLY from the 'main' branch."
             exit 1
           fi
           if [ "$EVENT_NAME" = "push" ] && [ -n "$INPUT_ENV" ] && [ "$INPUT_ENV" != "stage" ]; then

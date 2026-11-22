@@ -1,7 +1,10 @@
 name: Deploy All (Migrations, Backend API & Frontend UI)
-run-name: "Deploy All [${{ inputs.environment }}] (${{ github.actor }})"
+run-name: "Deploy All [${{ github.event_name == 'push' && 'prod' || inputs.environment }}] (${{ github.ref_name }} by ${{ github.actor }})"
 
 on:
+  push:
+    tags:
+      - '*'
   workflow_dispatch:
     inputs:
       environment:
@@ -24,29 +27,76 @@ permissions:
   id-token: write
 
 jobs:
+  verify-release:
+    name: Verify Release Target & Main Branch Ancestry
+    if: github.actor == 'ZacharyCalvert'
+    runs-on: ubuntu-latest
+    outputs:
+      target_env: ${{ steps.resolve.outputs.target_env }}
+      run_migrations: ${{ steps.resolve.outputs.run_migrations }}
+    steps:
+      - name: Checkout full history
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Verify tag or branch is in main and resolve target environment
+        id: resolve
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          REF: ${{ github.ref }}
+          REF_NAME: ${{ github.ref_name }}
+          TARGET_SHA: ${{ github.sha }}
+          INPUT_ENV: ${{ inputs.environment }}
+          INPUT_MIGRATIONS: ${{ inputs.run_migrations }}
+        run: |
+          if [ "$EVENT_NAME" = "push" ]; then
+            if [[ "$REF" != refs/tags/* ]]; then
+              echo "::error::Automated push trigger on deploy-all is strictly restricted to tags."
+              exit 1
+            fi
+            git fetch origin main
+            TAG_COMMIT="$(git rev-parse "${TARGET_SHA}^{commit}")"
+            if ! git merge-base --is-ancestor "$TAG_COMMIT" origin/main; then
+              echo "::error::Tag '${REF_NAME}' (${TAG_COMMIT}) is NOT a commit in 'main'. Production tag deploys require the tagged commit to exist in main."
+              exit 1
+            fi
+            echo "Verified tag '${REF_NAME}' (${TAG_COMMIT}) is an ancestor of origin/main."
+            echo "target_env=prod" >> "$GITHUB_OUTPUT"
+            echo "run_migrations=true" >> "$GITHUB_OUTPUT"
+          else
+            if [ "$REF" != "refs/heads/main" ]; then
+              echo "::error::Manual dispatch is strictly restricted to the 'main' branch (got '$REF')."
+              exit 1
+            fi
+            echo "target_env=${INPUT_ENV}" >> "$GITHUB_OUTPUT"
+            echo "run_migrations=${INPUT_MIGRATIONS}" >> "$GITHUB_OUTPUT"
+          fi
+
   apply-sql:
-    name: Apply Database Migrations (${{ inputs.environment }})
-    if: github.ref == 'refs/heads/main' && github.actor == 'ZacharyCalvert' && inputs.run_migrations
+    name: Apply Database Migrations (${{ needs.verify-release.outputs.target_env }})
+    needs: [verify-release]
+    if: github.actor == 'ZacharyCalvert' && needs.verify-release.outputs.run_migrations == 'true'
     uses: ./.github/workflows/apply-sql.yml
     with:
-      environment: ${{ inputs.environment }}
+      environment: ${{ needs.verify-release.outputs.target_env }}
     secrets: inherit
 
   backend-api:
-    name: Backend API CI/CD (${{ inputs.environment }})
-    needs: [apply-sql]
-    if: ${{ always() && github.ref == 'refs/heads/main' && github.actor == 'ZacharyCalvert' && (needs.apply-sql.result == 'success' || needs.apply-sql.result == 'skipped') }}
+    name: Backend API CI/CD (${{ needs.verify-release.outputs.target_env }})
+    needs: [verify-release, apply-sql]
+    if: ${{ always() && github.actor == 'ZacharyCalvert' && needs.verify-release.result == 'success' && (needs.apply-sql.result == 'success' || needs.apply-sql.result == 'skipped') }}
     uses: ./.github/workflows/backend-api.yml
     with:
-      environment: ${{ inputs.environment }}
+      environment: ${{ needs.verify-release.outputs.target_env }}
       run_migrations: false
     secrets: inherit
 
   frontend-ui:
-    name: Frontend UI CI/CD (${{ inputs.environment }})
-    needs: [backend-api]
-    if: github.ref == 'refs/heads/main' && github.actor == 'ZacharyCalvert'
+    name: Frontend UI CI/CD (${{ needs.verify-release.outputs.target_env }})
+    needs: [verify-release, backend-api]
+    if: github.actor == 'ZacharyCalvert'
     uses: ./.github/workflows/frontend-ui.yml
     with:
-      environment: ${{ inputs.environment }}
+      environment: ${{ needs.verify-release.outputs.target_env }}
     secrets: inherit

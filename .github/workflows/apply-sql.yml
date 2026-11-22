@@ -52,14 +52,34 @@ jobs:
 
       - name: Checkout code
         uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
 
-      - name: Validate target environment
+      - name: Validate target environment and ref
         env:
           TARGET_ENV: ${{ inputs.environment || 'stage' }}
           EVENT_NAME: ${{ github.event_name }}
+          BRANCH: ${{ github.ref_name }}
+          FULL_REF: ${{ github.ref }}
+          TARGET_SHA: ${{ github.sha }}
         run: |
           echo "Triggered by event: $EVENT_NAME"
+          echo "Triggered on ref: $FULL_REF ($BRANCH)"
           echo "Target Environment: $TARGET_ENV"
+          if [[ "$FULL_REF" == refs/tags/* ]]; then
+            git fetch origin main
+            TAG_COMMIT="$(git rev-parse "${TARGET_SHA}^{commit}")"
+            if ! git merge-base --is-ancestor "$TAG_COMMIT" origin/main; then
+              echo "::error::Tag '$BRANCH' ($TAG_COMMIT) is NOT in 'main'. Tag deployments are strictly restricted to commits in main."
+              exit 1
+            fi
+            echo "Verified tag '$BRANCH' ($TAG_COMMIT) is an ancestor of origin/main."
+          elif [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            echo "Manual workflow_dispatch authorized for actor 'ZacharyCalvert' on ref '$FULL_REF'."
+          elif [ "$BRANCH" != "main" ]; then
+            echo "::error::Automated or workflow_call migration is strictly restricted to 'main' (got '$FULL_REF')."
+            exit 1
+          fi
           if [ "$EVENT_NAME" = "push" ] && [ "$TARGET_ENV" != "stage" ]; then
             echo "Error: Automated push triggers are strictly restricted to the stage environment."
             exit 1
