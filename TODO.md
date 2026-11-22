@@ -37,37 +37,47 @@ Medium priority:
 - [x] safeguards against "too new" dependencies from dependabot
 - [x] embed privacy and terms policy version in jwt.  Enforce
 - [x] Account recovery - password reset if you know totp, totp reset if you know password
-Add Money-in / Money-out features (trending) for asset and snapshot accounts to track growth/change
-create batch job for data grabs (indexes/prices, captcha cleanup)
+- [x] Warn about using account numbers (UI warning modal)
+- [x] add "download all data" json and CSV zip exporter
+- [x] Tag line / branding
+- [x] favicon, banner for LinkedIn, banner for YouTube, etc
+- [x] bulk upload support (large 1000 record upload)
+- [x] UI text search (find record by keyword)
+- [x] UI amount search
+- [x] Bulk fix categories
 perspectives
-earmark
+ : net worth
+ : budgeting and expense pies
+Total net worth calculation / trending
+one time use bill (future schedule, 1 time use)
+add income category
+create batch job for data grabs (indexes/prices, captcha cleanup)
 - [x] Monthly bill additions / automation
 - [x] cleanup UI
 - [x] full reconcile of records (monthly capture?)
 - [x] WAF geospacial lock-down
 - [x] Aggregate grouping, such as credit card debt, retirement funds, liquid assets, crypto
-money transfers between accounts
-Total net worth calculation / trending
 Auto ingestion / scraping of data from remote services (gas trends, silver, gold, etc)
 - [x] postgres auto vaccuuming - schedule, auto trigger
 logging - log ingestion, formatting, context
-text search (find record by keyword) -> text search in postgres?
+
 fun money / daily money based on income expectations (payroll)
 Payroll / payday features -> button to add?
-Cookie to ignore TOTP challenge ? 
-Snapshot extraction of gold / silver / stocks / gas
+- [x] Cookie to ignore TOTP challenge ? 
+
 Add perspectives - graphical trending of net worth
 
 Production ready:
-- support email + support form -> "support@plannedwallet.com"
-- add "download all data" json and CSV zip exporter
-- legal disclaimer
-- Add aget of consent confirmation: "I confirm that I am at least 18 years of age, am a resident of the United States, and agree to the Terms of Use and Privacy & Security Policy."
-- Establish means to observe activity / record counts
-- Calculate space, size, cost (confirm limits for usage planning)
-- Regional Privacy Rights (CCPA/CPRA & GDPR): Even as a small app, if you have users in California, Europe, or states with comprehensive privacy laws (like Texas, Virginia, or Colorado), include sections detailing users' rights to access, export (portability), correct, and delete their data, along with an email address or form to submit those requests.
+- [x] support email + support form -> "support@plannedwallet.com"
+- [x] legal disclaimer
+- [x] Add aget of consent confirmation: "I confirm that I am at least 18 years of age, am a resident of the United States, and agree to the Terms of Use and Privacy & Security Policy."
+Compare some example/external terms of use and privacy policy
+- [x] Establish means to observe activity / record counts
+- [x] Calculate space, size, cost (confirm limits for usage planning)
 
 Premium features:
+Add Money-in / Money-out features (trending) for asset and snapshot accounts to track growth/change
+Snapshot extraction of gold / silver / stocks / gas
 earmark (capture bill, mark it against an account over time)
 Add financial records over 365 days old
 Bulk data upload (json/csv)
@@ -82,6 +92,7 @@ move / merge accounts
 Earmark / planning (5k for property taxes, earmark it for savings based on month)
 payment plans (like buying an iPhone split up by 12 months)
 Loan principal management
+money transfers between accounts
 
 Low priority:
 - [x] Means to halt/disable signups (new accounts)
@@ -113,6 +124,6 @@ scale postgres / review native eventual consistency models
 
 
 Completed:
-- W3C Trace Context (traceparent, tracestate) across backend, frontend, gateway, and logs
-- X-Client-ID header
+- [x] W3C Trace Context (traceparent, tracestate) across backend, frontend, gateway, and logs
+- [x] X-Client-ID header
 
