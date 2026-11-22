@@ -140,4 +140,48 @@ describe('Account Categories Helpers', () => {
     );
     assert.deepStrictEqual(uncatOrder, ['delete:cat-old']);
   });
+
+  it('summarizes uncategorized expense vendors and bulk assigns categories case-insensitively', async () => {
+    const {
+      summarizeUncategorizedVendors,
+      getUncategorizedExpensesForVendor,
+      bulkAssignCategoryToRecords,
+    } = await import('./accountCategories.ts');
+
+    const recs = [
+      { id: '1', account_id: 'acc-1', value: -12.5, date_sent: '2026-11-01', date_cleared: null, category_id: null, entity: 'Corner Grocery', description: 'Milk', created_at: '', updated_at: '' },
+      { id: '2', account_id: 'acc-1', value: -20.0, date_sent: '2026-11-03', date_cleared: null, category_id: null, entity: 'corner grocery', description: 'Bread', created_at: '', updated_at: '' },
+      { id: '3', account_id: 'acc-1', value: 50.0, date_sent: '2026-11-04', date_cleared: null, category_id: null, entity: 'Corner Grocery', description: 'Refund', created_at: '', updated_at: '' },
+      { id: '4', account_id: 'acc-1', value: -8.0, date_sent: '2026-11-02', date_cleared: null, category_id: 'cat-1', entity: 'Corner Grocery', description: 'Already categorized', created_at: '', updated_at: '' },
+      { id: '5', account_id: 'acc-1', value: -5.5, date_sent: '2026-11-05', date_cleared: null, category_id: null, entity: 'Coffee Shop', description: 'Latte', created_at: '', updated_at: '' },
+    ];
+
+    const summary = summarizeUncategorizedVendors(recs);
+    assert.strictEqual(summary.length, 2);
+    assert.strictEqual(summary[0].displayName, 'Corner Grocery');
+    assert.strictEqual(summary[0].count, 2);
+    assert.strictEqual(summary[0].totalAmount, 32.5);
+    assert.strictEqual(summary[1].displayName, 'Coffee Shop');
+    assert.strictEqual(summary[1].count, 1);
+
+    const matching = getUncategorizedExpensesForVendor(recs, 'CORNER GROCERY');
+    assert.deepStrictEqual(
+      matching.map((r) => r.id),
+      ['2', '1']
+    );
+
+    const progressUpdates: string[] = [];
+    const updated = await bulkAssignCategoryToRecords(
+      matching,
+      'cat-groceries',
+      async (accId, recId, catId) => {
+        const orig = recs.find((r) => r.id === recId)!;
+        return { ...orig, account_id: accId, category_id: catId };
+      },
+      (done, total) => progressUpdates.push(`${done}/${total}`)
+    );
+    assert.strictEqual(updated.length, 2);
+    assert.strictEqual(updated[0].category_id, 'cat-groceries');
+    assert.deepStrictEqual(progressUpdates, ['1/2', '2/2']);
+  });
 });

@@ -223,3 +223,78 @@ export async function transitionAndDeleteCategory(
   }
   await deleteFn(deletingCategoryId);
 }
+
+export interface UncategorizedVendorSummary {
+  key: string;
+  displayName: string;
+  count: number;
+  totalAmount: number;
+  records: AccountRecord[];
+}
+
+export function isUncategorizedExpense(
+  record: Pick<AccountRecord, 'value' | 'category_id'>
+): boolean {
+  return record.value < 0 && !record.category_id;
+}
+
+export function summarizeUncategorizedVendors(
+  records: AccountRecord[]
+): UncategorizedVendorSummary[] {
+  const groups = new Map<string, UncategorizedVendorSummary>();
+  for (const rec of records) {
+    if (!isUncategorizedExpense(rec)) continue;
+    const trimmed = rec.entity.trim();
+    const key = trimmed.toLowerCase();
+    if (!key) continue;
+
+    const existing = groups.get(key);
+    if (existing) {
+      existing.count += 1;
+      existing.totalAmount += Math.abs(rec.value);
+      existing.records.push(rec);
+    } else {
+      groups.set(key, {
+        key,
+        displayName: trimmed,
+        count: 1,
+        totalAmount: Math.abs(rec.value),
+        records: [rec],
+      });
+    }
+  }
+
+  return Array.from(groups.values()).sort((a, b) => {
+    if (b.count !== a.count) return b.count - a.count;
+    if (b.totalAmount !== a.totalAmount) return b.totalAmount - a.totalAmount;
+    return a.displayName.localeCompare(b.displayName);
+  });
+}
+
+export function getUncategorizedExpensesForVendor(
+  records: AccountRecord[],
+  vendorName: string
+): AccountRecord[] {
+  const targetKey = vendorName.trim().toLowerCase();
+  if (!targetKey) return [];
+  return records
+    .filter((r) => isUncategorizedExpense(r) && r.entity.trim().toLowerCase() === targetKey)
+    .sort((a, b) => b.date_sent.localeCompare(a.date_sent));
+}
+
+export async function bulkAssignCategoryToRecords(
+  recordsToUpdate: Pick<AccountRecord, 'id' | 'account_id'>[],
+  targetCategoryId: string,
+  patchFn: (accountId: string, recordId: string, categoryId: string) => Promise<AccountRecord>,
+  onProgress?: (completed: number, total: number) => void
+): Promise<AccountRecord[]> {
+  const updated: AccountRecord[] = [];
+  const total = recordsToUpdate.length;
+  for (let i = 0; i < total; i++) {
+    const rec = recordsToUpdate[i];
+    const next = await patchFn(rec.account_id, rec.id, targetCategoryId);
+    updated.push(next);
+    onProgress?.(i + 1, total);
+  }
+  return updated;
+}

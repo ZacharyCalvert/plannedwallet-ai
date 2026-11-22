@@ -3,28 +3,34 @@
 import { useState, useMemo, useRef, useEffect } from 'react';
 import { AccountRecord, Category } from '../lib/types';
 import { createCategory } from '../lib/api';
-import { findCategoryByNameCaseInsensitive, getRecordsForCategory } from '../lib/accountCategories';
+import { findCategoryByNameCaseInsensitive, getRecordsForCategory, isUncategorizedExpense } from '../lib/accountCategories';
 import { DeleteCategoryModal } from './DeleteCategoryModal';
+import { BulkFixCategoriesModal } from './BulkFixCategoriesModal';
 
 interface AccountCategoriesTabProps {
   token: string;
+  accountId: string;
   records: AccountRecord[];
   categories: Category[];
   onCategoryCreated: (cat: Category) => void;
   onCategoryDeleted: (deletedId: string, transitionToCategoryId: string | null) => void;
+  onRecordsUpdated: (updatedRecords: AccountRecord[]) => void;
 }
 
 export function AccountCategoriesTab({
   token,
+  accountId,
   records,
   categories,
   onCategoryCreated,
   onCategoryDeleted,
+  onRecordsUpdated,
 }: AccountCategoriesTabProps) {
   const [newName, setNewName] = useState('');
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState('');
   const [deletingCategory, setDeletingCategory] = useState<Category | null>(null);
+  const [bulkFixOpen, setBulkFixOpen] = useState(false);
   const categoryInputRef = useRef<HTMLInputElement>(null);
   const [focusCounter, setFocusCounter] = useState(0);
 
@@ -69,6 +75,11 @@ export function AccountCategoriesTab({
     [deletingCategory, records]
   );
 
+  const uncategorizedExpenseCount = useMemo(
+    () => records.filter((r) => isUncategorizedExpense(r)).length,
+    [records]
+  );
+
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     setCreateError('');
@@ -100,6 +111,27 @@ export function AccountCategoriesTab({
 
   return (
     <div className="categories-tab-section">
+      <section className="new-record-section">
+        <div className="section-title-row">
+          <div>
+            <h3>Bulk Fix Categories by Vendor / Recipient</h3>
+            <span className="section-subtitle">
+              {uncategorizedExpenseCount === 0
+                ? 'All expense records in this account are categorized.'
+                : `${uncategorizedExpenseCount} uncategorized ${uncategorizedExpenseCount === 1 ? 'expense' : 'expenses'} in this account`}
+            </span>
+          </div>
+          <button
+            type="button"
+            className="btn-secondary btn-sm"
+            onClick={() => setBulkFixOpen(true)}
+            disabled={uncategorizedExpenseCount === 0}
+          >
+            Bulk Fix Categories
+          </button>
+        </div>
+      </section>
+
       <section className="new-record-section">
         <div className="section-title-row">
           <h3>Create Custom Category</h3>
@@ -196,6 +228,16 @@ export function AccountCategoriesTab({
           setDeletingCategory(null);
           onCategoryDeleted(deletedId, transitionId);
         }}
+      />
+
+      <BulkFixCategoriesModal
+        isOpen={bulkFixOpen}
+        onClose={() => setBulkFixOpen(false)}
+        token={token}
+        accountId={accountId}
+        records={records}
+        categories={categories}
+        onRecordsUpdated={onRecordsUpdated}
       />
     </div>
   );

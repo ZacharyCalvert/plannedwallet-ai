@@ -586,6 +586,7 @@ export function AccountDetail({
       ) : activeTab === 'categories' ? (
         <AccountCategoriesTab
           token={token}
+          accountId={account.id}
           records={records}
           categories={categories}
           onCategoryCreated={(cat) => setCategories((prev) => [...prev, cat])}
@@ -597,6 +598,10 @@ export function AccountDetail({
             if (categoryId === deletedId) {
               setCategoryId(transitionId || '');
             }
+          }}
+          onRecordsUpdated={(updatedList) => {
+            const byId = new Map(updatedList.map((r) => [r.id, r]));
+            setRecords((prev) => prev.map((r) => byId.get(r.id) ?? r));
           }}
         />
       ) : activeTab === 'reconcile' ? (
