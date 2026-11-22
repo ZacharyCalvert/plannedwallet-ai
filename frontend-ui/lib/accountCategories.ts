@@ -185,6 +185,26 @@ export function computeCategoryPieData(
   return { totalExpenses, slices };
 }
 
+export function getPieSliceKey(slice: Pick<PieChartSlice, 'categoryId'>): string {
+  return slice.categoryId ?? '__uncategorized__';
+}
+
+export function filterAndRecomputePieData(
+  summary: CategoryPieSummary,
+  disabledKeys: ReadonlySet<string>
+): CategoryPieSummary {
+  if (disabledKeys.size === 0) {
+    return summary;
+  }
+  const activeSlices = summary.slices.filter((s) => !disabledKeys.has(getPieSliceKey(s)));
+  const totalExpenses = activeSlices.reduce((sum, s) => sum + s.amount, 0);
+  const slices = activeSlices.map((s) => ({
+    ...s,
+    percentage: totalExpenses > 0 ? (s.amount / totalExpenses) * 100 : 0,
+  }));
+  return { totalExpenses, slices };
+}
+
 export async function resolveAndCreateMissingCategories(
   rawCategoryNames: string[],
   existingCategories: Category[],

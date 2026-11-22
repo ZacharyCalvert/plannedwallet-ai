@@ -184,4 +184,36 @@ describe('Account Categories Helpers', () => {
     assert.strictEqual(updated[0].category_id, 'cat-groceries');
     assert.deepStrictEqual(progressUpdates, ['1/2', '2/2']);
   });
+
+  it('filters disabled categories from pie summary and recomputes percentages', async () => {
+    const {
+      computeCategoryPieData,
+      filterAndRecomputePieData,
+      getPieSliceKey,
+    } = await import('./accountCategories.ts');
+
+    const cats = [
+      { id: 'cat-debt', name: 'Debt', is_default: false, created_at: '', updated_at: '' },
+      { id: 'cat-food', name: 'Groceries', is_default: true, created_at: '', updated_at: '' },
+      { id: 'cat-util', name: 'Utilities', is_default: true, created_at: '', updated_at: '' },
+    ];
+    const recs = [
+      { id: '1', account_id: 'a1', value: -100, date_sent: '2026-11-01', date_cleared: null, category_id: 'cat-debt', entity: 'Loan', description: '', created_at: '', updated_at: '' },
+      { id: '2', account_id: 'a1', value: -60, date_sent: '2026-11-02', date_cleared: null, category_id: 'cat-food', entity: 'Market', description: '', created_at: '', updated_at: '' },
+      { id: '3', account_id: 'a1', value: -40, date_sent: '2026-11-03', date_cleared: null, category_id: 'cat-util', entity: 'Power', description: '', created_at: '', updated_at: '' },
+    ];
+
+    const full = computeCategoryPieData(recs, cats, 'all', true, '2026-11-10');
+    assert.strictEqual(full.totalExpenses, 200);
+    assert.strictEqual(full.slices.length, 3);
+
+    const debtSlice = full.slices.find((s) => s.categoryId === 'cat-debt')!;
+    const filtered = filterAndRecomputePieData(full, new Set([getPieSliceKey(debtSlice)]));
+    assert.strictEqual(filtered.totalExpenses, 100);
+    assert.strictEqual(filtered.slices.length, 2);
+    assert.strictEqual(filtered.slices[0].categoryName, 'Groceries');
+    assert.strictEqual(filtered.slices[0].percentage, 60);
+    assert.strictEqual(filtered.slices[1].categoryName, 'Utilities');
+    assert.strictEqual(filtered.slices[1].percentage, 40);
+  });
 });

@@ -458,8 +458,31 @@
   text-align: right;
 }
 
+.pie-legend-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+
+.legend-row-clickable {
+  cursor: pointer;
+  transition: background-color 0.15s ease, opacity 0.15s ease;
+}
+
+.legend-row-clickable:hover,
 .legend-row-active {
   background-color: #f8fafc;
+}
+
+.legend-row-disabled {
+  opacity: 0.48;
+  background-color: #f8fafc;
+}
+
+.legend-row-disabled .legend-category-name {
+  text-decoration: line-through;
+  color: var(--muted);
 }
 
 .legend-swatch {

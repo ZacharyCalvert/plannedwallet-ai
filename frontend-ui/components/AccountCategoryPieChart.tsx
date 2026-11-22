@@ -3,7 +3,12 @@
 import { useState, useMemo } from 'react';
 import { AccountRecord, Category } from '../lib/types';
 import { BalanceRange } from '../lib/accountTrend';
-import { computeCategoryPieData, PieChartSlice } from '../lib/accountCategories';
+import {
+  computeCategoryPieData,
+  filterAndRecomputePieData,
+  getPieSliceKey,
+  PieChartSlice,
+} from '../lib/accountCategories';
 
 interface AccountCategoryPieChartProps {
   records: AccountRecord[];
@@ -68,22 +73,53 @@ function buildArcSegments(slices: PieChartSlice[]): ArcSegment[] {
 export function AccountCategoryPieChart({ records, categories }: AccountCategoryPieChartProps) {
   const [rangeFilter, setRangeFilter] = useState<BalanceRange>('all');
   const [includeUncategorized, setIncludeUncategorized] = useState(true);
-  const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
+  const [hoveredKey, setHoveredKey] = useState<string | null>(null);
+  const [disabledKeys, setDisabledKeys] = useState<Set<string>>(() => new Set());
 
-  const summary = useMemo(
+  const allSummary = useMemo(
     () => computeCategoryPieData(records, categories, rangeFilter, includeUncategorized),
     [records, categories, rangeFilter, includeUncategorized]
   );
 
-  const segments = useMemo(() => buildArcSegments(summary.slices), [summary.slices]);
-  const activeSlice = hoveredIdx !== null ? summary.slices[hoveredIdx] ?? null : null;
+  const activeSummary = useMemo(
+    () => filterAndRecomputePieData(allSummary, disabledKeys),
+    [allSummary, disabledKeys]
+  );
+
+  const activeShareByKey = useMemo(
+    () => new Map(activeSummary.slices.map((s) => [getPieSliceKey(s), s.percentage])),
+    [activeSummary.slices]
+  );
+
+  const segments = useMemo(() => buildArcSegments(activeSummary.slices), [activeSummary.slices]);
+  const activeSlice =
+    hoveredKey !== null
+      ? activeSummary.slices.find((s) => getPieSliceKey(s) === hoveredKey) ?? null
+      : null;
+
+  const toggleCategoryKey = (key: string) => {
+    setDisabledKeys((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) {
+        next.delete(key);
+      } else {
+        next.add(key);
+        if (hoveredKey === key) {
+          setHoveredKey(null);
+        }
+      }
+      return next;
+    });
+  };
 
   return (
     <div className="trend-graph-section">
       <div className="graph-controls-row">
         <div>
           <h3 className="graph-title">Expenses by Category</h3>
-          <p className="graph-subtitle">Breakdown of negative (spending) transactions by category</p>
+          <p className="graph-subtitle">
+            Breakdown of negative (spending) transactions by category — click a row to hide or show it
+          </p>
         </div>
         <div className="expense-controls-right">
           <label className="uncategorized-toggle">
@@ -91,7 +127,7 @@ export function AccountCategoryPieChart({ records, categories }: AccountCategory
               type="checkbox"
               checked={includeUncategorized}
               onChange={(e) => {
-                setHoveredIdx(null);
+                setHoveredKey(null);
                 setIncludeUncategorized(e.target.checked);
               }}
             />
@@ -104,7 +140,7 @@ export function AccountCategoryPieChart({ records, categories }: AccountCategory
                 type="button"
                 className={`pill-btn ${rangeFilter === opt.value ? 'active' : ''}`}
                 onClick={() => {
-                  setHoveredIdx(null);
+                  setHoveredKey(null);
                   setRangeFilter(opt.value);
                 }}
               >
@@ -115,7 +151,7 @@ export function AccountCategoryPieChart({ records, categories }: AccountCategory
         </div>
       </div>
 
-      {summary.slices.length === 0 ? (
+      {allSummary.slices.length === 0 ? (
         <div className="graph-empty-card">
           <h4>No Matching Expenses</h4>
           <p>
@@ -127,48 +163,72 @@ export function AccountCategoryPieChart({ records, categories }: AccountCategory
       ) : (
         <div className="pie-chart-layout">
           <div className="pie-svg-card">
-            <svg viewBox="0 0 300 300" className="pie-svg" role="img" aria-label="Expense categories pie chart">
-              {segments.length === 1 ? (
-                <circle
-                  cx="150"
-                  cy="150"
-                  r="92"
-                  fill="none"
-                  stroke={segments[0].slice.color}
-                  strokeWidth="52"
-                  className="pie-slice"
-                  onMouseEnter={() => setHoveredIdx(0)}
-                  onMouseLeave={() => setHoveredIdx(null)}
-                />
-              ) : (
-                segments.map((seg) => (
-                  <path
-                    key={seg.slice.categoryName}
-                    d={seg.path}
-                    fill={seg.slice.color}
-                    stroke="#ffffff"
-                    strokeWidth="2"
-                    className={`pie-slice ${hoveredIdx === seg.index ? 'hovered' : ''}`}
-                    onMouseEnter={() => setHoveredIdx(seg.index)}
-                    onMouseLeave={() => setHoveredIdx(null)}
+            {activeSummary.slices.length === 0 ? (
+              <div className="graph-empty-card">
+                <h4>All Categories Hidden</h4>
+                <p>Click any greyed-out category row to re-enable it in the pie chart.</p>
+              </div>
+            ) : (
+              <svg viewBox="0 0 300 300" className="pie-svg" role="img" aria-label="Expense categories pie chart">
+                {segments.length === 1 ? (
+                  <circle
+                    cx="150"
+                    cy="150"
+                    r="92"
+                    fill="none"
+                    stroke={segments[0].slice.color}
+                    strokeWidth="52"
+                    className="pie-slice"
+                    onMouseEnter={() => setHoveredKey(getPieSliceKey(segments[0].slice))}
+                    onMouseLeave={() => setHoveredKey(null)}
                   />
-                ))
-              )}
-              <text x="150" y="142" textAnchor="middle" className="pie-center-label">
-                {activeSlice ? activeSlice.categoryName : 'Total Spend'}
-              </text>
-              <text x="150" y="166" textAnchor="middle" className="pie-center-value">
-                {formatCurrency(activeSlice ? activeSlice.amount : summary.totalExpenses)}
-              </text>
-              {activeSlice && (
-                <text x="150" y="185" textAnchor="middle" className="pie-center-pct">
-                  {activeSlice.percentage.toFixed(1)}%
+                ) : (
+                  segments.map((seg) => {
+                    const key = getPieSliceKey(seg.slice);
+                    return (
+                      <path
+                        key={seg.slice.categoryName}
+                        d={seg.path}
+                        fill={seg.slice.color}
+                        stroke="#ffffff"
+                        strokeWidth="2"
+                        className={`pie-slice ${hoveredKey === key ? 'hovered' : ''}`}
+                        onMouseEnter={() => setHoveredKey(key)}
+                        onMouseLeave={() => setHoveredKey(null)}
+                      />
+                    );
+                  })
+                )}
+                <text x="150" y="142" textAnchor="middle" className="pie-center-label">
+                  {activeSlice ? activeSlice.categoryName : 'Total Spend'}
                 </text>
-              )}
-            </svg>
+                <text x="150" y="166" textAnchor="middle" className="pie-center-value">
+                  {formatCurrency(activeSlice ? activeSlice.amount : activeSummary.totalExpenses)}
+                </text>
+                {activeSlice && (
+                  <text x="150" y="185" textAnchor="middle" className="pie-center-pct">
+                    {activeSlice.percentage.toFixed(1)}%
+                  </text>
+                )}
+              </svg>
+            )}
           </div>
 
           <div className="pie-legend-card">
+            {disabledKeys.size > 0 && (
+              <div className="pie-legend-header">
+                <span className="text-muted text-sm">
+                  {disabledKeys.size} {disabledKeys.size === 1 ? 'category' : 'categories'} hidden
+                </span>
+                <button
+                  type="button"
+                  className="btn-secondary btn-sm"
+                  onClick={() => setDisabledKeys(new Set())}
+                >
+                  Show All
+                </button>
+              </div>
+            )}
             <table className="pie-legend-table">
               <thead>
                 <tr>
@@ -179,22 +239,55 @@ export function AccountCategoryPieChart({ records, categories }: AccountCategory
                 </tr>
               </thead>
               <tbody>
-                {summary.slices.map((slice, idx) => (
-                  <tr
-                    key={slice.categoryName}
-                    className={hoveredIdx === idx ? 'legend-row-active' : ''}
-                    onMouseEnter={() => setHoveredIdx(idx)}
-                    onMouseLeave={() => setHoveredIdx(null)}
-                  >
-                    <td>
-                      <span className="legend-swatch" style={{ backgroundColor: slice.color }} />
-                      <span className="font-semibold">{slice.categoryName}</span>
-                    </td>
-                    <td className="text-right text-muted">{slice.recordCount}</td>
-                    <td className="text-right font-semibold">{formatCurrency(slice.amount)}</td>
-                    <td className="text-right text-muted">{slice.percentage.toFixed(1)}%</td>
-                  </tr>
-                ))}
+                {allSummary.slices.map((slice) => {
+                  const key = getPieSliceKey(slice);
+                  const isDisabled = disabledKeys.has(key);
+                  const activePct = activeShareByKey.get(key);
+                  const rowClasses = [
+                    'legend-row-clickable',
+                    !isDisabled && hoveredKey === key ? 'legend-row-active' : '',
+                    isDisabled ? 'legend-row-disabled' : '',
+                  ]
+                    .filter(Boolean)
+                    .join(' ');
+
+                  return (
+                    <tr
+                      key={slice.categoryName}
+                      className={rowClasses}
+                      role="button"
+                      tabIndex={0}
+                      aria-pressed={!isDisabled}
+                      title={
+                        isDisabled
+                          ? `Click to show "${slice.categoryName}" in pie chart`
+                          : `Click to hide "${slice.categoryName}" from pie chart`
+                      }
+                      onClick={() => toggleCategoryKey(key)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          toggleCategoryKey(key);
+                        }
+                      }}
+                      onMouseEnter={() => !isDisabled && setHoveredKey(key)}
+                      onMouseLeave={() => setHoveredKey(null)}
+                    >
+                      <td>
+                        <span
+                          className="legend-swatch"
+                          style={{ backgroundColor: isDisabled ? '#cbd5e1' : slice.color }}
+                        />
+                        <span className="font-semibold legend-category-name">{slice.categoryName}</span>
+                      </td>
+                      <td className="text-right text-muted">{slice.recordCount}</td>
+                      <td className="text-right font-semibold">{formatCurrency(slice.amount)}</td>
+                      <td className="text-right text-muted">
+                        {isDisabled ? 'Hidden' : `${(activePct ?? slice.percentage).toFixed(1)}%`}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
