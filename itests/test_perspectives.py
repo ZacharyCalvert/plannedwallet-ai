@@ -76,8 +76,8 @@ def test_perspective_creation_and_view(api_context: APIRequestContext):
             "account_ids": [snap1_id, snap2_id, snap3_id, chk_id],
             "settings": {
                 "show_financial_trend": True,
+                "show_categories": True,
                 "calculate_average_daily_spend": True,
-                "calculate_average_return_yoy": True,
                 "track_ruined_date": True,
             },
         },
@@ -109,9 +109,9 @@ def test_perspective_creation_and_view(api_context: APIRequestContext):
     assert view["average_daily_spend"] is not None
     assert round(view["average_daily_spend"], 1) == 30.0
 
-    # YoY return verification (Growth from 35000 on 2025-01-01 to ~44700 on 2026-01-11)
-    assert view["average_return_yoy"] is not None
-    assert view["average_return_yoy"] > 0.0
+    # show_categories enabled and average_return_yoy removed
+    assert view["settings"]["show_categories"] is True
+    assert "average_return_yoy" not in view
 
     # Ruined date verification
     assert view["ruined_date"] is not None
@@ -156,8 +156,8 @@ def test_perspective_settings_and_account_linking(api_context: APIRequestContext
         f"/api/v1/perspectives/{p_id}/settings",
         data={
             "show_financial_trend": True,
+            "show_categories": False,
             "calculate_average_daily_spend": False,
-            "calculate_average_return_yoy": False,
             "track_ruined_date": True,
             "custom_daily_spend": 100.0,
         },
@@ -175,6 +175,36 @@ def test_perspective_settings_and_account_linking(api_context: APIRequestContext
         headers=headers,
     )
     assert link_res.status == 201
+
+    # 2b. Create and link a recurring bill to the perspective, then verify & unlink
+    bill_res = api_context.post(
+        "/api/v1/recurring-transactions",
+        data={
+            "amount": -75.0,
+            "frequency": "monthly",
+            "entity": "Internet Service",
+            "description": "Monthly internet",
+        },
+        headers=headers,
+    )
+    assert bill_res.status == 201, f"Create bill failed: {bill_res.text()}"
+    bill_id = bill_res.json()["id"]
+
+    link_rt = api_context.post(
+        f"/api/v1/perspectives/{p_id}/recurring-transactions",
+        data={"recurring_transaction_id": bill_id},
+        headers=headers,
+    )
+    assert link_rt.status == 201, f"Link recurring tx failed: {link_rt.text()}"
+    list_rt = api_context.get(f"/api/v1/perspectives/{p_id}/recurring-transactions", headers=headers)
+    assert list_rt.status == 200
+    assert any(r["id"] == bill_id for r in list_rt.json())
+
+    unlink_rt = api_context.delete(
+        f"/api/v1/perspectives/{p_id}/recurring-transactions/{bill_id}",
+        headers=headers,
+    )
+    assert unlink_rt.status == 204
 
     # Duplicate link returns 409
     dup_res = api_context.post(
@@ -208,6 +238,48 @@ def test_perspective_settings_and_account_linking(api_context: APIRequestContext
     assert list_after.status == 200
     assert len(list_after.json()) == 1
     assert list_after.json()[0]["id"] == acc2_id
+
+    # 5. Relink account 1 and verify both accounts are linked again
+    relink_res = api_context.post(
+        f"/api/v1/perspectives/{p_id}/accounts",
+        data={"account_id": acc1_id},
+        headers=headers,
+    )
+    assert relink_res.status == 201, f"Relink account 1 failed: {relink_res.text()}"
+    list_relinked = api_context.get(f"/api/v1/perspectives/{p_id}/accounts", headers=headers)
+    assert list_relinked.status == 200
+    relinked_ids = [a["id"] for a in list_relinked.json()]
+    assert acc1_id in relinked_ids and acc2_id in relinked_ids
+
+    # 6. Update settings again (toggle show_categories / track_ruined_date / custom_daily_spend) and verify via GET /settings
+    put_settings_2 = api_context.put(
+        f"/api/v1/perspectives/{p_id}/settings",
+        data={
+            "show_financial_trend": True,
+            "show_categories": True,
+            "track_ruined_date": False,
+            "custom_daily_spend": 55.25,
+        },
+        headers=headers,
+    )
+    assert put_settings_2.status == 200
+    get_settings = api_context.get(f"/api/v1/perspectives/{p_id}/settings", headers=headers)
+    assert get_settings.status == 200
+    settings_2 = get_settings.json()
+    assert settings_2["show_categories"] is True
+    assert settings_2["track_ruined_date"] is False
+    assert settings_2["custom_daily_spend"] == 55.25
+
+    # 7. Delete perspective and verify it is removed while linked accounts remain intact
+    del_res = api_context.delete(f"/api/v1/perspectives/{p_id}", headers=headers)
+    assert del_res.status == 204, f"Delete perspective failed: {del_res.text()}"
+    get_deleted = api_context.get(f"/api/v1/perspectives/{p_id}", headers=headers)
+    assert get_deleted.status == 404
+    list_perspectives = api_context.get("/api/v1/perspectives", headers=headers)
+    assert list_perspectives.status == 200
+    assert all(p["id"] != p_id for p in (list_perspectives.json() or []))
+    assert api_context.get(f"/api/v1/accounts/{acc1_id}", headers=headers).status == 200
+    assert api_context.get(f"/api/v1/accounts/{acc2_id}", headers=headers).status == 200
 
 
 def test_perspective_sharing_and_access_control(api_context: APIRequestContext):

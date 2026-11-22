@@ -238,14 +238,17 @@ CREATE TABLE IF NOT EXISTS perspective_settings (
     id UUID PRIMARY KEY,
     perspective_id UUID NOT NULL REFERENCES perspectives(id) ON DELETE CASCADE,
     show_financial_trend BOOLEAN NOT NULL DEFAULT TRUE,
+    show_categories BOOLEAN NOT NULL DEFAULT FALSE,
     calculate_average_daily_spend BOOLEAN NOT NULL DEFAULT FALSE,
-    calculate_average_return_yoy BOOLEAN NOT NULL DEFAULT FALSE,
     track_ruined_date BOOLEAN NOT NULL DEFAULT FALSE,
     custom_daily_spend DOUBLE PRECISION,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     CONSTRAINT uq_perspective_settings_perspective UNIQUE (perspective_id)
 );
+
+ALTER TABLE perspective_settings ADD COLUMN IF NOT EXISTS show_categories BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE perspective_settings DROP COLUMN IF EXISTS calculate_average_return_yoy;
 
 CREATE INDEX IF NOT EXISTS idx_perspective_settings_perspective_id ON perspective_settings(perspective_id);
 
@@ -298,6 +301,17 @@ CREATE INDEX IF NOT EXISTS idx_recurring_transactions_category_id ON recurring_t
 ALTER TABLE recurring_transactions DROP CONSTRAINT IF EXISTS recurring_transactions_frequency_check;
 ALTER TABLE recurring_transactions DROP CONSTRAINT IF EXISTS chk_recurring_frequency;
 ALTER TABLE recurring_transactions ADD CONSTRAINT chk_recurring_frequency CHECK (frequency IN ('weekly', 'bi-monthly', 'monthly', 'yearly'));
+
+CREATE TABLE IF NOT EXISTS perspective_recurring_transactions (
+    id UUID PRIMARY KEY,
+    perspective_id UUID NOT NULL REFERENCES perspectives(id) ON DELETE CASCADE,
+    recurring_transaction_id UUID NOT NULL REFERENCES recurring_transactions(id) ON DELETE CASCADE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT uq_perspective_recurring_tx UNIQUE (perspective_id, recurring_transaction_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_perspective_recurring_tx_perspective_id ON perspective_recurring_transactions(perspective_id);
+CREATE INDEX IF NOT EXISTS idx_perspective_recurring_tx_recurring_id ON perspective_recurring_transactions(recurring_transaction_id);
 
 DROP INDEX IF EXISTS idx_bills_category_id;
 DROP INDEX IF EXISTS idx_bills_account_id;

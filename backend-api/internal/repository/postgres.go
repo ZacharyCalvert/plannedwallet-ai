@@ -1407,12 +1407,12 @@ func (p *PostgresRepository) DeletePerspective(ctx context.Context, id string) e
 }
 
 func (p *PostgresRepository) GetPerspectiveSettings(ctx context.Context, perspectiveID string) (*models.PerspectiveSettings, error) {
-	query := `SELECT id, perspective_id, show_financial_trend, calculate_average_daily_spend, calculate_average_return_yoy, track_ruined_date, custom_daily_spend, created_at, updated_at
+	query := `SELECT id, perspective_id, show_financial_trend, show_categories, calculate_average_daily_spend, track_ruined_date, custom_daily_spend, created_at, updated_at
 	          FROM perspective_settings WHERE perspective_id = $1`
 	var s models.PerspectiveSettings
 	err := p.db.QueryRowContext(ctx, query, perspectiveID).Scan(
-		&s.ID, &s.PerspectiveID, &s.ShowFinancialTrend, &s.CalculateAverageDailySpend,
-		&s.CalculateAverageReturnYoY, &s.TrackRuinedDate, &s.CustomDailySpend, &s.CreatedAt, &s.UpdatedAt,
+		&s.ID, &s.PerspectiveID, &s.ShowFinancialTrend, &s.ShowCategories,
+		&s.CalculateAverageDailySpend, &s.TrackRuinedDate, &s.CustomDailySpend, &s.CreatedAt, &s.UpdatedAt,
 	)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -1424,16 +1424,16 @@ func (p *PostgresRepository) GetPerspectiveSettings(ctx context.Context, perspec
 }
 
 func (p *PostgresRepository) UpsertPerspectiveSettings(ctx context.Context, s *models.PerspectiveSettings) error {
-	query := `INSERT INTO perspective_settings (id, perspective_id, show_financial_trend, calculate_average_daily_spend, calculate_average_return_yoy, track_ruined_date, custom_daily_spend, created_at, updated_at)
+	query := `INSERT INTO perspective_settings (id, perspective_id, show_financial_trend, show_categories, calculate_average_daily_spend, track_ruined_date, custom_daily_spend, created_at, updated_at)
 	          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 	          ON CONFLICT (perspective_id)
 	          DO UPDATE SET show_financial_trend = EXCLUDED.show_financial_trend,
+	                        show_categories = EXCLUDED.show_categories,
 	                        calculate_average_daily_spend = EXCLUDED.calculate_average_daily_spend,
-	                        calculate_average_return_yoy = EXCLUDED.calculate_average_return_yoy,
 	                        track_ruined_date = EXCLUDED.track_ruined_date,
 	                        custom_daily_spend = EXCLUDED.custom_daily_spend,
 	                        updated_at = EXCLUDED.updated_at`
-	_, err := p.db.ExecContext(ctx, query, s.ID, s.PerspectiveID, s.ShowFinancialTrend, s.CalculateAverageDailySpend, s.CalculateAverageReturnYoY, s.TrackRuinedDate, s.CustomDailySpend, s.CreatedAt, s.UpdatedAt)
+	_, err := p.db.ExecContext(ctx, query, s.ID, s.PerspectiveID, s.ShowFinancialTrend, s.ShowCategories, s.CalculateAverageDailySpend, s.TrackRuinedDate, s.CustomDailySpend, s.CreatedAt, s.UpdatedAt)
 	return err
 }
 
@@ -1481,6 +1481,57 @@ func (p *PostgresRepository) ListPerspectiveAccountIDs(ctx context.Context, pers
 			return nil, err
 		}
 		result = append(result, accID)
+	}
+	if result == nil {
+		result = make([]string, 0)
+	}
+	return result, rows.Err()
+}
+
+func (p *PostgresRepository) AddPerspectiveRecurringTransaction(ctx context.Context, link *models.PerspectiveRecurringTransaction) error {
+	query := `INSERT INTO perspective_recurring_transactions (id, perspective_id, recurring_transaction_id, created_at)
+	          VALUES ($1, $2, $3, $4)`
+	_, err := p.db.ExecContext(ctx, query, link.ID, link.PerspectiveID, link.RecurringTransactionID, link.CreatedAt)
+	if err != nil {
+		if isUniqueViolation(err) {
+			return ErrConflict
+		}
+		return err
+	}
+	return nil
+}
+
+func (p *PostgresRepository) RemovePerspectiveRecurringTransaction(ctx context.Context, perspectiveID, recurringTransactionID string) error {
+	query := `DELETE FROM perspective_recurring_transactions WHERE perspective_id = $1 AND recurring_transaction_id = $2`
+	res, err := p.db.ExecContext(ctx, query, perspectiveID, recurringTransactionID)
+	if err != nil {
+		return err
+	}
+	cnt, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if cnt == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+func (p *PostgresRepository) ListPerspectiveRecurringTransactionIDs(ctx context.Context, perspectiveID string) ([]string, error) {
+	query := `SELECT recurring_transaction_id FROM perspective_recurring_transactions WHERE perspective_id = $1 ORDER BY created_at ASC`
+	rows, err := p.db.QueryContext(ctx, query, perspectiveID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var result []string
+	for rows.Next() {
+		var recID string
+		if err := rows.Scan(&recID); err != nil {
+			return nil, err
+		}
+		result = append(result, recID)
 	}
 	if result == nil {
 		result = make([]string, 0)

@@ -667,6 +667,10 @@ func (h *Handler) registerPerspectiveRoutes(p *gin.RouterGroup) {
 	p.POST("/perspectives/:perspectiveId/accounts", h.LinkPerspectiveAccount)
 	p.DELETE("/perspectives/:perspectiveId/accounts/:accountId", h.UnlinkPerspectiveAccount)
 
+	p.GET("/perspectives/:perspectiveId/recurring-transactions", h.ListPerspectiveRecurringTransactions)
+	p.POST("/perspectives/:perspectiveId/recurring-transactions", h.LinkPerspectiveRecurringTransaction)
+	p.DELETE("/perspectives/:perspectiveId/recurring-transactions/:recurringId", h.UnlinkPerspectiveRecurringTransaction)
+
 	p.GET("/perspectives/:perspectiveId/access", h.ListPerspectiveAccess)
 	p.GET("/perspectives/:perspectiveId/access/:userId", h.GetPerspectiveAccess)
 	p.POST("/perspectives/:perspectiveId/access", h.GrantPerspectiveAccess)

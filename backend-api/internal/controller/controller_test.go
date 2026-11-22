@@ -858,14 +858,14 @@ func TestPerspectiveController_LifecycleAndView(t *testing.T) {
 }
 
 func testPerspectiveFlow(t *testing.T, ctx context.Context, ctrl *controller.Controller, _ repository.Repository, uID, snapID, chkID string) {
-	trendTrue, spendTrue, yoyTrue, ruinedTrue := true, true, true, true
+	trendTrue, catsTrue, spendTrue, ruinedTrue := true, true, true, true
 	pRes, err := ctrl.CreatePerspective(ctx, uID, models.PerspectiveCreateRequest{
 		Name: "Total Net Worth", Description: "Combined view",
 		AccountIDs: []string{snapID, chkID},
 		Settings: &models.PerspectiveSettingsInput{
 			ShowFinancialTrend:         &trendTrue,
+			ShowCategories:             &catsTrue,
 			CalculateAverageDailySpend: &spendTrue,
-			CalculateAverageReturnYoY:  &yoyTrue,
 			TrackRuinedDate:            &ruinedTrue,
 		},
 	})
@@ -888,6 +888,32 @@ func testPerspectiveFlow(t *testing.T, ctx context.Context, ctrl *controller.Con
 	}
 	if view.RuinedDate == nil || view.DaysUntilRuined == nil {
 		t.Fatalf("expected ruined forecast date and days, got %v, %v", view.RuinedDate, view.DaysUntilRuined)
+	}
+	if !view.Settings.ShowCategories {
+		t.Fatalf("expected ShowCategories=true")
+	}
+
+	// Link & unlink a recurring transaction (bill) to the perspective
+	amt := -120.0
+	bill, err := ctrl.CreateRecurringTransaction(ctx, uID, models.RecurringTransactionRequest{
+		Amount: &amt, Frequency: models.RecurringFrequencyMonthly, Entity: "Phone Bill",
+	})
+	if err != nil {
+		t.Fatalf("CreateRecurringTransaction failed: %v", err)
+	}
+	if err := ctrl.LinkPerspectiveRecurringTransaction(ctx, uID, pRes.ID, bill.ID); err != nil {
+		t.Fatalf("LinkPerspectiveRecurringTransaction failed: %v", err)
+	}
+	linkedRecs, err := ctrl.ListPerspectiveRecurringTransactions(ctx, uID, pRes.ID)
+	if err != nil || len(linkedRecs) != 1 || linkedRecs[0].ID != bill.ID {
+		t.Fatalf("expected 1 linked recurring transaction, got %+v err=%v", linkedRecs, err)
+	}
+	if err := ctrl.UnlinkPerspectiveRecurringTransaction(ctx, uID, pRes.ID, bill.ID); err != nil {
+		t.Fatalf("UnlinkPerspectiveRecurringTransaction failed: %v", err)
+	}
+	linkedRecsAfter, _ := ctrl.ListPerspectiveRecurringTransactions(ctx, uID, pRes.ID)
+	if len(linkedRecsAfter) != 0 {
+		t.Fatalf("expected 0 linked recurring transactions after unlink, got %d", len(linkedRecsAfter))
 	}
 }
 

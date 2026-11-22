@@ -67,8 +67,8 @@ func defaultPerspectiveSettings(perspectiveID string, now time.Time, in *models.
 		ID:                         uuid.New().String(),
 		PerspectiveID:              perspectiveID,
 		ShowFinancialTrend:         true,
+		ShowCategories:             false,
 		CalculateAverageDailySpend: false,
-		CalculateAverageReturnYoY:  false,
 		TrackRuinedDate:            false,
 		CreatedAt:                  now,
 		UpdatedAt:                  now,
@@ -79,11 +79,11 @@ func defaultPerspectiveSettings(perspectiveID string, now time.Time, in *models.
 	if in.ShowFinancialTrend != nil {
 		s.ShowFinancialTrend = *in.ShowFinancialTrend
 	}
+	if in.ShowCategories != nil {
+		s.ShowCategories = *in.ShowCategories
+	}
 	if in.CalculateAverageDailySpend != nil {
 		s.CalculateAverageDailySpend = *in.CalculateAverageDailySpend
-	}
-	if in.CalculateAverageReturnYoY != nil {
-		s.CalculateAverageReturnYoY = *in.CalculateAverageReturnYoY
 	}
 	if in.TrackRuinedDate != nil {
 		s.TrackRuinedDate = *in.TrackRuinedDate
@@ -133,18 +133,21 @@ func (c *Controller) CreatePerspective(ctx context.Context, userID string, req m
 	settings := defaultPerspectiveSettings(p.ID, now, req.Settings)
 	_ = c.repo.UpsertPerspectiveSettings(ctx, settings)
 	c.linkInitialAccounts(ctx, userID, p.ID, req.AccountIDs, now)
+	c.linkInitialRecurringTransactions(ctx, userID, p.ID, req.RecurringTransactionIDs, now)
 
 	linked, _ := c.repo.ListPerspectiveAccountIDs(ctx, p.ID)
+	linkedRecurring, _ := c.repo.ListPerspectiveRecurringTransactionIDs(ctx, p.ID)
 	return &models.PerspectiveResponse{
-		ID:          p.ID,
-		UserID:      p.UserID,
-		Name:        p.Name,
-		Description: p.Description,
-		AccessLevel: models.AccessLevelAdmin,
-		Settings:    settings,
-		AccountIDs:  linked,
-		CreatedAt:   p.CreatedAt,
-		UpdatedAt:   p.UpdatedAt,
+		ID:                      p.ID,
+		UserID:                  p.UserID,
+		Name:                    p.Name,
+		Description:             p.Description,
+		AccessLevel:             models.AccessLevelAdmin,
+		Settings:                settings,
+		AccountIDs:              linked,
+		RecurringTransactionIDs: linkedRecurring,
+		CreatedAt:               p.CreatedAt,
+		UpdatedAt:               p.UpdatedAt,
 	}, nil
 }
 
@@ -165,16 +168,18 @@ func (c *Controller) ListPerspectives(ctx context.Context, userID string) ([]*mo
 		}
 		settings, _ := c.repo.GetPerspectiveSettings(ctx, p.ID)
 		accIDs, _ := c.repo.ListPerspectiveAccountIDs(ctx, p.ID)
+		recIDs, _ := c.repo.ListPerspectiveRecurringTransactionIDs(ctx, p.ID)
 		res = append(res, &models.PerspectiveResponse{
-			ID:          p.ID,
-			UserID:      p.UserID,
-			Name:        p.Name,
-			Description: p.Description,
-			AccessLevel: lvl,
-			Settings:    settings,
-			AccountIDs:  accIDs,
-			CreatedAt:   p.CreatedAt,
-			UpdatedAt:   p.UpdatedAt,
+			ID:                      p.ID,
+			UserID:                  p.UserID,
+			Name:                    p.Name,
+			Description:             p.Description,
+			AccessLevel:             lvl,
+			Settings:                settings,
+			AccountIDs:              accIDs,
+			RecurringTransactionIDs: recIDs,
+			CreatedAt:               p.CreatedAt,
+			UpdatedAt:               p.UpdatedAt,
 		})
 	}
 	return res, nil
@@ -188,16 +193,18 @@ func (c *Controller) GetPerspective(ctx context.Context, userID, perspectiveID s
 	}
 	settings, _ := c.repo.GetPerspectiveSettings(ctx, p.ID)
 	accIDs, _ := c.repo.ListPerspectiveAccountIDs(ctx, p.ID)
+	recIDs, _ := c.repo.ListPerspectiveRecurringTransactionIDs(ctx, p.ID)
 	return &models.PerspectiveResponse{
-		ID:          p.ID,
-		UserID:      p.UserID,
-		Name:        p.Name,
-		Description: p.Description,
-		AccessLevel: lvl,
-		Settings:    settings,
-		AccountIDs:  accIDs,
-		CreatedAt:   p.CreatedAt,
-		UpdatedAt:   p.UpdatedAt,
+		ID:                      p.ID,
+		UserID:                  p.UserID,
+		Name:                    p.Name,
+		Description:             p.Description,
+		AccessLevel:             lvl,
+		Settings:                settings,
+		AccountIDs:              accIDs,
+		RecurringTransactionIDs: recIDs,
+		CreatedAt:               p.CreatedAt,
+		UpdatedAt:               p.UpdatedAt,
 	}, nil
 }
 
@@ -269,11 +276,11 @@ func applySettingsInput(s *models.PerspectiveSettings, in models.PerspectiveSett
 	if in.ShowFinancialTrend != nil {
 		s.ShowFinancialTrend = *in.ShowFinancialTrend
 	}
+	if in.ShowCategories != nil {
+		s.ShowCategories = *in.ShowCategories
+	}
 	if in.CalculateAverageDailySpend != nil {
 		s.CalculateAverageDailySpend = *in.CalculateAverageDailySpend
-	}
-	if in.CalculateAverageReturnYoY != nil {
-		s.CalculateAverageReturnYoY = *in.CalculateAverageReturnYoY
 	}
 	if in.TrackRuinedDate != nil {
 		s.TrackRuinedDate = *in.TrackRuinedDate
@@ -362,6 +369,86 @@ func (c *Controller) UnlinkPerspectiveAccount(ctx context.Context, userID, persp
 			return ErrAccountNotLinked
 		}
 		return NewAppError(http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to unlink account.")
+	}
+	return nil
+}
+
+func (c *Controller) linkInitialRecurringTransactions(ctx context.Context, userID, pID string, recIDs []string, now time.Time) {
+	for _, recID := range recIDs {
+		recID = strings.TrimSpace(recID)
+		if recID == "" {
+			continue
+		}
+		rt, err := c.repo.GetRecurringTransactionByID(ctx, userID, recID)
+		if err != nil || rt.UserID != userID {
+			continue
+		}
+		link := &models.PerspectiveRecurringTransaction{
+			ID:                     uuid.New().String(),
+			PerspectiveID:          pID,
+			RecurringTransactionID: recID,
+			CreatedAt:              now,
+		}
+		_ = c.repo.AddPerspectiveRecurringTransaction(ctx, link)
+	}
+}
+
+// ListPerspectiveRecurringTransactions returns the recurring transactions (bills/income) linked to a perspective.
+func (c *Controller) ListPerspectiveRecurringTransactions(ctx context.Context, userID, perspectiveID string) ([]*models.RecurringTransactionResponse, error) {
+	p, _, err := c.verifyPerspectiveAccess(ctx, userID, perspectiveID, models.AccessLevelRead)
+	if err != nil {
+		return nil, err
+	}
+	recIDs, err := c.repo.ListPerspectiveRecurringTransactionIDs(ctx, perspectiveID)
+	if err != nil {
+		return nil, NewAppError(http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to list recurring transactions.")
+	}
+	now := time.Now().UTC()
+	res := make([]*models.RecurringTransactionResponse, 0, len(recIDs))
+	for _, recID := range recIDs {
+		rt, err := c.repo.GetRecurringTransactionByID(ctx, p.UserID, recID)
+		if err == nil {
+			item := toRecurringTransactionResponse(rt, now)
+			res = append(res, &item)
+		}
+	}
+	return res, nil
+}
+
+// LinkPerspectiveRecurringTransaction links a user-owned recurring transaction (bill/income) to a perspective.
+func (c *Controller) LinkPerspectiveRecurringTransaction(ctx context.Context, userID, perspectiveID, recurringID string) error {
+	if _, _, err := c.verifyPerspectiveAccess(ctx, userID, perspectiveID, models.AccessLevelEdit); err != nil {
+		return err
+	}
+	rt, err := c.repo.GetRecurringTransactionByID(ctx, userID, recurringID)
+	if err != nil || rt.UserID != userID {
+		return NewAppError(http.StatusNotFound, "RECURRING_TRANSACTION_NOT_FOUND", "Recurring transaction not found.")
+	}
+	link := &models.PerspectiveRecurringTransaction{
+		ID:                     uuid.New().String(),
+		PerspectiveID:          perspectiveID,
+		RecurringTransactionID: recurringID,
+		CreatedAt:              time.Now().UTC(),
+	}
+	if err := c.repo.AddPerspectiveRecurringTransaction(ctx, link); err != nil {
+		if errors.Is(err, repository.ErrConflict) {
+			return NewAppError(http.StatusConflict, "ALREADY_LINKED", "Recurring transaction is already linked to this perspective.")
+		}
+		return NewAppError(http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to link recurring transaction.")
+	}
+	return nil
+}
+
+// UnlinkPerspectiveRecurringTransaction removes a recurring transaction from a perspective. Requires edit access.
+func (c *Controller) UnlinkPerspectiveRecurringTransaction(ctx context.Context, userID, perspectiveID, recurringID string) error {
+	if _, _, err := c.verifyPerspectiveAccess(ctx, userID, perspectiveID, models.AccessLevelEdit); err != nil {
+		return err
+	}
+	if err := c.repo.RemovePerspectiveRecurringTransaction(ctx, perspectiveID, recurringID); err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			return NewAppError(http.StatusNotFound, "NOT_LINKED", "Recurring transaction is not linked to this perspective.")
+		}
+		return NewAppError(http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to unlink recurring transaction.")
 	}
 	return nil
 }

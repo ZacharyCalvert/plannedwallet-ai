@@ -3862,6 +3862,92 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
+  /api/v1/perspectives/{perspectiveId}/recurring-transactions:
+    parameters:
+      - $ref: '#/components/parameters/XClientId'
+      - name: perspectiveId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    get:
+      tags:
+        - Perspectives
+      summary: List recurring transactions linked to a perspective
+      operationId: listPerspectiveRecurringTransactions
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Linked recurring transactions (bills and income).
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/RecurringTransactionResponse'
+    post:
+      tags:
+        - Perspectives
+      summary: Link a recurring transaction to a perspective
+      operationId: linkPerspectiveRecurringTransaction
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PerspectiveRecurringTransactionLinkRequest'
+      responses:
+        '201':
+          description: Recurring transaction linked successfully.
+        '404':
+          description: Perspective or recurring transaction not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Recurring transaction already linked.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/perspectives/{perspectiveId}/recurring-transactions/{recurringId}:
+    parameters:
+      - $ref: '#/components/parameters/XClientId'
+      - name: perspectiveId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: recurringId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    delete:
+      tags:
+        - Perspectives
+      summary: Unlink a recurring transaction from a perspective
+      operationId: unlinkPerspectiveRecurringTransaction
+      security:
+        - BearerAuth: []
+      responses:
+        '204':
+          description: Recurring transaction unlinked.
+        '404':
+          description: Perspective or link not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
   /api/v1/perspectives/{perspectiveId}/accounts/{accountId}:
     parameters:
       - $ref: '#/components/parameters/XClientId'
@@ -5528,8 +5614,8 @@ components:
         - id
         - perspective_id
         - show_financial_trend
+        - show_categories
         - calculate_average_daily_spend
-        - calculate_average_return_yoy
         - track_ruined_date
         - created_at
         - updated_at
@@ -5543,10 +5629,10 @@ components:
         show_financial_trend:
           type: boolean
           default: true
-        calculate_average_daily_spend:
+        show_categories:
           type: boolean
           default: false
-        calculate_average_return_yoy:
+        calculate_average_daily_spend:
           type: boolean
           default: false
         track_ruined_date:
@@ -5569,9 +5655,9 @@ components:
       properties:
         show_financial_trend:
           type: boolean
-        calculate_average_daily_spend:
+        show_categories:
           type: boolean
-        calculate_average_return_yoy:
+        calculate_average_daily_spend:
           type: boolean
         track_ruined_date:
           type: boolean
@@ -5706,6 +5792,15 @@ components:
           type: string
           format: uuid
 
+    PerspectiveRecurringTransactionLinkRequest:
+      type: object
+      required:
+        - recurring_transaction_id
+      properties:
+        recurring_transaction_id:
+          type: string
+          format: uuid
+
     PerspectiveTrendPoint:
       type: object
       required:
@@ -5742,6 +5837,10 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/AccountResponse'
+        recurring_transactions:
+          type: array
+          items:
+            $ref: '#/components/schemas/RecurringTransactionResponse'
         current_total_value:
           type: number
           format: double
@@ -5755,11 +5854,6 @@ components:
           format: double
           nullable: true
           example: 45.20
-        average_return_yoy:
-          type: number
-          format: double
-          nullable: true
-          example: 0.085
         ruined_date:
           type: string
           format: date

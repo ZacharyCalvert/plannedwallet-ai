@@ -129,6 +129,11 @@ type Repository interface {
 	RemovePerspectiveAccount(ctx context.Context, perspectiveID, accountID string) error
 	ListPerspectiveAccountIDs(ctx context.Context, perspectiveID string) ([]string, error)
 
+	// Perspective Recurring Transactions operations
+	AddPerspectiveRecurringTransaction(ctx context.Context, link *models.PerspectiveRecurringTransaction) error
+	RemovePerspectiveRecurringTransaction(ctx context.Context, perspectiveID, recurringTransactionID string) error
+	ListPerspectiveRecurringTransactionIDs(ctx context.Context, perspectiveID string) ([]string, error)
+
 	// Perspective Access operations
 	GrantPerspectiveAccess(ctx context.Context, access *models.PerspectiveAccess) error
 	GetPerspectiveAccess(ctx context.Context, perspectiveID, userID string) (*models.PerspectiveAccess, error)

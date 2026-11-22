@@ -29,9 +29,10 @@ type MemoryRepository struct {
 	captchas          map[string]*memoryCaptcha           // id -> memoryCaptcha
 	subscriptions     map[string]*models.Subscription     // id -> Subscription
 	perspectives      map[string]*models.Perspective
-	perspectiveSettings map[string]*models.PerspectiveSettings
-	perspectiveAccounts map[string]*models.PerspectiveAccount
-	perspectiveAccess     map[string]*models.PerspectiveAccess
+	perspectiveSettings            map[string]*models.PerspectiveSettings
+	perspectiveAccounts            map[string]*models.PerspectiveAccount
+	perspectiveRecurringTxs        map[string]*models.PerspectiveRecurringTransaction
+	perspectiveAccess              map[string]*models.PerspectiveAccess
 	recurringTransactions map[string]*models.RecurringTransaction
 	policyAgreements      map[string]*models.PolicyAgreement
 	recoveryKeys          map[string]*models.UserRecoveryKey
@@ -89,9 +90,10 @@ func NewMemoryRepository() *MemoryRepository {
 		captchas:            make(map[string]*memoryCaptcha),
 		subscriptions:       make(map[string]*models.Subscription),
 		perspectives:        make(map[string]*models.Perspective),
-		perspectiveSettings: make(map[string]*models.PerspectiveSettings),
-		perspectiveAccounts: make(map[string]*models.PerspectiveAccount),
-		perspectiveAccess:     make(map[string]*models.PerspectiveAccess),
+		perspectiveSettings:     make(map[string]*models.PerspectiveSettings),
+		perspectiveAccounts:     make(map[string]*models.PerspectiveAccount),
+		perspectiveRecurringTxs: make(map[string]*models.PerspectiveRecurringTransaction),
+		perspectiveAccess:       make(map[string]*models.PerspectiveAccess),
 		recurringTransactions: make(map[string]*models.RecurringTransaction),
 		policyAgreements:      make(map[string]*models.PolicyAgreement),
 		recoveryKeys:          make(map[string]*models.UserRecoveryKey),
@@ -1623,6 +1625,51 @@ func (m *MemoryRepository) ListPerspectiveAccountIDs(_ context.Context, perspect
 	for _, pa := range m.perspectiveAccounts {
 		if pa.PerspectiveID == perspectiveID {
 			result = append(result, pa.AccountID)
+		}
+	}
+	sort.Strings(result)
+	if result == nil {
+		result = make([]string, 0)
+	}
+	return result, nil
+}
+
+// AddPerspectiveRecurringTransaction links a recurring transaction to a perspective.
+func (m *MemoryRepository) AddPerspectiveRecurringTransaction(_ context.Context, link *models.PerspectiveRecurringTransaction) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	key := link.PerspectiveID + ":" + link.RecurringTransactionID
+	if _, exists := m.perspectiveRecurringTxs[key]; exists {
+		return ErrConflict
+	}
+	copied := *link
+	m.perspectiveRecurringTxs[key] = &copied
+	return nil
+}
+
+// RemovePerspectiveRecurringTransaction unlinks a recurring transaction from a perspective.
+func (m *MemoryRepository) RemovePerspectiveRecurringTransaction(_ context.Context, perspectiveID, recurringTransactionID string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	key := perspectiveID + ":" + recurringTransactionID
+	if _, exists := m.perspectiveRecurringTxs[key]; !exists {
+		return ErrNotFound
+	}
+	delete(m.perspectiveRecurringTxs, key)
+	return nil
+}
+
+// ListPerspectiveRecurringTransactionIDs returns the recurring transaction IDs linked to a perspective.
+func (m *MemoryRepository) ListPerspectiveRecurringTransactionIDs(_ context.Context, perspectiveID string) ([]string, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	var result []string
+	for _, link := range m.perspectiveRecurringTxs {
+		if link.PerspectiveID == perspectiveID {
+			result = append(result, link.RecurringTransactionID)
 		}
 	}
 	sort.Strings(result)

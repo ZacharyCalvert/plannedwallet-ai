@@ -175,6 +175,55 @@ func (h *Handler) UnlinkPerspectiveAccount(c *gin.Context) {
 	c.Status(http.StatusNoContent)
 }
 
+// ListPerspectiveRecurringTransactions handles GET /api/v1/perspectives/:perspectiveId/recurring-transactions
+func (h *Handler) ListPerspectiveRecurringTransactions(c *gin.Context) {
+	userID, ok := h.getUserID(c)
+	if !ok {
+		return
+	}
+	pID := strings.TrimSpace(c.Param("perspectiveId"))
+	res, err := h.ctrl.ListPerspectiveRecurringTransactions(c.Request.Context(), userID, pID)
+	if err != nil {
+		h.handleError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, res)
+}
+
+// LinkPerspectiveRecurringTransaction handles POST /api/v1/perspectives/:perspectiveId/recurring-transactions
+func (h *Handler) LinkPerspectiveRecurringTransaction(c *gin.Context) {
+	userID, ok := h.getUserID(c)
+	if !ok {
+		return
+	}
+	pID := strings.TrimSpace(c.Param("perspectiveId"))
+	var req models.PerspectiveRecurringTransactionLinkRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		h.sendError(c, http.StatusBadRequest, "VALIDATION_ERROR", err.Error())
+		return
+	}
+	if err := h.ctrl.LinkPerspectiveRecurringTransaction(c.Request.Context(), userID, pID, req.RecurringTransactionID); err != nil {
+		h.handleError(c, err)
+		return
+	}
+	c.Status(http.StatusCreated)
+}
+
+// UnlinkPerspectiveRecurringTransaction handles DELETE /api/v1/perspectives/:perspectiveId/recurring-transactions/:recurringId
+func (h *Handler) UnlinkPerspectiveRecurringTransaction(c *gin.Context) {
+	userID, ok := h.getUserID(c)
+	if !ok {
+		return
+	}
+	pID := strings.TrimSpace(c.Param("perspectiveId"))
+	recID := strings.TrimSpace(c.Param("recurringId"))
+	if err := h.ctrl.UnlinkPerspectiveRecurringTransaction(c.Request.Context(), userID, pID, recID); err != nil {
+		h.handleError(c, err)
+		return
+	}
+	c.Status(http.StatusNoContent)
+}
+
 // ListPerspectiveAccess handles GET /api/v1/perspectives/:perspectiveId/access
 func (h *Handler) ListPerspectiveAccess(c *gin.Context) {
 	userID, ok := h.getUserID(c)

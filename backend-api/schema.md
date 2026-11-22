@@ -173,8 +173,8 @@ Stores analytical viewing preferences and calculation settings.
 - `id` (UUID, Primary Key)
 - `perspective_id` (UUID, Not Null, FK -> `perspectives(id)` ON DELETE CASCADE)
 - `show_financial_trend` (BOOLEAN, Not Null, Default TRUE)
+- `show_categories` (BOOLEAN, Not Null, Default FALSE)
 - `calculate_average_daily_spend` (BOOLEAN, Not Null, Default FALSE)
-- `calculate_average_return_yoy` (BOOLEAN, Not Null, Default FALSE)
 - `track_ruined_date` (BOOLEAN, Not Null, Default FALSE)
 - `custom_daily_spend` (DOUBLE PRECISION, Nullable)
 - `created_at` (TIMESTAMPTZ, Not Null, Default NOW())
@@ -326,7 +326,10 @@ All HTTP requests require the `X-Client-ID` header. Protected endpoints require 
 - `PUT /api/v1/perspectives/{perspectiveId}`: Update perspective name or description.
 - `DELETE /api/v1/perspectives/{perspectiveId}`: Delete perspective (admin only).
 - `GET /api/v1/perspectives/{perspectiveId}/settings`: Get perspective settings.
-- `PUT /api/v1/perspectives/{perspectiveId}/settings`: Update calculation and display toggles (`show_financial_trend`, `calculate_average_daily_spend`, `calculate_average_return_yoy`, `track_ruined_date`, `custom_daily_spend`).
+- `PUT /api/v1/perspectives/{perspectiveId}/settings`: Update calculation and display toggles (`show_financial_trend`, `show_categories`, `calculate_average_daily_spend`, `track_ruined_date`, `custom_daily_spend`).
+- `GET /api/v1/perspectives/{perspectiveId}/recurring-transactions`: List recurring transactions (bills and income) linked to a perspective.
+- `POST /api/v1/perspectives/{perspectiveId}/recurring-transactions`: Link a recurring transaction to a perspective.
+- `DELETE /api/v1/perspectives/{perspectiveId}/recurring-transactions/{recurringId}`: Unlink a recurring transaction from a perspective.
 - `GET /api/v1/perspectives/{perspectiveId}/accounts`: List accounts linked to perspective.
 - `POST /api/v1/perspectives/{perspectiveId}/accounts`: Link an account to perspective (`account_id`).
 - `DELETE /api/v1/perspectives/{perspectiveId}/accounts/{accountId}`: Unlink an account from perspective.

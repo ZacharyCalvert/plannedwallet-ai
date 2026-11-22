@@ -14,7 +14,7 @@ func TestInitSQLEmbedded_Tables(t *testing.T) {
 		"users", "accounts", "account_access", "categories", "reconcile_reports", "checking_records",
 		"assets", "asset_values", "asset_stores", "asset_store_records",
 		"account_assets", "account_snapshots", "captchas", "subscriptions",
-		"perspectives", "perspective_settings", "perspective_accounts", "perspective_access", "recurring_transactions",
+		"perspectives", "perspective_settings", "perspective_accounts", "perspective_recurring_transactions", "perspective_access", "recurring_transactions",
 	}
 	for _, table := range expectedTables {
 		if !strings.Contains(initSQL, "CREATE TABLE IF NOT EXISTS "+table) {
@@ -50,6 +50,9 @@ func TestInitSQLEmbedded_Constraints(t *testing.T) {
 		"uq_asset_values_asset_date UNIQUE (asset_id, value_date)",
 		"uq_perspective_settings_perspective UNIQUE (perspective_id)",
 		"uq_perspective_accounts_perspective_account UNIQUE (perspective_id, account_id)",
+		"uq_perspective_recurring_tx UNIQUE (perspective_id, recurring_transaction_id)",
+		"ALTER TABLE perspective_settings ADD COLUMN IF NOT EXISTS show_categories",
+		"ALTER TABLE perspective_settings DROP COLUMN IF EXISTS calculate_average_return_yoy",
 		"uq_perspective_access_perspective_user UNIQUE (perspective_id, user_id)",
 		"uq_categories_user_name UNIQUE NULLS NOT DISTINCT (user_id, name)",
 		"uq_categories_user_lower_name ON categories (user_id, LOWER(name)) NULLS NOT DISTINCT",

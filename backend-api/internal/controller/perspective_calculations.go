@@ -143,29 +143,6 @@ func computeDailySpendFromRange(totalExpense float64, earliest, latest string) f
 	return totalExpense / days
 }
 
-func calculatePerspectiveYoY(trend []models.PerspectiveTrendPoint) *float64 {
-	if len(trend) < 2 {
-		return nil
-	}
-	first := trend[0]
-	last := trend[len(trend)-1]
-	if first.TotalValue <= 0 || last.TotalValue <= 0 {
-		return nil
-	}
-	d0, err0 := time.Parse("2006-01-02", first.Date)
-	dn, errN := time.Parse("2006-01-02", last.Date)
-	if err0 != nil || errN != nil {
-		return nil
-	}
-	days := dn.Sub(d0).Hours() / 24.0
-	if days < 1.0 {
-		return nil
-	}
-	years := days / 365.25
-	cagr := math.Pow(last.TotalValue/first.TotalValue, 1.0/years) - 1.0
-	return &cagr
-}
-
 func calculateRuinedForecast(currentTotal, dailySpend float64) (*string, *int) {
 	if dailySpend <= 0 {
 		return nil, nil
@@ -187,22 +164,18 @@ func (c *Controller) resolvePerspectiveDailySpend(ctx context.Context, s *models
 	return c.calculatePerspectiveSpend(ctx, accIDs)
 }
 
-func (c *Controller) computePerspectiveAnalytics(ctx context.Context, s *models.PerspectiveSettings, accIDs []string, currentTotal float64, trend []models.PerspectiveTrendPoint) (*float64, *float64, *string, *int) {
+func (c *Controller) computePerspectiveAnalytics(ctx context.Context, s *models.PerspectiveSettings, accIDs []string, currentTotal float64) (*float64, *string, *int) {
 	var avgSpend *float64
 	dailySpend := c.resolvePerspectiveDailySpend(ctx, s, accIDs)
 	if s.CalculateAverageDailySpend {
 		avgSpend = &dailySpend
-	}
-	var yoyReturn *float64
-	if s.CalculateAverageReturnYoY && len(trend) >= 2 {
-		yoyReturn = calculatePerspectiveYoY(trend)
 	}
 	var ruinedDate *string
 	var daysUntilRuined *int
 	if s.TrackRuinedDate {
 		ruinedDate, daysUntilRuined = calculateRuinedForecast(currentTotal, dailySpend)
 	}
-	return avgSpend, yoyReturn, ruinedDate, daysUntilRuined
+	return avgSpend, ruinedDate, daysUntilRuined
 }
 
 // GetPerspectiveView computes the aggregated financial trend and analytical metrics for a perspective.
@@ -216,29 +189,32 @@ func (c *Controller) GetPerspectiveView(ctx context.Context, userID, perspective
 		return nil, err
 	}
 	accounts, accIDs, currentTotal := c.loadPerspectiveAccountsSummary(ctx, perspectiveID)
+	recurringTxs, _ := c.ListPerspectiveRecurringTransactions(ctx, userID, perspectiveID)
+	recIDs, _ := c.repo.ListPerspectiveRecurringTransactionIDs(ctx, perspectiveID)
 	trend := c.computePerspectiveTrend(ctx, settings.ShowFinancialTrend, accIDs, accounts)
-	avgSpend, yoyReturn, ruinedDate, daysRuined := c.computePerspectiveAnalytics(ctx, settings, accIDs, currentTotal, trend)
+	avgSpend, ruinedDate, daysRuined := c.computePerspectiveAnalytics(ctx, settings, accIDs, currentTotal)
 
 	return &models.PerspectiveViewResponse{
 		Perspective: &models.PerspectiveResponse{
-			ID:          p.ID,
-			UserID:      p.UserID,
-			Name:        p.Name,
-			Description: p.Description,
-			AccessLevel: lvl,
-			Settings:    settings,
-			AccountIDs:  accIDs,
-			CreatedAt:   p.CreatedAt,
-			UpdatedAt:   p.UpdatedAt,
+			ID:                      p.ID,
+			UserID:                  p.UserID,
+			Name:                    p.Name,
+			Description:             p.Description,
+			AccessLevel:             lvl,
+			Settings:                settings,
+			AccountIDs:              accIDs,
+			RecurringTransactionIDs: recIDs,
+			CreatedAt:               p.CreatedAt,
+			UpdatedAt:               p.UpdatedAt,
 		},
-		Settings:          settings,
-		Accounts:          accounts,
-		CurrentTotalValue: currentTotal,
-		Trend:             trend,
-		AverageDailySpend: avgSpend,
-		AverageReturnYoY:  yoyReturn,
-		RuinedDate:        ruinedDate,
-		DaysUntilRuined:   daysRuined,
+		Settings:              settings,
+		Accounts:              accounts,
+		RecurringTransactions: recurringTxs,
+		CurrentTotalValue:     currentTotal,
+		Trend:                 trend,
+		AverageDailySpend:     avgSpend,
+		RuinedDate:            ruinedDate,
+		DaysUntilRuined:       daysRuined,
 	}, nil
 }
 
