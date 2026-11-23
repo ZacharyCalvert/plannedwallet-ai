@@ -22,6 +22,8 @@ interface AccountsPaneProps {
   incomesCount?: number;
   onSelectIncomes?: () => void;
   onAddIncomesClick?: () => void;
+  dailyUpdatesCount?: number;
+  onDailyUpdatesClick?: () => void;
 }
 
 export function AccountsPane({
@@ -43,6 +45,8 @@ export function AccountsPane({
   incomesCount = 0,
   onSelectIncomes,
   onAddIncomesClick,
+  dailyUpdatesCount = 0,
+  onDailyUpdatesClick,
 }: AccountsPaneProps) {
   const [collapsed, setCollapsed] = useState(false);
   const [accountsCollapsed, setAccountsCollapsed] = useState(false);
@@ -219,6 +223,19 @@ export function AccountsPane({
           )}
         </div>
       </div>
+
+      {!collapsed && dailyUpdatesCount > 0 && onDailyUpdatesClick && (
+        <div className="daily-updates-banner">
+          <button
+            type="button"
+            className="btn-daily-updates"
+            onClick={onDailyUpdatesClick}
+          >
+            <span>Today&apos;s Numbers</span>
+            <span className="daily-updates-count">{dailyUpdatesCount}</span>
+          </button>
+        </div>
+      )}
 
       {collapsed ? (
         <div className="accounts-collapsed-rail">

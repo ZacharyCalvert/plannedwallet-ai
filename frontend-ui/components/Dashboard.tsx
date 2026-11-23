@@ -21,7 +21,11 @@ import {
   updateRecurringTransaction,
 } from '../lib/api';
 import { getLocalTodayIso } from '../lib/bills';
+import { DailyUpdateItem } from '../lib/dailyUpdates';
+import { loadPendingDailyUpdates } from '../lib/dailyUpdatesApi';
+import { isJwtSubscriber } from '../lib/tokenRefresh';
 import { AccountsPane } from './AccountsPane';
+import { DailyUpdatesModal } from './DailyUpdatesModal';
 import { NewAccountForm } from './NewAccountForm';
 import { NewPerspectiveForm } from './NewPerspectiveForm';
 import { PerspectiveDetail } from './PerspectiveDetail';
@@ -81,7 +85,7 @@ function AccountRouteView({
   if (account.type === 'snapshot') {
     return (
       <SnapshotAccountDetail
-        key={account.id}
+        key={`${account.id}-${accountRefreshVersion}`}
         account={account}
         token={token}
         urlTab={tab}
@@ -95,7 +99,7 @@ function AccountRouteView({
   if (account.type === 'asset' || account.type === 'assets') {
     return (
       <AssetAccountDetail
-        key={account.id}
+        key={`${account.id}-${accountRefreshVersion}`}
         account={account}
         token={token}
         urlTab={tab}
@@ -146,6 +150,9 @@ export function Dashboard({ session, onUserDeleted }: DashboardProps) {
   const [applyingRecurringId, setApplyingRecurringId] = useState<string | null>(null);
   const [reminderError, setReminderError] = useState('');
   const [accountRefreshVersions, setAccountRefreshVersions] = useState<Record<string, number>>({});
+  const [dailyUpdateItems, setDailyUpdateItems] = useState<DailyUpdateItem[]>([]);
+  const [dailyUpdatesOpen, setDailyUpdatesOpen] = useState(false);
+  const [dailyUpdatesRefreshVersion, setDailyUpdatesRefreshVersion] = useState(0);
   const navigate = useNavigate();
   const accountMatch = useMatch('/accounts/:accountId/*');
   const perspectiveMatch = useMatch('/perspectives/:perspectiveId');
@@ -160,6 +167,7 @@ export function Dashboard({ session, onUserDeleted }: DashboardProps) {
   const incomes = recurringTransactions.filter((tx) => tx.amount > 0);
   const showBills = bills.length > 0 || billsActivated || Boolean(billsMatch);
   const showIncomes = incomes.length > 0 || incomesActivated || Boolean(incomesMatch);
+  const isSubscriber = isJwtSubscriber(session.token);
 
   useEffect(() => {
     let cancelled = false;
@@ -222,6 +230,26 @@ export function Dashboard({ session, onUserDeleted }: DashboardProps) {
       cancelled = true;
     };
   }, [billsMatch, incomesMatch, session.username]);
+
+  useEffect(() => {
+    if (!accountsLoaded) return;
+    if (!isSubscriber) {
+      setDailyUpdateItems([]);
+      setDailyUpdatesOpen(false);
+      return;
+    }
+    let cancelled = false;
+    loadPendingDailyUpdates(session.token, accounts, getLocalTodayIso())
+      .then((items) => {
+        if (!cancelled) setDailyUpdateItems(items);
+      })
+      .catch(() => {
+        // Daily update check failure handled gracefully
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [accountsLoaded, accounts, session.token, isSubscriber, dailyUpdatesRefreshVersion, selectedId]);
 
   const handleCreated = (newAcc: Account) => {
     setAccounts((prev) => [newAcc, ...prev]);
@@ -334,6 +362,8 @@ export function Dashboard({ session, onUserDeleted }: DashboardProps) {
         incomesCount={incomes.length}
         onSelectIncomes={() => navigate('/incomes')}
         onAddIncomesClick={handleActivateIncomes}
+        dailyUpdatesCount={isSubscriber ? dailyUpdateItems.length : 0}
+        onDailyUpdatesClick={() => setDailyUpdatesOpen(true)}
       />
       <main className="dashboard-content">
         {reminderError && <div className="alert-error">{reminderError}</div>}
@@ -450,7 +480,7 @@ export function Dashboard({ session, onUserDeleted }: DashboardProps) {
                 token={session.token}
                 onAccountUpdated={handleAccountUpdated}
                 onAccountDeleted={handleAccountDeleted}
-                accountRefreshVersion={matchedId ? accountRefreshVersions[matchedId] || 0 : 0}
+                accountRefreshVersion={(matchedId ? accountRefreshVersions[matchedId] || 0 : 0) + dailyUpdatesRefreshVersion}
               />
             }
           />
@@ -463,13 +493,23 @@ export function Dashboard({ session, onUserDeleted }: DashboardProps) {
                 token={session.token}
                 onAccountUpdated={handleAccountUpdated}
                 onAccountDeleted={handleAccountDeleted}
-                accountRefreshVersion={matchedId ? accountRefreshVersions[matchedId] || 0 : 0}
+                accountRefreshVersion={(matchedId ? accountRefreshVersions[matchedId] || 0 : 0) + dailyUpdatesRefreshVersion}
               />
             }
           />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>
+      <DailyUpdatesModal
+        isOpen={isSubscriber && dailyUpdatesOpen}
+        onClose={() => setDailyUpdatesOpen(false)}
+        token={session.token}
+        todayIso={getLocalTodayIso()}
+        items={dailyUpdateItems}
+        onSaved={() => {
+          setDailyUpdatesRefreshVersion((v) => v + 1);
+        }}
+      />
     </div>
   );
 }

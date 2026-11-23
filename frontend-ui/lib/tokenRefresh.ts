@@ -34,6 +34,14 @@ export function isJwtTermsApproved(token: string): boolean {
   return claims.terms_approved !== false;
 }
 
+export function isJwtSubscriber(token: string): boolean {
+  const claims = parseJwtClaims(token);
+  if (!claims) {
+    return false;
+  }
+  return claims.subscriber === true;
+}
+
 export function parseJwtExpirationMs(token: string): number | null {
   const parsed = parseJwtClaims(token);
   if (!parsed || typeof parsed.exp !== 'number' || !Number.isFinite(parsed.exp)) {
