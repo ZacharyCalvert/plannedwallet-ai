@@ -197,8 +197,10 @@ export function AssetAccountDetail({
   const editAssetInputRef = useRef<HTMLInputElement>(null);
 
   // Load account stores, summary, catalog, and valuation trend
-  const loadData = async () => {
-    setLoading(true);
+  const loadData = async (silent = false) => {
+    if (!silent) {
+      setLoading(true);
+    }
     setError('');
     try {
       const [storesData, sumData, trendData, catalogData] = await Promise.all([
@@ -461,7 +463,7 @@ export function AssetAccountDetail({
       setNewAssetLabel('');
       setNewAssetDesc('');
       setMessage(`Asset class "${label}" created successfully.`);
-      await loadData();
+      await loadData(true);
     } catch (err: unknown) {
       setCreateAssetError(err instanceof Error ? err.message : 'Failed to create asset class.');
     } finally {
@@ -483,7 +485,7 @@ export function AssetAccountDetail({
       await updateAsset(token, editingAsset.id, { label, description: editAssetDesc.trim() });
       setEditingAsset(null);
       setMessage(`Asset class updated to "${label}".`);
-      await loadData();
+      await loadData(true);
     } catch (err: unknown) {
       setEditAssetError(err instanceof Error ? err.message : 'Failed to update asset class.');
     } finally {
@@ -496,7 +498,7 @@ export function AssetAccountDetail({
     try {
       await deleteAsset(token, asset.id);
       setMessage(`Asset class "${asset.label}" removed.`);
-      await loadData();
+      await loadData(true);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to delete asset class.');
     }
@@ -528,7 +530,7 @@ export function AssetAccountDetail({
       setMessage(`Valuation of ${formatUnitValue(val)} recorded.`);
       const updatedHistory = await fetchAssetValues(token, selectedAssetForValues);
       setAssetValuationHistory(updatedHistory);
-      await loadData();
+      await loadData(true);
     } catch (err: unknown) {
       setHistoryError(err instanceof Error ? err.message : 'Failed to record valuation.');
     } finally {
@@ -552,7 +554,7 @@ export function AssetAccountDetail({
       setMessage('Valuation updated.');
       const updatedHistory = await fetchAssetValues(token, selectedAssetForValues);
       setAssetValuationHistory(updatedHistory);
-      await loadData();
+      await loadData(true);
     } catch (err: unknown) {
       setHistoryError(err instanceof Error ? err.message : 'Failed to update valuation.');
     }
@@ -565,7 +567,7 @@ export function AssetAccountDetail({
       setMessage('Valuation deleted.');
       const updatedHistory = await fetchAssetValues(token, selectedAssetForValues);
       setAssetValuationHistory(updatedHistory);
-      await loadData();
+      await loadData(true);
     } catch (err: unknown) {
       setHistoryError(err instanceof Error ? err.message : 'Failed to delete valuation.');
     }
@@ -607,7 +609,7 @@ export function AssetAccountDetail({
       setNewStoreInitQty('');
       setMessage(`Asset storage "${label}" created successfully.`);
       setSelectedStoreIdForRecords(created.id);
-      await loadData();
+      await loadData(true);
     } catch (err: unknown) {
       setCreateStoreError(err instanceof Error ? err.message : 'Failed to create storage location.');
     } finally {
@@ -633,7 +635,7 @@ export function AssetAccountDetail({
       });
       setEditingStore(null);
       setMessage(`Storage updated.`);
-      await loadData();
+      await loadData(true);
     } catch (err: unknown) {
       setEditStoreError(err instanceof Error ? err.message : 'Failed to update storage.');
     } finally {
@@ -646,7 +648,7 @@ export function AssetAccountDetail({
     try {
       await deleteAssetStore(token, account.id, s.id);
       setMessage(`Storage "${s.label}" removed.`);
-      await loadData();
+      await loadData(true);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to delete storage.');
     }
@@ -684,7 +686,7 @@ export function AssetAccountDetail({
       ]);
       setStoreRecords(updatedRecs);
       setStoreTrendPoints(updatedTrend);
-      await loadData();
+      await loadData(true);
     } catch (err: unknown) {
       setAddRecordError(err instanceof Error ? err.message : 'Failed to record quantity.');
     } finally {
@@ -716,7 +718,7 @@ export function AssetAccountDetail({
       ]);
       setStoreRecords(updatedRecs);
       setStoreTrendPoints(updatedTrend);
-      await loadData();
+      await loadData(true);
     } catch (err: unknown) {
       setEditRecordError(err instanceof Error ? err.message : 'Failed to update record.');
     } finally {
@@ -735,7 +737,7 @@ export function AssetAccountDetail({
       ]);
       setStoreRecords(updatedRecs);
       setStoreTrendPoints(updatedTrend);
-      await loadData();
+      await loadData(true);
     } catch (err: unknown) {
       setAddRecordError(err instanceof Error ? err.message : 'Failed to delete record.');
     }
