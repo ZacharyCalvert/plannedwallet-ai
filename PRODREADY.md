@@ -20,6 +20,12 @@ ENFORCE_POLICY (default false) MUST be explicitly set to "true" whenever PRODUCT
 PW_READONLY:
 Set PW_READONLY=true during maintenance windows to publish the read_only feature flag and block mutating requests (503 READ_ONLY_MODE) while keeping GET endpoints, login, and token refresh active.
 
+SUBSCRIBER_ALWAYS_ON:
+Defaults to false (anything other than explicit "true" is false). When set to "true", the subscriber claim in issued and refreshed JWTs is always true.
+
+SUBSCRIBER_FREE_DAYS:
+Defaults to 0. When set to a positive integer, brand-new accounts receive a subscriptions row for that many days on registration with paid_date set to the account creation date.
+
 REQUIRE_CAPTCHA:
 Set REQUIRE_CAPTCHA=true in production (auto-enabled when PRODUCTION_ENV=true, defaults to "false"). Protects user registration endpoints against automated bot account creation.
   

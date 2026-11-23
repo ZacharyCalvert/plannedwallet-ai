@@ -58,6 +58,8 @@ The backend API supports a unified boolean environment variable: `PRODUCTION_ENV
 | `PW_TERMS` | String | *None* | *64-char SHA-256 hex* | Required when `PRODUCTION_ENV=true` or `ENFORCE_POLICY=true`. Exact SHA-256 hex checksum of `frontend-ui/public/terms-of-use.pdf`. |
 | `PW_PRIVACY` | String | *None* | *64-char SHA-256 hex* | Required when `PRODUCTION_ENV=true` or `ENFORCE_POLICY=true`. Exact SHA-256 hex checksum of `frontend-ui/public/privacy-and-security-policy.pdf`. |
 | `PW_READONLY` | Boolean | `false` | `false` (`true` during maintenance) | Enables read-only maintenance mode (`read_only` feature flag and `503 READ_ONLY_MODE` on mutations while keeping login and token refresh working). |
+| `SUBSCRIBER_ALWAYS_ON` | String (`"true"`) | `false` | `false` | When explicitly set to `"true"`, forces the `subscriber` claim in issued/refreshed JWTs to `true`; any other value defaults to `false`. |
+| `SUBSCRIBER_FREE_DAYS` | Integer | `0` | `0` (or trial days) | When set to a positive integer, grants first-time registered users a `subscriptions` record for that many days (`paid_date` = account creation date). |
 | `CORS_ALLOWED_CLIENTS` | String | `*.plannedwallet.com` | `https://app.example.com` | Comma-separated list of allowed origin URLs and hostnames. Requests from unlisted origins receive `403 Forbidden`. |
 | `POSTGRES_HOST` | String | `localhost` | *RDS Primary Endpoint* | Hostname of the Amazon RDS PostgreSQL 16 instance (`DB_HOST` alias also supported). |
 | `POSTGRES_PORT` | Integer / String | `5432` | `5432` | Port of the PostgreSQL database (`DB_PORT` alias also supported). |

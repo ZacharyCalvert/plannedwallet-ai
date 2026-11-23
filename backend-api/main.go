@@ -52,6 +52,18 @@ func isPolicyEnforced(isProd bool) bool {
 	return isProd || strings.EqualFold(strings.TrimSpace(os.Getenv("ENFORCE_POLICY")), "true")
 }
 
+func isSubscriberAlwaysOn() bool {
+	return os.Getenv("SUBSCRIBER_ALWAYS_ON") == "true"
+}
+
+func parseSubscriberFreeDays(raw string) int {
+	days, err := strconv.Atoi(strings.TrimSpace(raw))
+	if err != nil || days <= 0 {
+		return 0
+	}
+	return days
+}
+
 func checkEnforcePolicyForProd(rawEnforce string, isProd bool) error {
 	if isProd && !strings.EqualFold(strings.TrimSpace(rawEnforce), "true") {
 		return fmt.Errorf("PRODUCTION_ENV is true but ENFORCE_POLICY is not set to \"true\"")
@@ -224,6 +236,8 @@ func addHandlers(r *gin.Engine, repo repository.Repository, authService *auth.Se
 		ctrl.SetRequireCaptcha(true)
 	}
 	ctrl.SetEnforcePolicy(isPolicyEnforced(isProd))
+	ctrl.SetSubscriberAlwaysOn(isSubscriberAlwaysOn())
+	ctrl.SetSubscriberFreeDays(parseSubscriberFreeDays(os.Getenv("SUBSCRIBER_FREE_DAYS")))
 	if rawTerms := strings.TrimSpace(os.Getenv("PW_TERMS")); rawTerms != "" {
 		ctrl.SetTermsHash(rawTerms)
 	}

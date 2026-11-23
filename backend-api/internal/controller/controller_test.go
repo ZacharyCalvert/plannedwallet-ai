@@ -1240,4 +1240,93 @@ func TestCreateCheckingRecordsBulk_LimitsAndPermissions(t *testing.T) {
 	}
 }
 
+func TestSubscriberAlwaysOn_LoginAndRefresh(t *testing.T) {
+	repo := repository.NewMemoryRepository()
+	authSvc := auth.NewService("test-secret-123456", 900)
+	ctrl := controller.NewController(repo, authSvc)
+	ctx := context.Background()
+
+	userRes, err := ctrl.RegisterUser(ctx, models.UserRegistrationRequest{
+		Username: "always_on_user", Email: "always_on@example.com", Password: "ValidPassword123!",
+	})
+	if err != nil {
+		t.Fatalf("RegisterUser failed: %v", err)
+	}
+	code, _ := auth.GenerateCode(userRes.TOTPSecret, time.Now().Unix()/30)
+
+	tokOff, err := ctrl.ExchangePasswordForToken(ctx, "always_on_user", "ValidPassword123!", code)
+	if err != nil {
+		t.Fatalf("ExchangePasswordForToken failed: %v", err)
+	}
+	claimsOff, _ := authSvc.ValidateToken(tokOff.AccessToken)
+	if claimsOff.Subscriber {
+		t.Fatal("expected Subscriber=false when subscriberAlwaysOn is disabled")
+	}
+
+	ctrl.SetSubscriberAlwaysOn(true)
+	tokOn, err := ctrl.ExchangePasswordForToken(ctx, "always_on_user", "ValidPassword123!", code)
+	if err != nil {
+		t.Fatalf("ExchangePasswordForToken failed: %v", err)
+	}
+	claimsOn, _ := authSvc.ValidateToken(tokOn.AccessToken)
+	if !claimsOn.Subscriber {
+		t.Fatal("expected Subscriber=true on login when subscriberAlwaysOn is enabled")
+	}
+
+	refreshed, err := ctrl.RefreshToken(ctx, userRes.ID, userRes.Username)
+	if err != nil {
+		t.Fatalf("RefreshToken failed: %v", err)
+	}
+	claimsRefresh, _ := authSvc.ValidateToken(refreshed.AccessToken)
+	if !claimsRefresh.Subscriber {
+		t.Fatal("expected Subscriber=true on refresh when subscriberAlwaysOn is enabled")
+	}
+}
+
+func TestSubscriberFreeDays_Registration(t *testing.T) {
+	repo := repository.NewMemoryRepository()
+	authSvc := auth.NewService("test-secret-123456", 900)
+	ctrl := controller.NewController(repo, authSvc)
+	ctx := context.Background()
+
+	ctrl.SetSubscriberFreeDays(-5)
+	noTrialUser, err := ctrl.RegisterUser(ctx, models.UserRegistrationRequest{
+		Username: "no_trial_user", Email: "no_trial@example.com", Password: "ValidPassword123!",
+	})
+	if err != nil {
+		t.Fatalf("RegisterUser no_trial failed: %v", err)
+	}
+	subs, _ := repo.ListSubscriptionsByUserID(ctx, noTrialUser.ID)
+	if len(subs) != 0 {
+		t.Fatalf("expected 0 subscriptions for non-positive free days, got %d", len(subs))
+	}
+
+	ctrl.SetSubscriberFreeDays(14)
+	trialUser, err := ctrl.RegisterUser(ctx, models.UserRegistrationRequest{
+		Username: "trial_user", Email: "trial@example.com", Password: "ValidPassword123!",
+	})
+	if err != nil {
+		t.Fatalf("RegisterUser trial failed: %v", err)
+	}
+	subs, err = repo.ListSubscriptionsByUserID(ctx, trialUser.ID)
+	if err != nil || len(subs) != 1 {
+		t.Fatalf("expected 1 subscription for trial user, got %d (err=%v)", len(subs), err)
+	}
+	expectedPaid := trialUser.CreatedAt.UTC().Format("2006-01-02")
+	expectedEnds := trialUser.CreatedAt.UTC().AddDate(0, 0, 14).Format("2006-01-02")
+	if subs[0].PaidDate != expectedPaid || subs[0].SubscriberEnds != expectedEnds {
+		t.Fatalf("expected paid_date=%s ends=%s, got paid_date=%s ends=%s", expectedPaid, expectedEnds, subs[0].PaidDate, subs[0].SubscriberEnds)
+	}
+
+	code, _ := auth.GenerateCode(trialUser.TOTPSecret, time.Now().Unix()/30)
+	tok, err := ctrl.ExchangePasswordForToken(ctx, "trial_user", "ValidPassword123!", code)
+	if err != nil {
+		t.Fatalf("ExchangePasswordForToken failed: %v", err)
+	}
+	claims, _ := authSvc.ValidateToken(tok.AccessToken)
+	if !claims.Subscriber {
+		t.Fatal("expected Subscriber=true in JWT for user with free trial days")
+	}
+}
+
 

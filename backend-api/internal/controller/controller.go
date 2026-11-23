@@ -45,12 +45,14 @@ var (
 )
 
 type Controller struct {
-	repo           repository.Repository
-	auth           *auth.Service
-	requireCaptcha bool
-	enforcePolicy  bool
-	termsHash      string
-	privacyHash    string
+	repo               repository.Repository
+	auth               *auth.Service
+	requireCaptcha     bool
+	enforcePolicy      bool
+	subscriberAlwaysOn bool
+	subscriberFreeDays int
+	termsHash          string
+	privacyHash        string
 }
 
 func NewController(repo repository.Repository, authService *auth.Service) *Controller {
@@ -65,6 +67,19 @@ func NewController(repo repository.Repository, authService *auth.Service) *Contr
 // SetRequireCaptcha configures whether CAPTCHA verification is required for user registration.
 func (c *Controller) SetRequireCaptcha(require bool) {
 	c.requireCaptcha = require
+}
+
+// SetSubscriberAlwaysOn configures whether the subscriber JWT claim is forced to true.
+func (c *Controller) SetSubscriberAlwaysOn(alwaysOn bool) {
+	c.subscriberAlwaysOn = alwaysOn
+}
+
+// SetSubscriberFreeDays configures the number of free subscription days granted on new user registration.
+func (c *Controller) SetSubscriberFreeDays(days int) {
+	if days < 0 {
+		days = 0
+	}
+	c.subscriberFreeDays = days
 }
 
 // SetEnforcePolicy configures whether policy & US-customer ledger verification is enforced.

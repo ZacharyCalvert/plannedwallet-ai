@@ -139,6 +139,26 @@ func buildUserResponse(user *models.User, recoveryPhrase, recoveryHint string) *
 	}
 }
 
+func (c *Controller) grantFreeTrialSubscription(ctx context.Context, user *models.User) error {
+	if c.subscriberFreeDays <= 0 {
+		return nil
+	}
+	createdUTC := user.CreatedAt.UTC()
+	sub := &models.Subscription{
+		ID:             uuid.New().String(),
+		UserID:         user.ID,
+		PaidDate:       createdUTC.Format("2006-01-02"),
+		SubscriberEnds: createdUTC.AddDate(0, 0, c.subscriberFreeDays).Format("2006-01-02"),
+		CreatedAt:      createdUTC,
+		UpdatedAt:      createdUTC,
+	}
+	if err := c.repo.CreateSubscription(ctx, sub); err != nil {
+		return NewAppError(http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to create free trial subscription.")
+	}
+	trace.LogInfo(ctx, "Granted %d-day free subscription to new user: %s (paid_date=%s, ends=%s)", c.subscriberFreeDays, user.Username, sub.PaidDate, sub.SubscriberEnds)
+	return nil
+}
+
 // RegisterUser validates user existence, verifies password rules, generates TOTP & recovery credentials, and persists user.
 func (c *Controller) RegisterUser(ctx context.Context, req models.UserRegistrationRequest) (*models.UserResponse, error) {
 	username, email := strings.TrimSpace(req.Username), strings.TrimSpace(req.Email)
@@ -159,6 +179,10 @@ func (c *Controller) RegisterUser(ctx context.Context, req models.UserRegistrati
 	}
 	if err := c.persistNewUserWithRecovery(ctx, user, recoveryKey); err != nil {
 		trace.LogError(ctx, err, "Failed to persist user %s", username)
+		return nil, err
+	}
+	if err := c.grantFreeTrialSubscription(ctx, user); err != nil {
+		trace.LogError(ctx, err, "Failed to grant free trial subscription for %s", username)
 		return nil, err
 	}
 	trace.LogInfo(ctx, "User registered successfully: %s (id: %s)", user.Username, user.ID)

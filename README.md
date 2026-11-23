@@ -186,6 +186,8 @@ erDiagram
 | `ENFORCE_POLICY` | `false` | **Must be `"true"` when `PRODUCTION_ENV=true`** (process exits at startup otherwise). Enforces active `policy_agreements` acceptance matching `PW_TERMS` and U.S. consumer confirmation. |
 | `PW_TERMS` | `""` (`docker-compose.yml` sets Terms PDF SHA-256) | 64-character hex SHA-256 digest of `frontend-ui/public/terms-of-use.pdf`. Required on startup whenever `ENFORCE_POLICY=true` or `PRODUCTION_ENV=true`. |
 | `PW_READONLY` | `false` | Set `"true"` to enable read-only maintenance mode (`read_only` feature flag + `503 READ_ONLY_MODE` on edits while allowing login & token refresh). |
+| `SUBSCRIBER_ALWAYS_ON` | `false` | Forces the `subscriber` JWT claim to `true` on login and token refresh when explicitly set to `"true"` (any other value evaluates to `false`). |
+| `SUBSCRIBER_FREE_DAYS` | `0` | When set to a positive integer, grants newly registered accounts a `subscriptions` trial for that many days with `paid_date` set to the account creation date. |
 | `CORS_ALLOWED_CLIENTS` | Built-in `plannedwallet.com` dev/stage/prod hosts | Comma-separated allowed client hosts (also checks `ALLOWED_CLIENTS`, `CORS_ALLOWED_ORIGINS`, `CORS_ALLOWED_HOSTS`). |
 
 ### Orchestration & Integration Testing

@@ -321,3 +321,35 @@ func TestIsPolicyEnforcedAndValidateTermsHash(t *testing.T) {
 		t.Fatalf("expected nil when PRODUCTION_ENV=false, got %v", err)
 	}
 }
+
+func TestSubscriberEnvConfig(t *testing.T) {
+	t.Setenv("SUBSCRIBER_ALWAYS_ON", "")
+	if isSubscriberAlwaysOn() {
+		t.Fatal("expected false when SUBSCRIBER_ALWAYS_ON is unset")
+	}
+	for _, val := range []string{"false", "TRUE", "True", " true ", "1", "yes"} {
+		t.Setenv("SUBSCRIBER_ALWAYS_ON", val)
+		if isSubscriberAlwaysOn() {
+			t.Fatalf("expected false for SUBSCRIBER_ALWAYS_ON=%q", val)
+		}
+	}
+	t.Setenv("SUBSCRIBER_ALWAYS_ON", "true")
+	if !isSubscriberAlwaysOn() {
+		t.Fatal("expected true when SUBSCRIBER_ALWAYS_ON=true")
+	}
+
+	if got := parseSubscriberFreeDays(""); got != 0 {
+		t.Fatalf("expected 0 for empty SUBSCRIBER_FREE_DAYS, got %d", got)
+	}
+	for _, raw := range []string{"0", "-1", "-30", "abc", "12.5"} {
+		if got := parseSubscriberFreeDays(raw); got != 0 {
+			t.Fatalf("expected 0 for %q, got %d", raw, got)
+		}
+	}
+	if got := parseSubscriberFreeDays("14"); got != 14 {
+		t.Fatalf("expected 14 for \"14\", got %d", got)
+	}
+	if got := parseSubscriberFreeDays(" 30 "); got != 30 {
+		t.Fatalf("expected 30 for \" 30 \", got %d", got)
+	}
+}

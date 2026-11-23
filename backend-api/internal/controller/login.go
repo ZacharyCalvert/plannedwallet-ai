@@ -38,8 +38,15 @@ func (c *Controller) authenticateUser(ctx context.Context, username, password, t
 	return user, nil
 }
 
+func (c *Controller) resolveSubscriberStatus(ctx context.Context, userID string) (bool, error) {
+	if c.subscriberAlwaysOn {
+		return true, nil
+	}
+	return c.repo.IsUserSubscriber(ctx, userID)
+}
+
 func (c *Controller) issueTokenForUser(ctx context.Context, user *models.User, action string) (*models.TokenResponse, error) {
-	isSubscriber, err := c.repo.IsUserSubscriber(ctx, user.ID)
+	isSubscriber, err := c.resolveSubscriberStatus(ctx, user.ID)
 	if err != nil {
 		trace.LogError(ctx, err, "Error checking subscriber status for: %s", user.Username)
 		return nil, NewAppError(http.StatusInternalServerError, "INTERNAL_ERROR", "Error checking subscriber status.")
