@@ -83,11 +83,11 @@ function compareRecordsForDisplay(a: AccountRecord, b: AccountRecord): number {
   }
 
   // 2. Both are Not Cleared:
-  // Sort by date sent with oldest records staying at the top.
+  // Sort by date sent with most recent records at the top (descending).
   // For records with the same sent date, sort by largest number at the top.
   if (!aCleared && !bCleared) {
     if (a.date_sent !== b.date_sent) {
-      return a.date_sent.localeCompare(b.date_sent);
+      return b.date_sent.localeCompare(a.date_sent);
     }
     if (a.value !== b.value) {
       return b.value - a.value;
@@ -95,7 +95,7 @@ function compareRecordsForDisplay(a: AccountRecord, b: AccountRecord): number {
     const aCreated = a.created_at || '';
     const bCreated = b.created_at || '';
     if (aCreated !== bCreated) {
-      return aCreated.localeCompare(bCreated);
+      return bCreated.localeCompare(aCreated);
     }
     return a.id.localeCompare(b.id);
   }
@@ -276,7 +276,7 @@ export function AccountDetail({
   // Compute display records and running balance matching the record ordering
   const { sortedRecords, recordBalances } = useMemo(() => {
     // 1. Display order:
-    // Not cleared -> top priority (oldest date_sent first, largest value first on ties)
+    // Not cleared -> top priority (most recent date_sent first, largest value first on ties)
     // Cleared -> second priority (latest date_cleared first, largest value first on ties)
     const display = [...records].sort(compareRecordsForDisplay);
 
