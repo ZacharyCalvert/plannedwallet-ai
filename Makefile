@@ -33,7 +33,8 @@ test:
 	make -C backend-api test
 	make -C frontend-ui test
 
-itest: refresh
+itest:
+	@SUBSCRIBER_ALWAYS_ON=false $(MAKE) refresh
 	@status=0; \
 	ready=0; \
 	for i in $$(seq 1 60); do \
