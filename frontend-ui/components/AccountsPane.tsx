@@ -45,6 +45,9 @@ export function AccountsPane({
   onAddIncomesClick,
 }: AccountsPaneProps) {
   const [collapsed, setCollapsed] = useState(false);
+  const [accountsCollapsed, setAccountsCollapsed] = useState(false);
+  const [recurringCollapsed, setRecurringCollapsed] = useState(false);
+  const [perspectivesCollapsed, setPerspectivesCollapsed] = useState(false);
   const [addMenuOpen, setAddMenuOpen] = useState(false);
   const expandedMenuRef = useRef<HTMLDivElement>(null);
   const railMenuRef = useRef<HTMLDivElement>(null);
@@ -165,14 +168,14 @@ export function AccountsPane({
   return (
     <aside className={`accounts-pane ${collapsed ? 'accounts-pane-collapsed' : ''}`}>
       <div className="accounts-pane-header">
-        {!collapsed && <h2 className="pane-title">Accounts</h2>}
+        {!collapsed && <h2 className="pane-title">Finances</h2>}
         <div className="accounts-pane-actions">
           <button
             type="button"
             className="btn-pane-toggle"
             onClick={() => setCollapsed((prev) => !prev)}
-            title={collapsed ? 'Expand accounts list' : 'Collapse accounts list'}
-            aria-label={collapsed ? 'Expand accounts list' : 'Collapse accounts list'}
+            title={collapsed ? 'Expand finances list' : 'Collapse finances list'}
+            aria-label={collapsed ? 'Expand finances list' : 'Collapse finances list'}
             aria-expanded={!collapsed}
           >
             <svg
@@ -237,84 +240,129 @@ export function AccountsPane({
             type="button"
             className="accounts-collapsed-expand-label"
             onClick={() => setCollapsed(false)}
-            title="Show accounts list"
+            title="Show finances list"
           >
-            Accounts ({accounts.length})
+            Finances ({accounts.length})
           </button>
         </div>
       ) : (
         <div className="accounts-list">
-          {accounts.length === 0 && !showBills && !showIncomes ? (
-            <p className="accounts-empty">No accounts yet. Click + to add one.</p>
+          {accounts.length === 0 && !showBills && !showIncomes && perspectives.length === 0 ? (
+            <p className="accounts-empty">No finances yet. Click + to add one.</p>
           ) : (
-            accounts.map((acc) => {
-              const typeSlug = (acc.type || '').toLowerCase().replace(/\s+/g, '-');
-              return (
-                <button
-                  key={acc.id}
-                  type="button"
-                  className={`account-card account-card-${typeSlug} ${selectedId === acc.id ? 'selected' : ''}`}
-                  onClick={() => onSelectAccount(acc)}
-                >
-                  <div className="account-card-header">
-                    <span className="account-card-name">{acc.name}</span>
-                    <span className={`badge-account-type badge-${typeSlug}`}>{acc.type}</span>
-                  </div>
-                  <p className="account-card-desc">{acc.description}</p>
-                </button>
-              );
-            })
+            <>
+              {accounts.length > 0 && (
+                <>
+                  <button
+                    type="button"
+                    className="accounts-section-toggle"
+                    onClick={() => setAccountsCollapsed((prev) => !prev)}
+                    aria-expanded={!accountsCollapsed}
+                  >
+                    <span>Accounts ({accounts.length})</span>
+                    <span className="accounts-section-chevron" aria-hidden="true">
+                      {accountsCollapsed ? '▸' : '▾'}
+                    </span>
+                  </button>
+                  {!accountsCollapsed &&
+                    accounts.map((acc) => {
+                      const typeSlug = (acc.type || '').toLowerCase().replace(/\s+/g, '-');
+                      return (
+                        <button
+                          key={acc.id}
+                          type="button"
+                          className={`account-card account-card-${typeSlug} ${selectedId === acc.id ? 'selected' : ''}`}
+                          onClick={() => onSelectAccount(acc)}
+                        >
+                          <div className="account-card-header">
+                            <span className="account-card-name">{acc.name}</span>
+                            <span className={`badge-account-type badge-${typeSlug}`}>{acc.type}</span>
+                          </div>
+                          <p className="account-card-desc">{acc.description}</p>
+                        </button>
+                      );
+                    })}
+                </>
+              )}
+            </>
           )}
           {((showBills && onSelectBills) || (showIncomes && onSelectIncomes)) && (
-            <div className="accounts-section-divider">Recurring Transactions</div>
-          )}
-          {showBills && onSelectBills && (
-            <button
-              type="button"
-              className={`account-card account-card-bills ${billsSelected ? 'selected' : ''}`}
-              onClick={onSelectBills}
-            >
-              <div className="account-card-header">
-                <span className="account-card-name">Bills</span>
-                <span className="badge-account-type badge-bills">
-                  {billsCount} {billsCount === 1 ? 'bill' : 'bills'}
+            <>
+              <button
+                type="button"
+                className="accounts-section-toggle"
+                onClick={() => setRecurringCollapsed((prev) => !prev)}
+                aria-expanded={!recurringCollapsed}
+              >
+                <span>Recurring Transactions</span>
+                <span className="accounts-section-chevron" aria-hidden="true">
+                  {recurringCollapsed ? '▸' : '▾'}
                 </span>
-              </div>
-              <p className="account-card-desc">Recurring bills &amp; reminders</p>
-            </button>
-          )}
-          {showIncomes && onSelectIncomes && (
-            <button
-              type="button"
-              className={`account-card account-card-incomes ${incomesSelected ? 'selected' : ''}`}
-              onClick={onSelectIncomes}
-            >
-              <div className="account-card-header">
-                <span className="account-card-name">Income</span>
-                <span className="badge-account-type badge-incomes">
-                  {incomesCount} {incomesCount === 1 ? 'entry' : 'entries'}
-                </span>
-              </div>
-              <p className="account-card-desc">Recurring income &amp; reminders</p>
-            </button>
+              </button>
+              {!recurringCollapsed && (
+                <>
+                  {showBills && onSelectBills && (
+                    <button
+                      type="button"
+                      className={`account-card account-card-bills ${billsSelected ? 'selected' : ''}`}
+                      onClick={onSelectBills}
+                    >
+                      <div className="account-card-header">
+                        <span className="account-card-name">Bills</span>
+                        <span className="badge-account-type badge-bills">
+                          {billsCount} {billsCount === 1 ? 'bill' : 'bills'}
+                        </span>
+                      </div>
+                      <p className="account-card-desc">Recurring bills &amp; reminders</p>
+                    </button>
+                  )}
+                  {showIncomes && onSelectIncomes && (
+                    <button
+                      type="button"
+                      className={`account-card account-card-incomes ${incomesSelected ? 'selected' : ''}`}
+                      onClick={onSelectIncomes}
+                    >
+                      <div className="account-card-header">
+                        <span className="account-card-name">Income</span>
+                        <span className="badge-account-type badge-incomes">
+                          {incomesCount} {incomesCount === 1 ? 'entry' : 'entries'}
+                        </span>
+                      </div>
+                      <p className="account-card-desc">Recurring income &amp; reminders</p>
+                    </button>
+                  )}
+                </>
+              )}
+            </>
           )}
           {perspectives.length > 0 && onSelectPerspective && (
             <>
-              <div className="accounts-section-divider">Perspectives</div>
-              {perspectives.map((p) => (
-                <button
-                  key={p.id}
-                  type="button"
-                  className={`account-card account-card-perspective ${selectedPerspectiveId === p.id ? 'selected' : ''}`}
-                  onClick={() => onSelectPerspective(p)}
-                >
-                  <div className="account-card-header">
-                    <span className="account-card-name">{p.name}</span>
-                    <span className="badge-account-type badge-perspective">perspective</span>
-                  </div>
-                  <p className="account-card-desc">{p.description || 'Aggregated viewing window'}</p>
-                </button>
-              ))}
+              <button
+                type="button"
+                className="accounts-section-toggle"
+                onClick={() => setPerspectivesCollapsed((prev) => !prev)}
+                aria-expanded={!perspectivesCollapsed}
+              >
+                <span>Perspectives ({perspectives.length})</span>
+                <span className="accounts-section-chevron" aria-hidden="true">
+                  {perspectivesCollapsed ? '▸' : '▾'}
+                </span>
+              </button>
+              {!perspectivesCollapsed &&
+                perspectives.map((p) => (
+                  <button
+                    key={p.id}
+                    type="button"
+                    className={`account-card account-card-perspective ${selectedPerspectiveId === p.id ? 'selected' : ''}`}
+                    onClick={() => onSelectPerspective(p)}
+                  >
+                    <div className="account-card-header">
+                      <span className="account-card-name">{p.name}</span>
+                      <span className="badge-account-type badge-perspective">perspective</span>
+                    </div>
+                    <p className="account-card-desc">{p.description || 'Aggregated viewing window'}</p>
+                  </button>
+                ))}
             </>
           )}
         </div>
