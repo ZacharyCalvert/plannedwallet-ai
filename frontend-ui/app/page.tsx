@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { BrowserRouter, useNavigate } from 'react-router-dom';
 import { UserSession } from '../lib/types';
 import { fetchFeatures, refreshToken } from '../lib/api';
 import {
@@ -27,7 +26,7 @@ function AppShell() {
   const [maintenanceWarning, setMaintenanceWarning] = useState<string | null>(null);
   const [policyRequired, setPolicyRequired] = useState(false);
   const [sessionNotice, setSessionNotice] = useState('');
-  const navigate = useNavigate();
+  const [openUserTrigger, setOpenUserTrigger] = useState(0);
   const sessionRef = useRef<UserSession | null>(session);
   const refreshInFlightRef = useRef(false);
   const lastRefreshFailureRef = useRef<number | null>(null);
@@ -113,7 +112,6 @@ function AppShell() {
     const expireSession = () => {
       setSession(null);
       setSessionNotice('Your session expired after 15 minutes of inactivity. Please sign in again.');
-      navigate('/', { replace: true });
     };
 
     if (remainingMs === 0) {
@@ -125,7 +123,7 @@ function AppShell() {
     return () => {
       window.clearTimeout(timeoutId);
     };
-  }, [session, navigate]);
+  }, [session]);
 
   const handleAuthSuccess = (username: string, token: string) => {
     setSessionNotice('');
@@ -142,14 +140,12 @@ function AppShell() {
     setSessionNotice('');
     setPolicyRequired(false);
     setSession(null);
-    navigate('/', { replace: true });
   };
 
   const handleUserDeleted = () => {
     setSessionNotice('Your user account and all associated records have been permanently deleted.');
     setPolicyRequired(false);
     setSession(null);
-    navigate('/', { replace: true });
   };
 
   const needsPolicyApproval = Boolean(
@@ -160,7 +156,7 @@ function AppShell() {
     <div className="app-root">
       <Banner
         username={session?.username}
-        onUserClick={needsPolicyApproval ? undefined : () => navigate('/user')}
+        onUserClick={needsPolicyApproval ? undefined : () => setOpenUserTrigger((n) => n + 1)}
         onSignOut={handleSignOut}
         readOnly={isReadOnly}
       />
@@ -174,7 +170,12 @@ function AppShell() {
             onSignOut={handleSignOut}
           />
         ) : (
-          <Dashboard key={session.username} session={session} onUserDeleted={handleUserDeleted} />
+          <Dashboard
+            key={session.username}
+            session={session}
+            onUserDeleted={handleUserDeleted}
+            openUserTrigger={openUserTrigger}
+          />
         )}
       </div>
       <Footer />
@@ -199,9 +200,5 @@ export default function HomePage() {
     return <div className="app-root" />;
   }
 
-  return (
-    <BrowserRouter>
-      <AppShell />
-    </BrowserRouter>
-  );
+  return <AppShell />;
 }

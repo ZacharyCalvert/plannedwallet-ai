@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Routes, Route, Navigate, useNavigate, useParams, useMatch } from 'react-router-dom';
 import {
   Account,
   Category,
@@ -37,30 +36,47 @@ import { IncomesPane } from './IncomesPane';
 import { BillReminderBanners } from './BillReminderBanners';
 import { UserDetailsPane } from './UserDetailsPane';
 
+type DashboardView =
+  | { kind: 'home' }
+  | { kind: 'user' }
+  | { kind: 'new-account' }
+  | { kind: 'new-perspective' }
+  | { kind: 'perspective'; perspectiveId: string }
+  | { kind: 'bills' }
+  | { kind: 'incomes' }
+  | { kind: 'account'; accountId: string; tab?: string };
+
 interface DashboardProps {
   session: UserSession;
   onUserDeleted: () => void;
+  openUserTrigger?: number;
 }
 
 interface AccountRouteViewProps {
+  accountId: string;
+  tab?: string;
   accounts: Account[];
   accountsLoaded: boolean;
   token: string;
   onAccountUpdated: (updated: Account) => void;
   onAccountDeleted: (deletedId: string) => void;
+  onTabChange: (accountId: string, nextTab: string) => void;
+  onGoHome: () => void;
   accountRefreshVersion: number;
 }
 
 function AccountRouteView({
+  accountId,
+  tab,
   accounts,
   accountsLoaded,
   token,
   onAccountUpdated,
   onAccountDeleted,
+  onTabChange,
+  onGoHome,
   accountRefreshVersion,
 }: AccountRouteViewProps) {
-  const { accountId, tab } = useParams<{ accountId: string; tab?: string }>();
-  const navigate = useNavigate();
   const account = accounts.find((a) => a.id === accountId);
 
   if (!accountsLoaded) {
@@ -71,15 +87,15 @@ function AccountRouteView({
     return (
       <div className="card empty-prompt">
         <p>Account not found or you do not have access.</p>
-        <button type="button" className="btn-secondary btn-sm" onClick={() => navigate('/')}>
+        <button type="button" className="btn-secondary btn-sm" onClick={onGoHome}>
           Go to Accounts
         </button>
       </div>
     );
   }
 
-  const handleTabChange = (nextTab: string, replace = false) => {
-    navigate(`/accounts/${account.id}/${nextTab}`, { replace });
+  const handleTabChange = (nextTab: string) => {
+    onTabChange(account.id, nextTab);
   };
 
   if (account.type === 'snapshot') {
@@ -124,12 +140,9 @@ function AccountRouteView({
   );
 }
 
-function DashboardIndex({ accounts, accountsLoaded }: { accounts: Account[]; accountsLoaded: boolean }) {
+function DashboardIndex({ accountsLoaded }: { accountsLoaded: boolean }) {
   if (!accountsLoaded) {
     return <div className="card empty-prompt"><p>Loading accounts...</p></div>;
-  }
-  if (accounts.length > 0) {
-    return <Navigate to={`/accounts/${accounts[0].id}`} replace />;
   }
   return (
     <div className="card empty-prompt">
@@ -138,7 +151,7 @@ function DashboardIndex({ accounts, accountsLoaded }: { accounts: Account[]; acc
   );
 }
 
-export function Dashboard({ session, onUserDeleted }: DashboardProps) {
+export function Dashboard({ session, onUserDeleted, openUserTrigger = 0 }: DashboardProps) {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [accountsLoaded, setAccountsLoaded] = useState(false);
   const [perspectives, setPerspectives] = useState<Perspective[]>([]);
@@ -153,21 +166,29 @@ export function Dashboard({ session, onUserDeleted }: DashboardProps) {
   const [dailyUpdateItems, setDailyUpdateItems] = useState<DailyUpdateItem[]>([]);
   const [dailyUpdatesOpen, setDailyUpdatesOpen] = useState(false);
   const [dailyUpdatesRefreshVersion, setDailyUpdatesRefreshVersion] = useState(0);
-  const navigate = useNavigate();
-  const accountMatch = useMatch('/accounts/:accountId/*');
-  const perspectiveMatch = useMatch('/perspectives/:perspectiveId');
-  const billsMatch = useMatch('/bills');
-  const incomesMatch = useMatch('/incomes');
-  const matchedId = accountMatch?.params.accountId;
-  const selectedId = matchedId && matchedId !== 'new' ? matchedId : null;
-  const matchedPerspectiveId = perspectiveMatch?.params.perspectiveId;
-  const selectedPerspectiveId =
-    matchedPerspectiveId && matchedPerspectiveId !== 'new' ? matchedPerspectiveId : null;
+  const [view, setView] = useState<DashboardView>({ kind: 'home' });
+
+  const selectedId = view.kind === 'account' ? view.accountId : null;
+  const selectedPerspectiveId = view.kind === 'perspective' ? view.perspectiveId : null;
+  const billsMatch = view.kind === 'bills';
+  const incomesMatch = view.kind === 'incomes';
   const bills = recurringTransactions.filter((tx) => tx.amount < 0);
   const incomes = recurringTransactions.filter((tx) => tx.amount > 0);
-  const showBills = bills.length > 0 || billsActivated || Boolean(billsMatch);
-  const showIncomes = incomes.length > 0 || incomesActivated || Boolean(incomesMatch);
+  const showBills = bills.length > 0 || billsActivated || billsMatch;
+  const showIncomes = incomes.length > 0 || incomesActivated || incomesMatch;
   const isSubscriber = isJwtSubscriber(session.token);
+
+  useEffect(() => {
+    if (openUserTrigger > 0) {
+      setView({ kind: 'user' });
+    }
+  }, [openUserTrigger]);
+
+  useEffect(() => {
+    if (view.kind === 'home' && accountsLoaded && accounts.length > 0) {
+      setView({ kind: 'account', accountId: accounts[0].id });
+    }
+  }, [view.kind, accountsLoaded, accounts]);
 
   useEffect(() => {
     let cancelled = false;
@@ -253,17 +274,17 @@ export function Dashboard({ session, onUserDeleted }: DashboardProps) {
 
   const handleCreated = (newAcc: Account) => {
     setAccounts((prev) => [newAcc, ...prev]);
-    navigate(`/accounts/${newAcc.id}`);
+    setView({ kind: 'account', accountId: newAcc.id });
   };
 
   const handleActivateBills = () => {
     setBillsActivated(true);
-    navigate('/bills');
+    setView({ kind: 'bills' });
   };
 
   const handleActivateIncomes = () => {
     setIncomesActivated(true);
-    navigate('/incomes');
+    setView({ kind: 'incomes' });
   };
 
   const handleAccountUpdated = (updated: Account) => {
@@ -278,7 +299,7 @@ export function Dashboard({ session, onUserDeleted }: DashboardProps) {
         tx.account_id === deletedId ? { ...tx, account_id: null, category_id: null } : tx
       )
     );
-    navigate(remaining.length > 0 ? `/accounts/${remaining[0].id}` : '/', { replace: true });
+    setView(remaining.length > 0 ? { kind: 'account', accountId: remaining[0].id } : { kind: 'home' });
   };
 
   const handleCreateRecurring = async (payload: RecurringTransactionRequest) => {
@@ -331,13 +352,13 @@ export function Dashboard({ session, onUserDeleted }: DashboardProps) {
 
   const handleCancelCreate = () => {
     if (accounts.length > 0) {
-      navigate(`/accounts/${accounts[0].id}`);
+      setView({ kind: 'account', accountId: accounts[0].id });
     } else if (showBills) {
-      navigate('/bills');
+      setView({ kind: 'bills' });
     } else if (showIncomes) {
-      navigate('/incomes');
+      setView({ kind: 'incomes' });
     } else {
-      navigate('/');
+      setView({ kind: 'home' });
     }
   };
 
@@ -346,21 +367,21 @@ export function Dashboard({ session, onUserDeleted }: DashboardProps) {
       <AccountsPane
         accounts={accounts}
         selectedId={selectedId}
-        onSelectAccount={(acc) => navigate(`/accounts/${acc.id}`)}
-        onNewAccountClick={() => navigate('/accounts/new')}
+        onSelectAccount={(acc) => setView({ kind: 'account', accountId: acc.id })}
+        onNewAccountClick={() => setView({ kind: 'new-account' })}
         perspectives={perspectives}
         selectedPerspectiveId={selectedPerspectiveId}
-        onSelectPerspective={(p) => navigate(`/perspectives/${p.id}`)}
-        onNewPerspectiveClick={() => navigate('/perspectives/new')}
+        onSelectPerspective={(p) => setView({ kind: 'perspective', perspectiveId: p.id })}
+        onNewPerspectiveClick={() => setView({ kind: 'new-perspective' })}
         showBills={showBills}
-        billsSelected={Boolean(billsMatch)}
+        billsSelected={billsMatch}
         billsCount={bills.length}
-        onSelectBills={() => navigate('/bills')}
+        onSelectBills={() => setView({ kind: 'bills' })}
         onAddBillsClick={handleActivateBills}
         showIncomes={showIncomes}
-        incomesSelected={Boolean(incomesMatch)}
+        incomesSelected={incomesMatch}
         incomesCount={incomes.length}
-        onSelectIncomes={() => navigate('/incomes')}
+        onSelectIncomes={() => setView({ kind: 'incomes' })}
         onAddIncomesClick={handleActivateIncomes}
         dailyUpdatesCount={isSubscriber ? dailyUpdateItems.length : 0}
         onDailyUpdatesClick={() => setDailyUpdatesOpen(true)}
@@ -375,130 +396,95 @@ export function Dashboard({ session, onUserDeleted }: DashboardProps) {
           onApply={handleApplyRecurring}
           onHide={handleHideReminder}
         />
-        <Routes>
-          <Route path="/" element={<DashboardIndex accounts={accounts} accountsLoaded={accountsLoaded} />} />
-          <Route
-            path="/user"
-            element={
-              <UserDetailsPane
-                session={session}
-                accounts={accounts}
-                onUserDeleted={onUserDeleted}
-                onBackToAccounts={handleCancelCreate}
-              />
-            }
+        {view.kind === 'home' && <DashboardIndex accountsLoaded={accountsLoaded} />}
+        {view.kind === 'user' && (
+          <UserDetailsPane
+            session={session}
+            accounts={accounts}
+            onUserDeleted={onUserDeleted}
+            onBackToAccounts={handleCancelCreate}
           />
-          <Route
-            path="/accounts/new"
-            element={
-              <NewAccountForm
-                token={session.token}
-                onSuccess={handleCreated}
-                onCancel={handleCancelCreate}
-              />
-            }
+        )}
+        {view.kind === 'new-account' && (
+          <NewAccountForm
+            token={session.token}
+            onSuccess={handleCreated}
+            onCancel={handleCancelCreate}
           />
-          <Route
-            path="/perspectives/new"
-            element={
-              <NewPerspectiveForm
-                token={session.token}
-                accounts={accounts}
-                recurringTransactions={recurringTransactions}
-                onSuccess={(created) => {
-                  setPerspectives((prev) => [created, ...prev]);
-                  navigate(`/perspectives/${created.id}`);
-                }}
-                onCancel={handleCancelCreate}
-              />
-            }
+        )}
+        {view.kind === 'new-perspective' && (
+          <NewPerspectiveForm
+            token={session.token}
+            accounts={accounts}
+            recurringTransactions={recurringTransactions}
+            onSuccess={(created) => {
+              setPerspectives((prev) => [created, ...prev]);
+              setView({ kind: 'perspective', perspectiveId: created.id });
+            }}
+            onCancel={handleCancelCreate}
           />
-          <Route
-            path="/perspectives/:perspectiveId"
-            element={
-              selectedPerspectiveId ? (
-                <PerspectiveDetail
-                  perspectiveId={selectedPerspectiveId}
-                  token={session.token}
-                  allAccounts={accounts}
-                  allRecurringTransactions={recurringTransactions}
-                  categories={categories}
-                  onPerspectiveUpdated={(updated) =>
-                    setPerspectives((prev) => prev.map((p) => (p.id === updated.id ? updated : p)))
-                  }
-                  onPerspectiveDeleted={(deletedId) => {
-                    const remaining = perspectives.filter((p) => p.id !== deletedId);
-                    setPerspectives(remaining);
-                    if (remaining.length > 0) {
-                      navigate(`/perspectives/${remaining[0].id}`, { replace: true });
-                    } else {
-                      handleCancelCreate();
-                    }
-                  }}
-                />
-              ) : (
-                <Navigate to="/" replace />
-              )
+        )}
+        {view.kind === 'perspective' && (
+          <PerspectiveDetail
+            perspectiveId={view.perspectiveId}
+            token={session.token}
+            allAccounts={accounts}
+            allRecurringTransactions={recurringTransactions}
+            categories={categories}
+            onPerspectiveUpdated={(updated) =>
+              setPerspectives((prev) => prev.map((p) => (p.id === updated.id ? updated : p)))
             }
+            onPerspectiveDeleted={(deletedId) => {
+              const remaining = perspectives.filter((p) => p.id !== deletedId);
+              setPerspectives(remaining);
+              if (remaining.length > 0) {
+                setView({ kind: 'perspective', perspectiveId: remaining[0].id });
+              } else {
+                handleCancelCreate();
+              }
+            }}
           />
-          <Route
-            path="/bills"
-            element={
-              <BillsPane
-                bills={bills}
-                accounts={accounts}
-                categories={categories}
-                applyingId={applyingRecurringId}
-                onCreateBill={handleCreateRecurring}
-                onUpdateBill={handleUpdateRecurring}
-                onDeleteBill={handleDeleteRecurring}
-                onApplyBill={handleApplyRecurring}
-              />
+        )}
+        {view.kind === 'bills' && (
+          <BillsPane
+            bills={bills}
+            accounts={accounts}
+            categories={categories}
+            applyingId={applyingRecurringId}
+            onCreateBill={handleCreateRecurring}
+            onUpdateBill={handleUpdateRecurring}
+            onDeleteBill={handleDeleteRecurring}
+            onApplyBill={handleApplyRecurring}
+          />
+        )}
+        {view.kind === 'incomes' && (
+          <IncomesPane
+            incomes={incomes}
+            accounts={accounts}
+            categories={categories}
+            applyingId={applyingRecurringId}
+            onCreateIncome={handleCreateRecurring}
+            onUpdateIncome={handleUpdateRecurring}
+            onDeleteIncome={handleDeleteRecurring}
+            onApplyIncome={handleApplyRecurring}
+          />
+        )}
+        {view.kind === 'account' && (
+          <AccountRouteView
+            accountId={view.accountId}
+            tab={view.tab}
+            accounts={accounts}
+            accountsLoaded={accountsLoaded}
+            token={session.token}
+            onAccountUpdated={handleAccountUpdated}
+            onAccountDeleted={handleAccountDeleted}
+            onTabChange={(accountId, nextTab) =>
+              setView({ kind: 'account', accountId, tab: nextTab })
             }
+            onGoHome={() => setView({ kind: 'home' })}
+            accountRefreshVersion={(accountRefreshVersions[view.accountId] || 0) + dailyUpdatesRefreshVersion}
           />
-          <Route
-            path="/incomes"
-            element={
-              <IncomesPane
-                incomes={incomes}
-                accounts={accounts}
-                categories={categories}
-                applyingId={applyingRecurringId}
-                onCreateIncome={handleCreateRecurring}
-                onUpdateIncome={handleUpdateRecurring}
-                onDeleteIncome={handleDeleteRecurring}
-                onApplyIncome={handleApplyRecurring}
-              />
-            }
-          />
-          <Route
-            path="/accounts/:accountId"
-            element={
-              <AccountRouteView
-                accounts={accounts}
-                accountsLoaded={accountsLoaded}
-                token={session.token}
-                onAccountUpdated={handleAccountUpdated}
-                onAccountDeleted={handleAccountDeleted}
-                accountRefreshVersion={(matchedId ? accountRefreshVersions[matchedId] || 0 : 0) + dailyUpdatesRefreshVersion}
-              />
-            }
-          />
-          <Route
-            path="/accounts/:accountId/:tab"
-            element={
-              <AccountRouteView
-                accounts={accounts}
-                accountsLoaded={accountsLoaded}
-                token={session.token}
-                onAccountUpdated={handleAccountUpdated}
-                onAccountDeleted={handleAccountDeleted}
-                accountRefreshVersion={(matchedId ? accountRefreshVersions[matchedId] || 0 : 0) + dailyUpdatesRefreshVersion}
-              />
-            }
-          />
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
+        )}
       </main>
       <DailyUpdatesModal
         isOpen={isSubscriber && dailyUpdatesOpen}
