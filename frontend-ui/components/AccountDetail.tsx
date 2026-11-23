@@ -184,6 +184,7 @@ export function AccountDetail({
   const [dateSent, setDateSent] = useState(getTodayDateString());
   const [dateCleared, setDateCleared] = useState('');
   const [recipient, setRecipient] = useState('');
+  const [showSenderLabel, setShowSenderLabel] = useState(false);
   const [categoryId, setCategoryId] = useState('');
   const [categoryManuallySelected, setCategoryManuallySelected] = useState(false);
   const [description, setDescription] = useState('');
@@ -213,6 +214,7 @@ export function AccountDetail({
     setDateSent(getTodayDateString());
     setDateCleared('');
     setRecipient('');
+    setShowSenderLabel(false);
     setCategoryId('');
     setCategoryManuallySelected(false);
     setDescription('');
@@ -295,9 +297,14 @@ export function AccountDetail({
   }, [records]);
 
   const amountColorClass = getAmountColorClass(amount);
+  const parsedEntryAmount = parseAmount(amount);
+  const isPositiveNewRecord =
+    !selectedRecordId && Number.isFinite(parsedEntryAmount) && parsedEntryAmount > 0;
+  const counterpartyLabel = isPositiveNewRecord && showSenderLabel ? 'Sender' : 'Recipient';
 
   const handleSelectRecord = (rec: AccountRecord) => {
     setSelectedRecordId(rec.id);
+    setShowSenderLabel(false);
     setAmount(rec.value.toString());
     setDateSent(rec.date_sent);
     setDateCleared(rec.date_cleared || '');
@@ -671,6 +678,7 @@ export function AccountDetail({
                       setAmount(val);
                     }
                   }}
+                  onBlur={() => setShowSenderLabel(isPositiveNewRecord)}
                   className={`amount-input ${amountColorClass}`}
                 />
               </div>
@@ -702,16 +710,21 @@ export function AccountDetail({
               />
             </div>
 
-            {/* 4. Recipient */}
+            {/* 4. Recipient / Sender */}
             <div className="field-group field-recipient">
-              <label htmlFor="record-recipient">Recipient</label>
+              <label htmlFor="record-recipient">{counterpartyLabel}</label>
               <input
                 id="record-recipient"
                 type="text"
                 required
                 disabled={isEditingReconciled}
-                placeholder="e.g. Grocery Store, Employer"
+                placeholder={
+                  counterpartyLabel === 'Sender'
+                    ? 'e.g. Employer Payroll, Refund'
+                    : 'e.g. Grocery Store, Employer'
+                }
                 value={recipient}
+                onFocus={() => setShowSenderLabel(isPositiveNewRecord)}
                 onChange={(e) => handleRecipientChange(e.target.value)}
               />
             </div>
