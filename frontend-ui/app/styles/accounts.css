@@ -8,6 +8,11 @@
 .accounts-pane {
   width: 320px;
   min-width: 280px;
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  max-height: 100vh;
+  align-self: flex-start;
   background-color: #ffffff;
   border-right: 1px solid var(--border);
   display: flex;

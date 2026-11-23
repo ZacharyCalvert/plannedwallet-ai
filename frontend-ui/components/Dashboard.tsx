@@ -191,6 +191,12 @@ export function Dashboard({ session, onUserDeleted, openUserTrigger = 0 }: Dashb
   }, [view.kind, accountsLoaded, accounts]);
 
   useEffect(() => {
+    if (typeof window !== 'undefined' && window.scrollY > 0) {
+      window.scrollTo({ top: 0, behavior: 'auto' });
+    }
+  }, [view.kind, selectedId, selectedPerspectiveId]);
+
+  useEffect(() => {
     let cancelled = false;
     setBillsActivated(false);
     setIncomesActivated(false);
