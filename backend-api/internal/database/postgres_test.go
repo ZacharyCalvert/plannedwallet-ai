@@ -41,7 +41,8 @@ func TestInitSQLEmbedded_Subscriptions(t *testing.T) {
 
 func TestInitSQLEmbedded_Constraints(t *testing.T) {
 	expectedConstraints := []string{
-		"uq_asset_stores_account_label UNIQUE (account_id, label)",
+		"uq_asset_stores_account_asset_label UNIQUE (account_id, asset_id, label)",
+		"uq_asset_stores_account_asset_lower_label ON asset_stores (account_id, asset_id, LOWER(label))",
 		"uq_asset_store_records_store_date UNIQUE (asset_store_id, record_date)",
 		"uq_account_snapshots_account_date UNIQUE (account_id, snapshot_date)",
 		"uq_account_assets_account_asset_date UNIQUE (account_id, asset_id, asset_date)",

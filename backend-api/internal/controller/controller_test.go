@@ -1329,4 +1329,60 @@ func TestSubscriberFreeDays_Registration(t *testing.T) {
 	}
 }
 
+func TestAssetStoreLabelReuse_Controller(t *testing.T) {
+	ctrl, _ := setupController()
+	ctx := context.Background()
+
+	userRes, err := ctrl.RegisterUser(ctx, models.UserRegistrationRequest{
+		Username: "store_reuse_u", Email: "store_reuse@example.com", Password: "ValidPassword123!",
+	})
+	if err != nil {
+		t.Fatalf("RegisterUser failed: %v", err)
+	}
+
+	acc1, err := ctrl.CreateAccount(ctx, userRes.ID, models.AccountCreationRequest{Name: "Vault Account 1", Type: "asset", Description: "Primary vault"})
+	if err != nil {
+		t.Fatalf("CreateAccount 1 failed: %v", err)
+	}
+	acc2, err := ctrl.CreateAccount(ctx, userRes.ID, models.AccountCreationRequest{Name: "Vault Account 2", Type: "asset", Description: "Secondary vault"})
+	if err != nil {
+		t.Fatalf("CreateAccount 2 failed: %v", err)
+	}
+	asset1, _ := ctrl.CreateAsset(ctx, userRes.ID, models.AssetCreateRequest{Label: "Gold Coin"})
+	asset2, _ := ctrl.CreateAsset(ctx, userRes.ID, models.AssetCreateRequest{Label: "Silver Coin"})
+
+	if _, err := ctrl.CreateAssetStore(ctx, userRes.ID, acc1.ID, models.CreateAssetStoreRequest{
+		AssetID: asset1.ID, Label: "Safe Deposit 1",
+	}); err != nil {
+		t.Fatalf("CreateAssetStore 1 failed: %v", err)
+	}
+
+	// Same account, different asset class, same storage label -> allowed
+	store2, err := ctrl.CreateAssetStore(ctx, userRes.ID, acc1.ID, models.CreateAssetStoreRequest{
+		AssetID: asset2.ID, Label: "Safe Deposit 1",
+	})
+	if err != nil {
+		t.Fatalf("expected label reuse across asset classes in same account to succeed, got: %v", err)
+	}
+
+	// Same account, same asset class, same storage label (case-insensitive) -> 409 Conflict
+	_, errDup := ctrl.CreateAssetStore(ctx, userRes.ID, acc1.ID, models.CreateAssetStoreRequest{
+		AssetID: asset1.ID, Label: "safe deposit 1",
+	})
+	assertAppErrorStatus(t, errDup, http.StatusConflict)
+
+	// Different account, same asset class, same storage label -> allowed
+	if _, err := ctrl.CreateAssetStore(ctx, userRes.ID, acc2.ID, models.CreateAssetStoreRequest{
+		AssetID: asset1.ID, Label: "Safe Deposit 1",
+	}); err != nil {
+		t.Fatalf("expected label reuse across accounts to succeed, got: %v", err)
+	}
+
+	// Updating store2's asset class to asset1 while keeping "Safe Deposit 1" -> 409 Conflict
+	_, errUpdateDup := ctrl.UpdateAssetStore(ctx, userRes.ID, acc1.ID, store2.ID, models.UpdateAssetStoreRequest{
+		AssetID: &asset1.ID, Label: "Safe Deposit 1",
+	})
+	assertAppErrorStatus(t, errUpdateDup, http.StatusConflict)
+}
+
 

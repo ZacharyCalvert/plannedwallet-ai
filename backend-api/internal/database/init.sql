@@ -122,12 +122,22 @@ CREATE TABLE IF NOT EXISTS asset_stores (
     description VARCHAR(500) NOT NULL DEFAULT '',
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    CONSTRAINT uq_asset_stores_account_label UNIQUE (account_id, label)
+    CONSTRAINT uq_asset_stores_account_asset_label UNIQUE (account_id, asset_id, label)
 );
 
 CREATE INDEX IF NOT EXISTS idx_asset_stores_account_id ON asset_stores(account_id);
 CREATE INDEX IF NOT EXISTS idx_asset_stores_asset_id ON asset_stores(asset_id);
-CREATE UNIQUE INDEX IF NOT EXISTS uq_asset_stores_account_lower_label ON asset_stores (account_id, LOWER(label));
+ALTER TABLE asset_stores DROP CONSTRAINT IF EXISTS uq_asset_stores_account_label;
+DROP INDEX IF EXISTS uq_asset_stores_account_lower_label;
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint WHERE conname = 'uq_asset_stores_account_asset_label'
+    ) THEN
+        ALTER TABLE asset_stores ADD CONSTRAINT uq_asset_stores_account_asset_label UNIQUE (account_id, asset_id, label);
+    END IF;
+END $$;
+CREATE UNIQUE INDEX IF NOT EXISTS uq_asset_stores_account_asset_lower_label ON asset_stores (account_id, asset_id, LOWER(label));
 
 CREATE TABLE IF NOT EXISTS asset_store_records (
     id UUID PRIMARY KEY,

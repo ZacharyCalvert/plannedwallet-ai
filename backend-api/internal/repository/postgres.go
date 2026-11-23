@@ -1064,7 +1064,7 @@ func (p *PostgresRepository) ListAssetStores(ctx context.Context, accountID stri
 	            LIMIT 1
 	          ) v ON true
 	          WHERE s.account_id = $1
-	          ORDER BY s.label ASC`
+	          ORDER BY s.label ASC, a.label ASC, s.id ASC`
 	rows, err := p.db.QueryContext(ctx, query, accountID)
 	if err != nil {
 		return nil, err

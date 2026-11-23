@@ -90,7 +90,7 @@ func (c *Controller) CreateAssetStore(ctx context.Context, userID, accountID str
 	}
 	if err := c.repo.CreateAssetStore(ctx, store); err != nil {
 		if errors.Is(err, repository.ErrConflict) {
-			return nil, NewAppError(http.StatusConflict, "DUPLICATE_STORE_LABEL", "A store with this label already exists in this account.")
+			return nil, NewAppError(http.StatusConflict, "DUPLICATE_STORE_LABEL", "A store with this label and asset class already exists in this account.")
 		}
 		return nil, NewAppError(http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to create asset store.")
 	}
@@ -145,7 +145,7 @@ func (c *Controller) UpdateAssetStore(ctx context.Context, userID, accountID, st
 	}
 	if err := c.repo.UpdateAssetStore(ctx, store); err != nil {
 		if errors.Is(err, repository.ErrConflict) {
-			return nil, NewAppError(http.StatusConflict, "DUPLICATE_STORE_LABEL", "A store with this label already exists in this account.")
+			return nil, NewAppError(http.StatusConflict, "DUPLICATE_STORE_LABEL", "A store with this label and asset class already exists in this account.")
 		}
 		return nil, NewAppError(http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to update asset store.")
 	}

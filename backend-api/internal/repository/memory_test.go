@@ -279,10 +279,26 @@ func TestMemoryRepo_AssetStoreAndRecords(t *testing.T) {
 		t.Fatalf("failed to create store: %v", err)
 	}
 
-	// 2. Duplicate label in same account
+	// 2. Duplicate label + same asset in same account
 	storeDup := &models.AssetStore{ID: "store-dup", AccountID: acc.ID, AssetID: btc.ID, Label: "RED", CreatedAt: now, UpdatedAt: now}
 	if err := repo.CreateAssetStore(ctx, storeDup); !errors.Is(err, repository.ErrConflict) {
-		t.Fatalf("expected conflict on duplicate store label, got: %v", err)
+		t.Fatalf("expected conflict on duplicate store label + asset, got: %v", err)
+	}
+
+	// 2b. Same label with a DIFFERENT asset class in the same account succeeds
+	eth := &models.Asset{ID: "asset-beta", Label: "Coin Beta"}
+	_ = repo.CreateAsset(ctx, eth)
+	storeRedBeta := &models.AssetStore{ID: "store-red-beta", AccountID: acc.ID, AssetID: eth.ID, Label: "red", Description: "Red hardware key (Beta)", CreatedAt: now, UpdatedAt: now}
+	if err := repo.CreateAssetStore(ctx, storeRedBeta); err != nil {
+		t.Fatalf("expected same store label for different asset class to succeed, got: %v", err)
+	}
+
+	// 2c. Same label + same asset in a DIFFERENT account succeeds
+	acc2 := &models.Account{ID: "acc-asset-2", AdminID: "u-1", Name: "Backup Portfolio", Type: "asset"}
+	_ = repo.CreateAccount(ctx, acc2)
+	storeRedAcc2 := &models.AssetStore{ID: "store-red-acc2", AccountID: acc2.ID, AssetID: btc.ID, Label: "red", CreatedAt: now, UpdatedAt: now}
+	if err := repo.CreateAssetStore(ctx, storeRedAcc2); err != nil {
+		t.Fatalf("expected same store label in different account to succeed, got: %v", err)
 	}
 
 	// 3. Add records for 'red': Jan 1 (0.2), Feb 1 (0.3), Oct 1 (0.5)

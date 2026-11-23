@@ -796,3 +796,91 @@ def test_asset_stores_and_records_workflow(api_context: APIRequestContext):
     assert len(final_stores.json()) == 1
     assert final_stores.json()[0]["label"] == "Red Key"
 
+
+def test_asset_store_label_reuse_across_assets_and_accounts(api_context: APIRequestContext):
+    """
+    Verify storage labels can be reused:
+    - Across multiple asset accounts for the same user
+    - Within the same asset account across different asset classes
+    - While rejecting duplicate (account_id, asset_id, LOWER(label)) with 409 Conflict
+    """
+    _, token = create_authenticated_user(api_context)
+    headers = {"Authorization": f"Bearer {token}"}
+    uid = uuid.uuid4().hex[:6]
+
+    # Create two asset accounts
+    acc1_res = api_context.post(
+        "/api/v1/accounts",
+        data={"name": f"Precious Metals Vault {uid}", "type": "asset", "description": "Primary vault"},
+        headers=headers,
+    )
+    assert acc1_res.status == 201
+    acc1_id = acc1_res.json()["id"]
+
+    acc2_res = api_context.post(
+        "/api/v1/accounts",
+        data={"name": f"Digital Cold Storage {uid}", "type": "asset", "description": "Secondary vault"},
+        headers=headers,
+    )
+    assert acc2_res.status == 201
+    acc2_id = acc2_res.json()["id"]
+
+    # Create three distinct asset classes
+    asset_labels = [f"Gold Coins {uid}", f"Silver Coins {uid}", f"Silver Bars {uid}"]
+    asset_ids = []
+    for label in asset_labels:
+        res = api_context.post(
+            "/api/v1/assets",
+            data={"label": label, "description": f"Asset class {label}"},
+            headers=headers,
+        )
+        assert res.status == 201
+        asset_ids.append(res.json()["id"])
+
+    # Reuse the same storage label "Safe Deposit 1" across all 3 asset classes in account 1
+    created_acc1_stores = []
+    for idx, asset_id in enumerate(asset_ids):
+        res = api_context.post(
+            f"/api/v1/accounts/{acc1_id}/stores",
+            data={
+                "asset_id": asset_id,
+                "label": "Safe Deposit 1",
+                "description": f"Compartment {idx + 1}",
+                "quantity": float(idx + 1),
+                "record_date": "2026-11-01",
+            },
+            headers=headers,
+        )
+        assert res.status == 201, f"Expected store creation to succeed for asset {idx}: {res.text()}"
+        created_acc1_stores.append(res.json())
+
+    # Verify all 3 stores exist in account 1 with the same label
+    list_acc1 = api_context.get(f"/api/v1/accounts/{acc1_id}/stores", headers=headers)
+    assert list_acc1.status == 200
+    acc1_stores = list_acc1.json()
+    assert len(acc1_stores) == 3
+    assert all(s["label"] == "Safe Deposit 1" for s in acc1_stores)
+    assert {s["asset_id"] for s in acc1_stores} == set(asset_ids)
+
+    # Duplicate (same account, same asset class, same label case-insensitive) must fail with 409
+    dup_res = api_context.post(
+        f"/api/v1/accounts/{acc1_id}/stores",
+        data={"asset_id": asset_ids[0], "label": "safe deposit 1"},
+        headers=headers,
+    )
+    assert dup_res.status == 409
+
+    # Reuse the exact same storage label "Safe Deposit 1" in account 2 for the same asset classes
+    for asset_id in asset_ids[:2]:
+        res = api_context.post(
+            f"/api/v1/accounts/{acc2_id}/stores",
+            data={"asset_id": asset_id, "label": "Safe Deposit 1"},
+            headers=headers,
+        )
+        assert res.status == 201, f"Expected store creation in second account to succeed: {res.text()}"
+
+    list_acc2 = api_context.get(f"/api/v1/accounts/{acc2_id}/stores", headers=headers)
+    assert list_acc2.status == 200
+    assert len(list_acc2.json()) == 2
+
+

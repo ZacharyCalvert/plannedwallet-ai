@@ -1094,7 +1094,7 @@ export function AssetAccountDetail({
               <div className="card new-holding-card">
                 <h3>Add Asset Storage / Holding</h3>
                 <p className="accounts-empty" style={{ textAlign: 'left', padding: '0.2rem 0' }}>
-                  Create a labeled storage location, hardware key, or vault in this account (e.g. &quot;red&quot;, &quot;blue&quot;, &quot;attic box&quot;, &quot;silver mattress&quot;).
+                  Create a labeled storage location, hardware key, or vault in this account (e.g. &quot;Safe Deposit 1&quot;, &quot;Hardware Vault Red&quot;). The same storage label can be reused across different asset classes.
                 </p>
 
                 <form onSubmit={handleCreateStore} className="form-grid">

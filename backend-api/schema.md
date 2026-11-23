@@ -104,7 +104,7 @@ Maps asset classes to unique labeled storage locations / holdings within an asse
 - `description` (VARCHAR(500), Not Null, Default `''`)
 - `created_at` (TIMESTAMPTZ, Not Null, Default NOW())
 - `updated_at` (TIMESTAMPTZ, Not Null, Default NOW())
-- **Constraints**: `CONSTRAINT uq_asset_stores_account_label UNIQUE (account_id, label)`, `uq_asset_stores_account_lower_label (account_id, LOWER(label))`
+- **Constraints**: `CONSTRAINT uq_asset_stores_account_asset_label UNIQUE (account_id, asset_id, label)`, `uq_asset_stores_account_asset_lower_label (account_id, asset_id, LOWER(label))`
 - **Indexes**: `idx_asset_stores_account_id`, `idx_asset_stores_asset_id`
 
 ### 1.8 `asset_store_records`

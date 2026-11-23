@@ -1157,7 +1157,7 @@ func (m *MemoryRepository) CreateAssetStore(_ context.Context, store *models.Ass
 
 	lowerLabel := strings.ToLower(strings.TrimSpace(store.Label))
 	for _, existing := range m.assetStores {
-		if existing.AccountID == store.AccountID && strings.ToLower(existing.Label) == lowerLabel {
+		if existing.AccountID == store.AccountID && existing.AssetID == store.AssetID && strings.ToLower(existing.Label) == lowerLabel {
 			return ErrConflict
 		}
 	}
@@ -1202,7 +1202,13 @@ func (m *MemoryRepository) ListAssetStores(_ context.Context, accountID string) 
 		}
 	}
 	sort.Slice(list, func(i, j int) bool {
-		return list[i].Label < list[j].Label
+		if list[i].Label != list[j].Label {
+			return list[i].Label < list[j].Label
+		}
+		if list[i].AssetLabel != list[j].AssetLabel {
+			return list[i].AssetLabel < list[j].AssetLabel
+		}
+		return list[i].ID < list[j].ID
 	})
 	return list, nil
 }
@@ -1215,9 +1221,13 @@ func (m *MemoryRepository) UpdateAssetStore(_ context.Context, store *models.Ass
 	if !exists || existing.AccountID != store.AccountID {
 		return ErrNotFound
 	}
+	effectiveAssetID := existing.AssetID
+	if store.AssetID != "" {
+		effectiveAssetID = store.AssetID
+	}
 	lowerLabel := strings.ToLower(strings.TrimSpace(store.Label))
 	for _, other := range m.assetStores {
-		if other.ID != store.ID && other.AccountID == store.AccountID && strings.ToLower(other.Label) == lowerLabel {
+		if other.ID != store.ID && other.AccountID == store.AccountID && other.AssetID == effectiveAssetID && strings.ToLower(other.Label) == lowerLabel {
 			return ErrConflict
 		}
 	}
