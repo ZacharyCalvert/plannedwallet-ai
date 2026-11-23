@@ -141,10 +141,10 @@ describe('Account Categories Helpers', () => {
     assert.deepStrictEqual(uncatOrder, ['delete:cat-old']);
   });
 
-  it('summarizes uncategorized expense vendors and bulk assigns categories case-insensitively', async () => {
+  it('summarizes uncategorized money-out and money-in vendors and bulk assigns categories case-insensitively', async () => {
     const {
       summarizeUncategorizedVendors,
-      getUncategorizedExpensesForVendor,
+      getUncategorizedRecordsForVendor,
       bulkAssignCategoryToRecords,
     } = await import('./accountCategories.ts');
 
@@ -153,21 +153,23 @@ describe('Account Categories Helpers', () => {
       { id: '2', account_id: 'acc-1', value: -20.0, date_sent: '2026-11-03', date_cleared: null, category_id: null, entity: 'corner grocery', description: 'Bread', created_at: '', updated_at: '' },
       { id: '3', account_id: 'acc-1', value: 50.0, date_sent: '2026-11-04', date_cleared: null, category_id: null, entity: 'Corner Grocery', description: 'Refund', created_at: '', updated_at: '' },
       { id: '4', account_id: 'acc-1', value: -8.0, date_sent: '2026-11-02', date_cleared: null, category_id: 'cat-1', entity: 'Corner Grocery', description: 'Already categorized', created_at: '', updated_at: '' },
-      { id: '5', account_id: 'acc-1', value: -5.5, date_sent: '2026-11-05', date_cleared: null, category_id: null, entity: 'Coffee Shop', description: 'Latte', created_at: '', updated_at: '' },
+      { id: '5', account_id: 'acc-1', value: 1200.0, date_sent: '2026-11-05', date_cleared: null, category_id: null, entity: 'Employer Payroll', description: 'Paycheck', created_at: '', updated_at: '' },
     ];
 
     const summary = summarizeUncategorizedVendors(recs);
     assert.strictEqual(summary.length, 2);
     assert.strictEqual(summary[0].displayName, 'Corner Grocery');
-    assert.strictEqual(summary[0].count, 2);
-    assert.strictEqual(summary[0].totalAmount, 32.5);
-    assert.strictEqual(summary[1].displayName, 'Coffee Shop');
+    assert.strictEqual(summary[0].count, 3);
+    assert.strictEqual(summary[0].totalAmount, 82.5);
+    assert.strictEqual(summary[0].netAmount, 17.5);
+    assert.strictEqual(summary[1].displayName, 'Employer Payroll');
     assert.strictEqual(summary[1].count, 1);
+    assert.strictEqual(summary[1].netAmount, 1200);
 
-    const matching = getUncategorizedExpensesForVendor(recs, 'CORNER GROCERY');
+    const matching = getUncategorizedRecordsForVendor(recs, 'CORNER GROCERY');
     assert.deepStrictEqual(
       matching.map((r) => r.id),
-      ['2', '1']
+      ['3', '2', '1']
     );
 
     const progressUpdates: string[] = [];
@@ -180,9 +182,9 @@ describe('Account Categories Helpers', () => {
       },
       (done, total) => progressUpdates.push(`${done}/${total}`)
     );
-    assert.strictEqual(updated.length, 2);
+    assert.strictEqual(updated.length, 3);
     assert.strictEqual(updated[0].category_id, 'cat-groceries');
-    assert.deepStrictEqual(progressUpdates, ['1/2', '2/2']);
+    assert.deepStrictEqual(progressUpdates, ['1/3', '2/3', '3/3']);
   });
 
   it('filters disabled categories from pie summary and recomputes percentages', async () => {

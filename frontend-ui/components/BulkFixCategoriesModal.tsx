@@ -5,7 +5,7 @@ import { AccountRecord, Category } from '../lib/types';
 import { patchAccountRecord } from '../lib/api';
 import {
   bulkAssignCategoryToRecords,
-  getUncategorizedExpensesForVendor,
+  getUncategorizedRecordsForVendor,
   summarizeUncategorizedVendors,
 } from '../lib/accountCategories';
 
@@ -64,7 +64,7 @@ export function BulkFixCategoriesModal({
   }, [vendorSummaries, vendorName]);
 
   const matchingRecords = useMemo(
-    () => getUncategorizedExpensesForVendor(records, vendorName),
+    () => getUncategorizedRecordsForVendor(records, vendorName),
     [records, vendorName]
   );
 
@@ -86,7 +86,7 @@ export function BulkFixCategoriesModal({
     setSuccessMessage('');
 
     if (matchingRecords.length === 0) {
-      setError('Select or enter an exact vendor/recipient with uncategorized expenses.');
+      setError('Select or enter an exact vendor/payer with uncategorized records.');
       return;
     }
     if (!targetCategoryId) {
@@ -111,7 +111,7 @@ export function BulkFixCategoriesModal({
       setVendorName('');
       setTargetCategoryId('');
       setSuccessMessage(
-        `Updated ${updated.length} uncategorized ${updated.length === 1 ? 'expense' : 'expenses'} for "${appliedVendor}" to "${selectedCategory?.name || 'selected category'}".`
+        `Updated ${updated.length} uncategorized ${updated.length === 1 ? 'record' : 'records'} for "${appliedVendor}" to "${selectedCategory?.name || 'selected category'}".`
       );
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to bulk update categories.');
@@ -133,7 +133,7 @@ export function BulkFixCategoriesModal({
           <div>
             <h2 className="modal-title">Bulk Fix Categories</h2>
             <p className="modal-subtitle">
-              Assign a category to all uncategorized expenses for a specific vendor or recipient.
+              Assign a category to all uncategorized transactions (money out or money in) for a specific vendor or payer.
             </p>
           </div>
           {!submitting && (
@@ -149,12 +149,12 @@ export function BulkFixCategoriesModal({
 
           {vendorSummaries.length === 0 ? (
             <div className="empty-state">
-              All expense records in this account already have a category assigned.
+              All records in this account already have a category assigned.
             </div>
           ) : (
             <form onSubmit={handleApply}>
               <div className="form-group">
-                <label htmlFor="bulk-fix-vendor-input">Vendor / Recipient Name</label>
+                <label htmlFor="bulk-fix-vendor-input">Vendor / Payer Name</label>
                 <input
                   id="bulk-fix-vendor-input"
                   type="text"
@@ -163,15 +163,15 @@ export function BulkFixCategoriesModal({
                     setVendorName(e.target.value);
                     setError('');
                   }}
-                  placeholder="Type or click a vendor below (e.g. Corner Grocery)..."
+                  placeholder="Type or click a vendor or payer below (e.g. Corner Grocery)..."
                   disabled={submitting}
                 />
               </div>
 
-              <div className="bulk-fix-vendor-list" aria-label="Uncategorized vendors">
+              <div className="bulk-fix-vendor-list" aria-label="Uncategorized vendors and payers">
                 {filteredVendors.length === 0 ? (
                   <div className="text-muted text-sm p-2">
-                    No uncategorized expense vendors match &ldquo;{vendorName}&rdquo;.
+                    No uncategorized vendors or payers match &ldquo;{vendorName}&rdquo;.
                   </div>
                 ) : (
                   filteredVendors.map((v) => {
@@ -190,7 +190,9 @@ export function BulkFixCategoriesModal({
                       >
                         <span className="font-semibold">{v.displayName}</span>
                         <span className="text-muted text-sm">
-                          {v.count} {v.count === 1 ? 'expense' : 'expenses'} &bull; {formatCurrency(v.totalAmount)}
+                          {v.count} {v.count === 1 ? 'record' : 'records'} &bull;{' '}
+                          {v.netAmount >= 0 ? '+' : '-'}
+                          {formatCurrency(v.netAmount)}
                         </span>
                       </button>
                     );
@@ -201,7 +203,7 @@ export function BulkFixCategoriesModal({
               {matchingRecords.length > 0 && (
                 <div className="bulk-fix-preview mt-3">
                   <div className="text-sm font-semibold mb-1">
-                    Matching uncategorized expenses ({matchingRecords.length}):
+                    Matching uncategorized records ({matchingRecords.length}):
                   </div>
                   <ul className="bulk-fix-preview-list">
                     {matchingRecords.slice(0, 5).map((r) => (
@@ -209,7 +211,10 @@ export function BulkFixCategoriesModal({
                         <span>{r.date_sent}</span>
                         <span>{r.entity}</span>
                         <span>{r.description || '—'}</span>
-                        <span className="text-danger">-{formatCurrency(r.value)}</span>
+                        <span className={r.value >= 0 ? 'text-success' : 'text-danger'}>
+                          {r.value >= 0 ? '+' : '-'}
+                          {formatCurrency(r.value)}
+                        </span>
                       </li>
                     ))}
                   </ul>

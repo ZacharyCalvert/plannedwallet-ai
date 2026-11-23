@@ -249,7 +249,14 @@ export interface UncategorizedVendorSummary {
   displayName: string;
   count: number;
   totalAmount: number;
+  netAmount: number;
   records: AccountRecord[];
+}
+
+export function isUncategorizedRecord(
+  record: Pick<AccountRecord, 'category_id'>
+): boolean {
+  return !record.category_id;
 }
 
 export function isUncategorizedExpense(
@@ -263,7 +270,7 @@ export function summarizeUncategorizedVendors(
 ): UncategorizedVendorSummary[] {
   const groups = new Map<string, UncategorizedVendorSummary>();
   for (const rec of records) {
-    if (!isUncategorizedExpense(rec)) continue;
+    if (!isUncategorizedRecord(rec)) continue;
     const trimmed = rec.entity.trim();
     const key = trimmed.toLowerCase();
     if (!key) continue;
@@ -272,6 +279,7 @@ export function summarizeUncategorizedVendors(
     if (existing) {
       existing.count += 1;
       existing.totalAmount += Math.abs(rec.value);
+      existing.netAmount += rec.value;
       existing.records.push(rec);
     } else {
       groups.set(key, {
@@ -279,6 +287,7 @@ export function summarizeUncategorizedVendors(
         displayName: trimmed,
         count: 1,
         totalAmount: Math.abs(rec.value),
+        netAmount: rec.value,
         records: [rec],
       });
     }
@@ -291,16 +300,18 @@ export function summarizeUncategorizedVendors(
   });
 }
 
-export function getUncategorizedExpensesForVendor(
+export function getUncategorizedRecordsForVendor(
   records: AccountRecord[],
   vendorName: string
 ): AccountRecord[] {
   const targetKey = vendorName.trim().toLowerCase();
   if (!targetKey) return [];
   return records
-    .filter((r) => isUncategorizedExpense(r) && r.entity.trim().toLowerCase() === targetKey)
+    .filter((r) => isUncategorizedRecord(r) && r.entity.trim().toLowerCase() === targetKey)
     .sort((a, b) => b.date_sent.localeCompare(a.date_sent));
 }
+
+export const getUncategorizedExpensesForVendor = getUncategorizedRecordsForVendor;
 
 export async function bulkAssignCategoryToRecords(
   recordsToUpdate: Pick<AccountRecord, 'id' | 'account_id'>[],

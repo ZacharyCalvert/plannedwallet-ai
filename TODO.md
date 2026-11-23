@@ -49,7 +49,14 @@ Medium priority:
 - [x] net worth
 - [x] budgeting and expense pies
 - [x] Total net worth calculation / trending
+- [x] Add support of looping updates (daily)
+earmark support (monthly?)
+- [x] Support collapse of accounts, perspectives, bills, income
+Enable retention of sorted views of accounts, perspectives, bills, income
+Enable retention of starting window
+Allow trending against an asset (CPI, price of gas, etc)
 one time use bill (future schedule, 1 time use)
+Allow sorting of accounts (user settings)
 - [x] add income category
 create batch job for data grabs (indexes/prices, captcha cleanup)
 - [x] Monthly bill additions / automation

@@ -3,7 +3,7 @@
 import { useState, useMemo, useRef, useEffect } from 'react';
 import { AccountRecord, Category } from '../lib/types';
 import { createCategory } from '../lib/api';
-import { findCategoryByNameCaseInsensitive, getRecordsForCategory, isUncategorizedExpense } from '../lib/accountCategories';
+import { findCategoryByNameCaseInsensitive, getRecordsForCategory, isUncategorizedRecord } from '../lib/accountCategories';
 import { DeleteCategoryModal } from './DeleteCategoryModal';
 import { BulkFixCategoriesModal } from './BulkFixCategoriesModal';
 
@@ -75,8 +75,8 @@ export function AccountCategoriesTab({
     [deletingCategory, records]
   );
 
-  const uncategorizedExpenseCount = useMemo(
-    () => records.filter((r) => isUncategorizedExpense(r)).length,
+  const uncategorizedRecordCount = useMemo(
+    () => records.filter((r) => isUncategorizedRecord(r)).length,
     [records]
   );
 
@@ -116,16 +116,16 @@ export function AccountCategoriesTab({
           <div>
             <h3>Bulk Fix Categories by Vendor / Recipient</h3>
             <span className="section-subtitle">
-              {uncategorizedExpenseCount === 0
-                ? 'All expense records in this account are categorized.'
-                : `${uncategorizedExpenseCount} uncategorized ${uncategorizedExpenseCount === 1 ? 'expense' : 'expenses'} in this account`}
+              {uncategorizedRecordCount === 0
+                ? 'All records in this account are categorized.'
+                : `${uncategorizedRecordCount} uncategorized ${uncategorizedRecordCount === 1 ? 'record' : 'records'} in this account`}
             </span>
           </div>
           <button
             type="button"
             className="btn-secondary btn-sm"
             onClick={() => setBulkFixOpen(true)}
-            disabled={uncategorizedExpenseCount === 0}
+            disabled={uncategorizedRecordCount === 0}
           >
             Bulk Fix Categories
           </button>
