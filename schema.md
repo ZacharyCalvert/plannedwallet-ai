@@ -242,7 +242,7 @@ Single-use ledger storing Argon2id-hashed 12-word recovery phrases and rotation/
 
 ## 3. API Specification
 
-All HTTP requests require the `X-Client-ID` header. Protected endpoints require the `Authorization: Bearer <JWT>` header. The JWT payload includes `user_id`, `username`, `subscriber` (boolean flag denoting active paid/trial subscription status, or forced `true` when `SUBSCRIBER_ALWAYS_ON=true`), and `terms_approved` (boolean flag denoting active policy acceptance matching `PW_TERMS` when `ENFORCE_POLICY=true` or `PRODUCTION_ENV=true`).
+All HTTP requests require the `X-Client-ID` header. Protected endpoints require the `Authorization: Bearer <JWT>` header. The JWT payload includes `user_id`, `username`, `subscriber` (boolean flag where `true` denotes a **premium user** via an active paid/trial subscription or `SUBSCRIBER_ALWAYS_ON=true`, unlocking premium quality-of-life features; basic users receive `false`), and `terms_approved` (boolean flag denoting active policy acceptance matching `PW_TERMS` when `ENFORCE_POLICY=true` or `PRODUCTION_ENV=true`).
 
 ### 3.1 Health
 - `GET /api/health`: Database-confirmed health check endpoint (`{"status": "up"}`).

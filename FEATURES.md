@@ -356,7 +356,7 @@ The codebase adheres to rigorous engineering constraints enforced via automated 
   - 35 end-to-end integration test suites (`itests`) written in Python utilizing Pytest and Playwright's API client.
   - Automated tests execute against completely clean database volumes (`make refresh`), validating:
     - User registration, password complexity rejection, and duplicate prevention.
-    - TOTP exchange, token validity, and subscriber claims.
+    - TOTP exchange, token validity, and `subscriber` claims (`subscriber: true` = premium user with quality-of-life features enabled; `subscriber: false` = basic user).
     - CAPTCHA generation, rendering, and solution verification.
     - Checking, savings, and credit card ledger integrity and running balances.
     - Asset classes, multi-day valuations, store partitioning, and holding records.
