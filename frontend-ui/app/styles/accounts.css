@@ -143,11 +143,20 @@
   box-shadow: 0 0 0 1px var(--primary);
 }
 
+.account-card.account-card-compact {
+  padding: 0.55rem 0.75rem;
+}
+
 .account-card-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
   margin-bottom: 0.35rem;
+}
+
+.account-card.account-card-compact .account-card-header {
+  margin-bottom: 0;
+  gap: 0.5rem;
 }
 
 .account-card-name {

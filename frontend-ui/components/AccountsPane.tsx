@@ -284,18 +284,20 @@ export function AccountsPane({
                   {!accountsCollapsed &&
                     accounts.map((acc) => {
                       const typeSlug = (acc.type || '').toLowerCase().replace(/\s+/g, '-');
+                      const compactAccounts = accounts.length > 3;
                       return (
                         <button
                           key={acc.id}
                           type="button"
-                          className={`account-card account-card-${typeSlug} ${selectedId === acc.id ? 'selected' : ''}`}
+                          className={`account-card account-card-${typeSlug} ${compactAccounts ? 'account-card-compact' : ''} ${selectedId === acc.id ? 'selected' : ''}`}
                           onClick={() => onSelectAccount(acc)}
+                          title={compactAccounts && acc.description ? acc.description : undefined}
                         >
                           <div className="account-card-header">
                             <span className="account-card-name">{acc.name}</span>
                             <span className={`badge-account-type badge-${typeSlug}`}>{acc.type}</span>
                           </div>
-                          <p className="account-card-desc">{acc.description}</p>
+                          {!compactAccounts && <p className="account-card-desc">{acc.description}</p>}
                         </button>
                       );
                     })}
