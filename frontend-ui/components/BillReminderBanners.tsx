@@ -102,7 +102,7 @@ export function BillReminderBanners({
               {tx.account_id ? (
                 <button
                   type="button"
-                  className="btn-primary btn-sm"
+                  className="btn-primary btn-sm btn-reminder-action"
                   disabled={isApplying}
                   onClick={() => onApply(tx)}
                 >
@@ -112,7 +112,7 @@ export function BillReminderBanners({
                 onMarkPaid && (
                   <button
                     type="button"
-                    className="btn-primary btn-sm"
+                    className="btn-paid btn-sm btn-reminder-action"
                     disabled={isApplying}
                     onClick={() => onMarkPaid(tx)}
                   >
