@@ -447,6 +447,36 @@ export function Dashboard({ session, onUserDeleted, openUserTrigger = 0 }: Dashb
     setHiddenReminderIds((prev) => ({ ...prev, [id]: true }));
   };
 
+  const handleMarkPaidRecurring = async (tx: RecurringTransaction) => {
+    setReminderError('');
+    setApplyingRecurringId(tx.id);
+    try {
+      const targetDate = tx.next_due_date || getLocalTodayIso();
+      const updated = await updateRecurringTransaction(session.token, tx.id, {
+        account_id: tx.account_id,
+        category_id: tx.category_id,
+        amount: tx.amount,
+        last_date_applied: targetDate,
+        frequency: tx.frequency,
+        interval: tx.interval,
+        schedule: tx.schedule,
+        name: tx.name,
+        entity: tx.entity,
+        description: tx.description,
+        reminder: tx.reminder,
+      });
+      setRecurringTransactions((prev) =>
+        prev.map((item) => (item.id === tx.id ? updated : item))
+      );
+    } catch (err: unknown) {
+      setReminderError(
+        err instanceof Error ? err.message : 'Failed to mark recurring transaction as paid'
+      );
+    } finally {
+      setApplyingRecurringId(null);
+    }
+  };
+
   const handleCancelCreate = () => {
     if (accounts.length > 0) {
       setView({ kind: 'account', accountId: accounts[0].id });
@@ -505,6 +535,7 @@ export function Dashboard({ session, onUserDeleted, openUserTrigger = 0 }: Dashb
           hiddenIds={hiddenReminderIds}
           applyingId={applyingRecurringId}
           onApply={handleApplyRecurring}
+          onMarkPaid={handleMarkPaidRecurring}
           onHide={handleHideReminder}
         />
         {view.kind === 'home' && <DashboardIndex accountsLoaded={accountsLoaded} />}

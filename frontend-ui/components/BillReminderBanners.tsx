@@ -15,6 +15,7 @@ interface BillReminderBannersProps {
   hiddenIds: Record<string, boolean>;
   applyingId: string | null;
   onApply: (tx: RecurringTransaction) => void;
+  onMarkPaid?: (tx: RecurringTransaction) => void;
   onHide: (id: string) => void;
 }
 
@@ -42,6 +43,7 @@ export function BillReminderBanners({
   hiddenIds,
   applyingId,
   onApply,
+  onMarkPaid,
   onHide,
 }: BillReminderBannersProps) {
   const todayIso = getLocalTodayIso();
@@ -97,7 +99,7 @@ export function BillReminderBanners({
               )}
             </div>
             <div className="bill-reminder-actions">
-              {tx.account_id && (
+              {tx.account_id ? (
                 <button
                   type="button"
                   className="btn-primary btn-sm"
@@ -106,6 +108,17 @@ export function BillReminderBanners({
                 >
                   {isApplying ? 'Applying...' : 'Apply'}
                 </button>
+              ) : (
+                onMarkPaid && (
+                  <button
+                    type="button"
+                    className="btn-primary btn-sm"
+                    disabled={isApplying}
+                    onClick={() => onMarkPaid(tx)}
+                  >
+                    {isApplying ? 'Saving...' : 'Paid'}
+                  </button>
+                )
               )}
               <button
                 type="button"
