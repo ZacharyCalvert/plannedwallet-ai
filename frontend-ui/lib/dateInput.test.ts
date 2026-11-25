@@ -54,4 +54,13 @@ describe('DateInput Helpers', () => {
       action: 'focusNext',
     });
   });
+
+  it('preserves in-progress month and day edits without jumping to year', () => {
+    assert.strictEqual(applyDateAutoSlash('11/1/2026', '11//2026'), '11/1/2026');
+    assert.strictEqual(applyDateAutoSlash('11/10/2026', '11/1/2026'), '11/10/2026');
+    assert.strictEqual(applyDateAutoSlash('1/25/2026', '/25/2026'), '1/25/2026');
+    assert.strictEqual(applyDateAutoSlash('12/25/2026', '1/25/2026'), '12/25/2026');
+    assert.strictEqual(displayDateToIso('11/1/2026'), '2026-11-01');
+    assert.strictEqual(displayDateToIso('11/10/2026'), '2026-11-10');
+  });
 });

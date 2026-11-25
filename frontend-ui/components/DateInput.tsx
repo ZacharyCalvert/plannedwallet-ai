@@ -32,9 +32,12 @@ export function DateInput({
   const [displayValue, setDisplayValue] = useState(() => isoToDisplayDate(value));
   const nativeDateRef = useRef<HTMLInputElement>(null);
 
-  // Sync with value prop changes (e.g. form reset or selecting record to edit)
+  // Sync with external value prop changes (e.g. form reset, selecting record, or calendar picker)
+  // without clobbering in-progress edits like "11/1/2026" before typing the second digit.
   useEffect(() => {
-    setDisplayValue(isoToDisplayDate(value));
+    if (displayDateToIso(displayValue) !== value) {
+      setDisplayValue(isoToDisplayDate(value));
+    }
   }, [value]);
 
   const focusNextField = () => {
