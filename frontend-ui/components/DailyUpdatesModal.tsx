@@ -1,9 +1,10 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { DailyUpdateItem } from '../lib/dailyUpdates';
+import { DailyUpdateItem, dailyUpdateItemKey } from '../lib/dailyUpdates';
 import { submitDailyUpdateItem } from '../lib/dailyUpdatesApi';
 import { isoToDisplayDate } from '../lib/dateInput';
+import { reorderItems } from '../lib/userSettings';
 
 interface DailyUpdatesModalProps {
   isOpen: boolean;
@@ -12,6 +13,8 @@ interface DailyUpdatesModalProps {
   todayIso: string;
   items: DailyUpdateItem[];
   onSaved: (updatedIds: string[]) => Promise<void> | void;
+  canReorder?: boolean;
+  onReorder?: (nextOrderKeys: string[]) => void;
 }
 
 function itemKey(item: DailyUpdateItem): string {
@@ -42,10 +45,14 @@ export function DailyUpdatesModal({
   todayIso,
   items,
   onSaved,
+  canReorder = false,
+  onReorder,
 }: DailyUpdatesModalProps) {
   const [values, setValues] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [draggedIdx, setDraggedIdx] = useState<number | null>(null);
+  const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -166,13 +173,47 @@ export function DailyUpdatesModal({
               <p className="text-muted">All snapshot accounts and asset values are up to date for today.</p>
             ) : (
               <div className="daily-updates-list">
-                {items.map((item) => {
+                {items.map((item, idx) => {
                   const key = itemKey(item);
                   const inputId = `daily-update-${item.kind}-${item.id}`;
+                  const isDragOver = canReorder && dragOverIdx === idx && draggedIdx !== idx;
                   return (
-                    <div key={key} className="daily-update-row">
+                    <div
+                      key={key}
+                      draggable={canReorder && !saving}
+                      onDragStart={() => {
+                        if (!canReorder || saving) return;
+                        setDraggedIdx(idx);
+                        setDragOverIdx(idx);
+                      }}
+                      onDragOver={(e) => {
+                        if (!canReorder || draggedIdx === null) return;
+                        e.preventDefault();
+                        if (dragOverIdx !== idx) setDragOverIdx(idx);
+                      }}
+                      onDrop={(e) => {
+                        if (!canReorder || draggedIdx === null) return;
+                        e.preventDefault();
+                        if (draggedIdx !== idx) {
+                          const reordered = reorderItems(items, draggedIdx, idx);
+                          onReorder?.(reordered.map((it) => dailyUpdateItemKey(it)));
+                        }
+                        setDraggedIdx(null);
+                        setDragOverIdx(null);
+                      }}
+                      onDragEnd={() => {
+                        setDraggedIdx(null);
+                        setDragOverIdx(null);
+                      }}
+                      className={`daily-update-row ${isDragOver ? 'daily-update-row-drag-over' : ''}`}
+                    >
                       <div className="daily-update-meta">
                         <div className="daily-update-title-line">
+                          {canReorder && (
+                            <span className="drag-handle" aria-hidden="true" title="Drag to reorder">
+                              ⋮⋮
+                            </span>
+                          )}
                           <span
                             className={`badge-account-type ${
                               item.kind === 'snapshot' ? 'badge-snapshot' : 'badge-asset'

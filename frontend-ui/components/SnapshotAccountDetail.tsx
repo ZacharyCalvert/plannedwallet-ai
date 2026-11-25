@@ -20,6 +20,9 @@ interface SnapshotAccountDetailProps {
   onTabChange?: (tab: string, replace?: boolean) => void;
   onAccountUpdated?: (updated: Account) => void;
   onAccountDeleted?: (deletedId: string) => void;
+  showPinToggle?: boolean;
+  isPinned?: boolean;
+  onTogglePin?: () => void;
 }
 
 type SnapshotTab = 'snapshots' | 'graph';
@@ -73,6 +76,9 @@ export function SnapshotAccountDetail({
   onTabChange,
   onAccountUpdated,
   onAccountDeleted,
+  showPinToggle = false,
+  isPinned = false,
+  onTogglePin,
 }: SnapshotAccountDetailProps) {
   const [snapshots, setSnapshots] = useState<AccountSnapshot[]>([]);
   const [loading, setLoading] = useState(true);
@@ -280,6 +286,9 @@ export function SnapshotAccountDetail({
           badgeClassName="badge-snapshot"
           onAccountUpdated={onAccountUpdated}
           onDeleteClick={() => setDeleteModalOpen(true)}
+          showPinToggle={showPinToggle}
+          isPinned={isPinned}
+          onTogglePin={onTogglePin}
         />
 
         {/* Rightmost Balances */}

@@ -31,6 +31,9 @@ interface AccountDetailProps {
   onAccountUpdated?: (updated: Account) => void;
   onAccountDeleted?: (deletedId: string) => void;
   refreshVersion?: number;
+  showPinToggle?: boolean;
+  isPinned?: boolean;
+  onTogglePin?: () => void;
 }
 
 type AccountTab = 'records' | 'trend' | 'expenses' | 'categories' | 'reconcile';
@@ -127,6 +130,9 @@ export function AccountDetail({
   onAccountUpdated,
   onAccountDeleted,
   refreshVersion = 0,
+  showPinToggle = false,
+  isPinned = false,
+  onTogglePin,
 }: AccountDetailProps) {
   const [records, setRecords] = useState<AccountRecord[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -459,6 +465,9 @@ export function AccountDetail({
           token={token}
           onAccountUpdated={onAccountUpdated}
           onDeleteClick={() => setDeleteModalOpen(true)}
+          showPinToggle={showPinToggle}
+          isPinned={isPinned}
+          onTogglePin={onTogglePin}
         />
 
         {/* Rightmost side balances */}

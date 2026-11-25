@@ -44,6 +44,9 @@ interface AssetAccountDetailProps {
   onTabChange?: (tab: string, replace?: boolean) => void;
   onAccountUpdated?: (updated: Account) => void;
   onAccountDeleted?: (deletedId: string) => void;
+  showPinToggle?: boolean;
+  isPinned?: boolean;
+  onTogglePin?: () => void;
 }
 
 type AssetTab = 'classes' | 'values' | 'storage' | 'records' | 'trend';
@@ -102,6 +105,9 @@ export function AssetAccountDetail({
   onTabChange,
   onAccountUpdated,
   onAccountDeleted,
+  showPinToggle = false,
+  isPinned = false,
+  onTogglePin,
 }: AssetAccountDetailProps) {
   const [stores, setStores] = useState<AssetStore[]>([]);
   const [summary, setSummary] = useState<AssetAccountSummary | null>(null);
@@ -753,6 +759,9 @@ export function AssetAccountDetail({
           badgeClassName="badge-asset"
           onAccountUpdated={onAccountUpdated}
           onDeleteClick={() => setDeleteModalOpen(true)}
+          showPinToggle={showPinToggle}
+          isPinned={isPinned}
+          onTogglePin={onTogglePin}
         />
       </div>
 

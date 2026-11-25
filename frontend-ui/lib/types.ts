@@ -427,3 +427,28 @@ export interface RecurringTransactionApplyResponse {
   recurring_transaction: RecurringTransaction;
   record: AccountRecord;
 }
+
+export interface PinnedBalanceRef {
+  kind: 'account' | 'perspective';
+  id: string;
+}
+
+export interface UserSettingsPayload {
+  account_order: string[];
+  daily_update_order: string[];
+  pinned_balances: PinnedBalanceRef[];
+}
+
+export interface UserSettings {
+  id: string;
+  user_id: string;
+  settings: UserSettingsPayload;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PatchUserSettingsRequest {
+  account_order?: string[];
+  daily_update_order?: string[];
+  pinned_balances?: PinnedBalanceRef[];
+}

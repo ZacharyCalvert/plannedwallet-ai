@@ -45,6 +45,9 @@ interface PerspectiveDetailProps {
   categories: Category[];
   onPerspectiveUpdated: (updated: Perspective) => void;
   onPerspectiveDeleted: (deletedId: string) => void;
+  showPinToggle?: boolean;
+  isPinned?: boolean;
+  onTogglePin?: () => void;
 }
 
 type PerspectiveTab = 'trend' | 'categories' | 'settings';
@@ -102,6 +105,9 @@ export function PerspectiveDetail({
   categories,
   onPerspectiveUpdated,
   onPerspectiveDeleted,
+  showPinToggle = false,
+  isPinned = false,
+  onTogglePin,
 }: PerspectiveDetailProps) {
   const [view, setView] = useState<PerspectiveView | null>(null);
   const [accountRecords, setAccountRecords] = useState<AccountRecord[]>([]);
@@ -552,6 +558,16 @@ export function PerspectiveDetail({
             >
               Delete
             </button>
+            {showPinToggle && onTogglePin && (
+              <label className="pin-balance-toggle" title="Pin expected balance to top bar">
+                <input
+                  type="checkbox"
+                  checked={isPinned}
+                  onChange={onTogglePin}
+                />
+                <span>Pin to top</span>
+              </label>
+            )}
           </div>
         </div>
       </div>

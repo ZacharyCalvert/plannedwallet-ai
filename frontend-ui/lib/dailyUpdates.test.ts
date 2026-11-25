@@ -116,4 +116,17 @@ describe('dailyUpdates', () => {
     );
     assert.equal(noneWhenUpdatedToday, null);
   });
+
+  it('respects custom dailyUpdateOrder and appends new items in default order', () => {
+    const items: DailyUpdateItem[] = [
+      { kind: 'snapshot', id: 'snap-1', name: 'Alpha', subtitle: '', lastValue: null, lastDate: null },
+      { kind: 'asset', id: 'asset-1', name: 'Gold', subtitle: '', lastValue: null, lastDate: null },
+      { kind: 'snapshot', id: 'snap-2', name: 'Zeta', subtitle: '', lastValue: null, lastDate: null },
+    ];
+    const sorted = sortDailyUpdateItems(items, ['asset:asset-1', 'snapshot:snap-2']);
+    assert.deepEqual(
+      sorted.map((item) => `${item.kind}:${item.id}`),
+      ['asset:asset-1', 'snapshot:snap-2', 'snapshot:snap-1']
+    );
+  });
 });

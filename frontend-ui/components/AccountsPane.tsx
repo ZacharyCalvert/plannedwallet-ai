@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { Account, Perspective } from '../lib/types';
+import { reorderItems } from '../lib/userSettings';
 
 interface AccountsPaneProps {
   accounts: Account[];
@@ -24,6 +25,8 @@ interface AccountsPaneProps {
   onAddIncomesClick?: () => void;
   dailyUpdatesCount?: number;
   onDailyUpdatesClick?: () => void;
+  canReorderAccounts?: boolean;
+  onReorderAccounts?: (nextAccountOrder: string[]) => void;
 }
 
 export function AccountsPane({
@@ -47,12 +50,16 @@ export function AccountsPane({
   onAddIncomesClick,
   dailyUpdatesCount = 0,
   onDailyUpdatesClick,
+  canReorderAccounts = false,
+  onReorderAccounts,
 }: AccountsPaneProps) {
   const [collapsed, setCollapsed] = useState(false);
   const [accountsCollapsed, setAccountsCollapsed] = useState(false);
   const [recurringCollapsed, setRecurringCollapsed] = useState(false);
   const [perspectivesCollapsed, setPerspectivesCollapsed] = useState(false);
   const [addMenuOpen, setAddMenuOpen] = useState(false);
+  const [draggedAccountIndex, setDraggedAccountIndex] = useState<number | null>(null);
+  const [dragOverAccountIndex, setDragOverAccountIndex] = useState<number | null>(null);
   const expandedMenuRef = useRef<HTMLDivElement>(null);
   const railMenuRef = useRef<HTMLDivElement>(null);
 
@@ -282,19 +289,54 @@ export function AccountsPane({
                     </span>
                   </button>
                   {!accountsCollapsed &&
-                    accounts.map((acc) => {
+                    accounts.map((acc, idx) => {
                       const typeSlug = (acc.type || '').toLowerCase().replace(/\s+/g, '-');
                       const compactAccounts = accounts.length > 3;
+                      const isDragOver = canReorderAccounts && dragOverAccountIndex === idx && draggedAccountIndex !== idx;
                       return (
                         <button
                           key={acc.id}
                           type="button"
-                          className={`account-card account-card-${typeSlug} ${compactAccounts ? 'account-card-compact' : ''} ${selectedId === acc.id ? 'selected' : ''}`}
+                          draggable={canReorderAccounts}
+                          onDragStart={() => {
+                            if (!canReorderAccounts) return;
+                            setDraggedAccountIndex(idx);
+                            setDragOverAccountIndex(idx);
+                          }}
+                          onDragOver={(e) => {
+                            if (!canReorderAccounts || draggedAccountIndex === null) return;
+                            e.preventDefault();
+                            if (dragOverAccountIndex !== idx) {
+                              setDragOverAccountIndex(idx);
+                            }
+                          }}
+                          onDrop={(e) => {
+                            if (!canReorderAccounts || draggedAccountIndex === null) return;
+                            e.preventDefault();
+                            if (draggedAccountIndex !== idx) {
+                              const reordered = reorderItems(accounts, draggedAccountIndex, idx);
+                              onReorderAccounts?.(reordered.map((a) => a.id));
+                            }
+                            setDraggedAccountIndex(null);
+                            setDragOverAccountIndex(null);
+                          }}
+                          onDragEnd={() => {
+                            setDraggedAccountIndex(null);
+                            setDragOverAccountIndex(null);
+                          }}
+                          className={`account-card account-card-${typeSlug} ${compactAccounts ? 'account-card-compact' : ''} ${selectedId === acc.id ? 'selected' : ''} ${isDragOver ? 'account-card-drag-over' : ''}`}
                           onClick={() => onSelectAccount(acc)}
                           title={compactAccounts && acc.description ? acc.description : undefined}
                         >
                           <div className="account-card-header">
-                            <span className="account-card-name">{acc.name}</span>
+                            <span className="account-card-title-group">
+                              {canReorderAccounts && (
+                                <span className="drag-handle" aria-hidden="true" title="Drag to reorder">
+                                  ⋮⋮
+                                </span>
+                              )}
+                              <span className="account-card-name">{acc.name}</span>
+                            </span>
                             <span className={`badge-account-type badge-${typeSlug}`}>{acc.type}</span>
                           </div>
                           {!compactAccounts && <p className="account-card-desc">{acc.description}</p>}

@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -1685,5 +1686,38 @@ func (p *PostgresRepository) DeleteCategory(ctx context.Context, id string) erro
 		return ErrNotFound
 	}
 	return nil
+}
+
+func (p *PostgresRepository) GetUserSettings(ctx context.Context, userID string) (*models.UserSettings, error) {
+	query := `SELECT id, user_id, settings, created_at, updated_at FROM user_settings WHERE user_id = $1`
+	var s models.UserSettings
+	var raw []byte
+	err := p.db.QueryRowContext(ctx, query, userID).Scan(&s.ID, &s.UserID, &raw, &s.CreatedAt, &s.UpdatedAt)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrNotFound
+		}
+		return nil, err
+	}
+	if len(raw) > 0 {
+		if err := json.Unmarshal(raw, &s.Settings); err != nil {
+			return nil, err
+		}
+	}
+	return &s, nil
+}
+
+func (p *PostgresRepository) UpsertUserSettings(ctx context.Context, settings *models.UserSettings) error {
+	raw, err := json.Marshal(settings.Settings)
+	if err != nil {
+		return err
+	}
+	query := `INSERT INTO user_settings (id, user_id, settings, created_at, updated_at)
+	          VALUES ($1, $2, $3::jsonb, $4, $5)
+	          ON CONFLICT (user_id) DO UPDATE
+	          SET settings = EXCLUDED.settings, updated_at = EXCLUDED.updated_at
+	          RETURNING id, created_at, updated_at`
+	return p.db.QueryRowContext(ctx, query, settings.ID, settings.UserID, string(raw), settings.CreatedAt, settings.UpdatedAt).
+		Scan(&settings.ID, &settings.CreatedAt, &settings.UpdatedAt)
 }
 

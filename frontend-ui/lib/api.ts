@@ -1392,3 +1392,43 @@ export async function unlinkPerspectiveRecurringTransaction(
     throw new Error(err.message || 'Failed to unlink recurring transaction from perspective');
   }
 }
+
+export async function fetchUserSettings(
+  token: string,
+  username: string
+): Promise<import('./types').UserSettings> {
+  const res = await tracedFetch(
+    `/api/v1/users/${encodeURIComponent(username)}/settings`,
+    {
+      headers: { Authorization: `Bearer ${token}` },
+    }
+  );
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || 'Failed to load user settings');
+  }
+  return res.json();
+}
+
+export async function patchUserSettings(
+  token: string,
+  username: string,
+  data: import('./types').PatchUserSettingsRequest
+): Promise<import('./types').UserSettings> {
+  const res = await tracedFetch(
+    `/api/v1/users/${encodeURIComponent(username)}/settings`,
+    {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(data),
+    }
+  );
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || 'Failed to update user settings');
+  }
+  return res.json();
+}

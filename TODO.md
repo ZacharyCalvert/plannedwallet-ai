@@ -18,6 +18,9 @@ Top priority:
 - [x] git statCreate JWT secret and mount as required field for JWT issuance / signing
 
 Medium priority:
+- Password changes
+- itest account enumeration (401 vs 403 vs 404)
+- Account lock / require reset using recovery codes after X number of failed password attempts
 - [x] Add dependabot monitoring of npm, docker images, golang dependencies
 - [x] branch protections, code owners, etc.
 - [x] Captcha on account creation - creation only
@@ -83,6 +86,9 @@ Compare some example/external terms of use and privacy policy
 - [x] Calculate space, size, cost (confirm limits for usage planning)
 
 Premium features:
+Add save settings for ordering (accounts and daily updates)
+Add support for show perspective balance at top of viewing window
+Day reminder (X days ahead of due bill)
 Add Money-in / Money-out features (trending) for asset and snapshot accounts to track growth/change
 Snapshot extraction of gold / silver / stocks / gas
 earmark (capture bill, mark it against an account over time)

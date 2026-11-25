@@ -13,7 +13,7 @@ func TestInitSQLEmbedded_Tables(t *testing.T) {
 	expectedTables := []string{
 		"users", "accounts", "account_access", "categories", "reconcile_reports", "checking_records",
 		"assets", "asset_values", "asset_stores", "asset_store_records",
-		"account_assets", "account_snapshots", "captchas", "subscriptions",
+		"account_assets", "account_snapshots", "captchas", "subscriptions", "user_settings",
 		"perspectives", "perspective_settings", "perspective_accounts", "perspective_recurring_transactions", "perspective_access", "recurring_transactions",
 	}
 	for _, table := range expectedTables {
@@ -57,6 +57,7 @@ func TestInitSQLEmbedded_Constraints(t *testing.T) {
 		"uq_perspective_access_perspective_user UNIQUE (perspective_id, user_id)",
 		"uq_categories_user_name UNIQUE NULLS NOT DISTINCT (user_id, name)",
 		"uq_categories_user_lower_name ON categories (user_id, LOWER(name)) NULLS NOT DISTINCT",
+		"uq_user_settings_user UNIQUE (user_id)",
 	}
 	for _, c := range expectedConstraints {
 		if !strings.Contains(initSQL, c) {

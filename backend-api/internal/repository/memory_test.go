@@ -884,5 +884,41 @@ func TestMemoryRepo_CreateCheckingRecordsBulk(t *testing.T) {
 	}
 }
 
+func TestMemoryRepo_UserSettings(t *testing.T) {
+	repo := repository.NewMemoryRepository()
+	ctx := context.Background()
+	now := time.Now().UTC()
+
+	if _, err := repo.GetUserSettings(ctx, "user-1"); !errors.Is(err, repository.ErrNotFound) {
+		t.Fatalf("expected ErrNotFound, got %v", err)
+	}
+
+	in := &models.UserSettings{
+		ID:     "us-1",
+		UserID: "user-1",
+		Settings: models.UserSettingsPayload{
+			AccountOrder:     []string{"acc-2", "acc-1"},
+			DailyUpdateOrder: []string{"snapshot:acc-2", "asset:a-1"},
+			PinnedBalances:   []models.PinnedBalanceRef{{Kind: "account", ID: "acc-1"}},
+		},
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
+	if err := repo.UpsertUserSettings(ctx, in); err != nil {
+		t.Fatalf("UpsertUserSettings failed: %v", err)
+	}
+
+	got, err := repo.GetUserSettings(ctx, "user-1")
+	if err != nil {
+		t.Fatalf("GetUserSettings failed: %v", err)
+	}
+	if len(got.Settings.AccountOrder) != 2 || got.Settings.AccountOrder[0] != "acc-2" {
+		t.Fatalf("unexpected account order: %+v", got.Settings.AccountOrder)
+	}
+	if len(got.Settings.PinnedBalances) != 1 || got.Settings.PinnedBalances[0].ID != "acc-1" {
+		t.Fatalf("unexpected pinned balances: %+v", got.Settings.PinnedBalances)
+	}
+}
+
 
 

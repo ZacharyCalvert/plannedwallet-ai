@@ -36,6 +36,7 @@ type MemoryRepository struct {
 	recurringTransactions map[string]*models.RecurringTransaction
 	policyAgreements      map[string]*models.PolicyAgreement
 	recoveryKeys          map[string]*models.UserRecoveryKey
+	userSettings          map[string]*models.UserSettings // userID -> UserSettings
 }
 
 type memoryCaptcha struct {
@@ -97,6 +98,7 @@ func NewMemoryRepository() *MemoryRepository {
 		recurringTransactions: make(map[string]*models.RecurringTransaction),
 		policyAgreements:      make(map[string]*models.PolicyAgreement),
 		recoveryKeys:          make(map[string]*models.UserRecoveryKey),
+		userSettings:          make(map[string]*models.UserSettings),
 	}
 }
 
@@ -307,6 +309,7 @@ func (m *MemoryRepository) DeleteUser(_ context.Context, id string) error {
 	m.deleteUserOwnedAssets(id)
 	m.deleteUserOwnedPerspectives(id)
 	m.deleteUserAccessAndRecords(id)
+	delete(m.userSettings, id)
 	return nil
 }
 
@@ -1847,6 +1850,37 @@ func (m *MemoryRepository) DeleteCategory(_ context.Context, id string) error {
 			rt.UpdatedAt = now
 		}
 	}
+	return nil
+}
+
+func cloneUserSettings(src *models.UserSettings) *models.UserSettings {
+	copied := *src
+	copied.Settings.AccountOrder = append([]string{}, src.Settings.AccountOrder...)
+	copied.Settings.DailyUpdateOrder = append([]string{}, src.Settings.DailyUpdateOrder...)
+	copied.Settings.PinnedBalances = append([]models.PinnedBalanceRef{}, src.Settings.PinnedBalances...)
+	return &copied
+}
+
+func (m *MemoryRepository) GetUserSettings(_ context.Context, userID string) (*models.UserSettings, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	s, ok := m.userSettings[userID]
+	if !ok {
+		return nil, ErrNotFound
+	}
+	return cloneUserSettings(s), nil
+}
+
+func (m *MemoryRepository) UpsertUserSettings(_ context.Context, settings *models.UserSettings) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if existing, ok := m.userSettings[settings.UserID]; ok {
+		settings.ID = existing.ID
+		settings.CreatedAt = existing.CreatedAt
+	}
+	m.userSettings[settings.UserID] = cloneUserSettings(settings)
 	return nil
 }
 

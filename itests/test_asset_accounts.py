@@ -808,21 +808,21 @@ def test_asset_store_label_reuse_across_assets_and_accounts(api_context: APIRequ
     headers = {"Authorization": f"Bearer {token}"}
     uid = uuid.uuid4().hex[:6]
 
-    # Create two asset accounts
+    # Create two asset accounts (avoid digits in account names per 4-digit rule)
     acc1_res = api_context.post(
         "/api/v1/accounts",
-        data={"name": f"Precious Metals Vault {uid}", "type": "asset", "description": "Primary vault"},
+        data={"name": "Precious Metals Vault", "type": "asset", "description": "Primary vault"},
         headers=headers,
     )
-    assert acc1_res.status == 201
+    assert acc1_res.status == 201, f"Failed to create acc1: {acc1_res.text()}"
     acc1_id = acc1_res.json()["id"]
 
     acc2_res = api_context.post(
         "/api/v1/accounts",
-        data={"name": f"Digital Cold Storage {uid}", "type": "asset", "description": "Secondary vault"},
+        data={"name": "Digital Cold Storage", "type": "asset", "description": "Secondary vault"},
         headers=headers,
     )
-    assert acc2_res.status == 201
+    assert acc2_res.status == 201, f"Failed to create acc2: {acc2_res.text()}"
     acc2_id = acc2_res.json()["id"]
 
     # Create three distinct asset classes

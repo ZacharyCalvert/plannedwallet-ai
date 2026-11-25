@@ -160,4 +160,8 @@ type Repository interface {
 	ListRecoveryKeysByUserID(ctx context.Context, userID string) ([]*models.UserRecoveryKey, error)
 	CompleteAccountRecovery(ctx context.Context, userID, newPasswordHash, newTOTPSecret, consumedKeyID, usedIP string, usedAt time.Time, replacementKey *models.UserRecoveryKey) error
 	RotateRecoveryKey(ctx context.Context, userID string, newKey *models.UserRecoveryKey) error
+
+	// User Settings operations
+	GetUserSettings(ctx context.Context, userID string) (*models.UserSettings, error)
+	UpsertUserSettings(ctx context.Context, settings *models.UserSettings) error
 }

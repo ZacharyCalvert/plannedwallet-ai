@@ -551,6 +551,8 @@ func (h *Handler) RegisterRoutes(r *gin.Engine) {
 	protected.Use(h.auth.Middleware())
 	protected.Use(h.PolicyEnforcementMiddleware())
 	protected.GET("/users/:username", h.GetUser)
+	protected.GET("/users/:username/settings", h.GetUserSettings)
+	protected.PATCH("/users/:username/settings", h.PatchUserSettings)
 	protected.POST("/users/:username/token/refresh", h.RefreshToken)
 	protected.POST("/users/:username/policy-agreements", h.RecordPolicyAgreement)
 	protected.GET("/users/:username/policy-agreements", h.ListPolicyAgreements)

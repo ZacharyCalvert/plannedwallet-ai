@@ -11,24 +11,48 @@ export interface DailyUpdateItem {
   lastDate: string | null;
 }
 
-export function sortDailyUpdateItems(items: DailyUpdateItem[]): DailyUpdateItem[] {
+export function dailyUpdateItemKey(item: Pick<DailyUpdateItem, 'kind' | 'id'>): string {
+  return `${item.kind}:${item.id}`;
+}
+
+function compareDefaultDailyUpdateItems(a: DailyUpdateItem, b: DailyUpdateItem): number {
+  const kindOrderA = a.kind === 'snapshot' ? 0 : 1;
+  const kindOrderB = b.kind === 'snapshot' ? 0 : 1;
+  if (kindOrderA !== kindOrderB) {
+    return kindOrderA - kindOrderB;
+  }
+  const nameCmp = a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
+  if (nameCmp !== 0) {
+    return nameCmp;
+  }
+  if (a.name !== b.name) {
+    return a.name < b.name ? -1 : 1;
+  }
+  if (a.id !== b.id) {
+    return a.id < b.id ? -1 : 1;
+  }
+  return 0;
+}
+
+export function sortDailyUpdateItems(
+  items: DailyUpdateItem[],
+  dailyUpdateOrder: string[] = []
+): DailyUpdateItem[] {
+  const rank = new Map<string, number>();
+  dailyUpdateOrder.forEach((key, idx) => {
+    if (!rank.has(key)) {
+      rank.set(key, idx);
+    }
+  });
   return [...items].sort((a, b) => {
-    const kindOrderA = a.kind === 'snapshot' ? 0 : 1;
-    const kindOrderB = b.kind === 'snapshot' ? 0 : 1;
-    if (kindOrderA !== kindOrderB) {
-      return kindOrderA - kindOrderB;
+    const rankA = rank.get(dailyUpdateItemKey(a));
+    const rankB = rank.get(dailyUpdateItemKey(b));
+    if (rankA !== undefined && rankB !== undefined) {
+      return rankA - rankB;
     }
-    const nameCmp = a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
-    if (nameCmp !== 0) {
-      return nameCmp;
-    }
-    if (a.name !== b.name) {
-      return a.name < b.name ? -1 : 1;
-    }
-    if (a.id !== b.id) {
-      return a.id < b.id ? -1 : 1;
-    }
-    return 0;
+    if (rankA !== undefined) return -1;
+    if (rankB !== undefined) return 1;
+    return compareDefaultDailyUpdateItems(a, b);
   });
 }
 

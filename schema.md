@@ -260,6 +260,8 @@ All HTTP requests require the `X-Client-ID` header. Protected endpoints require 
 - `POST /api/v1/users/{username}/recovery-key/rotate`: Authenticated recovery phrase rotation (`password`, `totp_code`), deactivating prior active phrases and returning a fresh 12-word phrase.
 - `GET /api/v1/users/{username}/policy-agreements`: List policy agreement ledger entries for the signed-in user (permitted when `terms_approved: false`).
 - `POST /api/v1/users/{username}/policy-agreements`: Append a policy agreement ledger entry confirming Terms of Use, Privacy Policy, US consumer status, and matching Terms PDF SHA-256 (`PW_TERMS`), capturing client IP and timestamp (permitted when `terms_approved: false`).
+- `GET /api/v1/users/{username}/settings`: Retrieve premium user viewing settings (`account_order`, `daily_update_order`, `pinned_balances`). Returns `403 PREMIUM_REQUIRED` for basic users.
+- `PATCH /api/v1/users/{username}/settings`: Partially update premium user viewing settings (`user_settings` JSONB). Returns `403 PREMIUM_REQUIRED` for basic users.
 
 ### 3.3 Accounts
 - `POST /api/v1/accounts`: Create account (`checking`, `savings`, `credit card`, `asset`, `snapshot`).

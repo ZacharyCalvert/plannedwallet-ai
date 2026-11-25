@@ -1,13 +1,16 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import {
   Account,
   Category,
+  PatchUserSettingsRequest,
   Perspective,
+  PinnedBalanceRef,
   RecurringTransaction,
   RecurringTransactionRequest,
   UserSession,
+  UserSettingsPayload,
 } from '../lib/types';
 import {
   applyRecurringTransactionToAccount,
@@ -17,14 +20,18 @@ import {
   fetchCategories,
   fetchPerspectives,
   fetchRecurringTransactions,
+  fetchUserSettings,
+  patchUserSettings,
   updateRecurringTransaction,
 } from '../lib/api';
 import { getLocalTodayIso } from '../lib/bills';
-import { DailyUpdateItem } from '../lib/dailyUpdates';
+import { DailyUpdateItem, sortDailyUpdateItems } from '../lib/dailyUpdates';
 import { loadPendingDailyUpdates } from '../lib/dailyUpdatesApi';
 import { isJwtSubscriber } from '../lib/tokenRefresh';
+import { applyAccountOrder, isPinnedBalance, togglePinnedBalance } from '../lib/userSettings';
 import { AccountsPane } from './AccountsPane';
 import { DailyUpdatesModal } from './DailyUpdatesModal';
+import { PinnedBalancesBar } from './PinnedBalancesBar';
 import { NewAccountForm } from './NewAccountForm';
 import { NewPerspectiveForm } from './NewPerspectiveForm';
 import { PerspectiveDetail } from './PerspectiveDetail';
@@ -63,6 +70,9 @@ interface AccountRouteViewProps {
   onTabChange: (accountId: string, nextTab: string) => void;
   onGoHome: () => void;
   accountRefreshVersion: number;
+  showPinToggle?: boolean;
+  isPinned?: boolean;
+  onTogglePin?: () => void;
 }
 
 function AccountRouteView({
@@ -76,6 +86,9 @@ function AccountRouteView({
   onTabChange,
   onGoHome,
   accountRefreshVersion,
+  showPinToggle = false,
+  isPinned = false,
+  onTogglePin,
 }: AccountRouteViewProps) {
   const account = accounts.find((a) => a.id === accountId);
 
@@ -108,6 +121,9 @@ function AccountRouteView({
         onTabChange={handleTabChange}
         onAccountUpdated={onAccountUpdated}
         onAccountDeleted={onAccountDeleted}
+        showPinToggle={showPinToggle}
+        isPinned={isPinned}
+        onTogglePin={onTogglePin}
       />
     );
   }
@@ -122,6 +138,9 @@ function AccountRouteView({
         onTabChange={handleTabChange}
         onAccountUpdated={onAccountUpdated}
         onAccountDeleted={onAccountDeleted}
+        showPinToggle={showPinToggle}
+        isPinned={isPinned}
+        onTogglePin={onTogglePin}
       />
     );
   }
@@ -136,6 +155,9 @@ function AccountRouteView({
       onAccountUpdated={onAccountUpdated}
       onAccountDeleted={onAccountDeleted}
       refreshVersion={accountRefreshVersion}
+      showPinToggle={showPinToggle}
+      isPinned={isPinned}
+      onTogglePin={onTogglePin}
     />
   );
 }
@@ -166,6 +188,11 @@ export function Dashboard({ session, onUserDeleted, openUserTrigger = 0 }: Dashb
   const [dailyUpdateItems, setDailyUpdateItems] = useState<DailyUpdateItem[]>([]);
   const [dailyUpdatesOpen, setDailyUpdatesOpen] = useState(false);
   const [dailyUpdatesRefreshVersion, setDailyUpdatesRefreshVersion] = useState(0);
+  const [userSettings, setUserSettings] = useState<UserSettingsPayload>({
+    account_order: [],
+    daily_update_order: [],
+    pinned_balances: [],
+  });
   const [view, setView] = useState<DashboardView>({ kind: 'home' });
 
   const selectedId = view.kind === 'account' ? view.accountId : null;
@@ -178,6 +205,70 @@ export function Dashboard({ session, onUserDeleted, openUserTrigger = 0 }: Dashb
   const showIncomes = incomes.length > 0 || incomesActivated || incomesMatch;
   const isSubscriber = isJwtSubscriber(session.token);
 
+  const orderedAccounts = useMemo(
+    () => (isSubscriber ? applyAccountOrder(accounts, userSettings.account_order) : accounts),
+    [isSubscriber, accounts, userSettings.account_order]
+  );
+
+  const orderedDailyUpdateItems = useMemo(
+    () =>
+      isSubscriber
+        ? sortDailyUpdateItems(dailyUpdateItems, userSettings.daily_update_order)
+        : [],
+    [isSubscriber, dailyUpdateItems, userSettings.daily_update_order]
+  );
+
+  useEffect(() => {
+    if (!isSubscriber) {
+      setUserSettings({ account_order: [], daily_update_order: [], pinned_balances: [] });
+      return;
+    }
+    let cancelled = false;
+    fetchUserSettings(session.token, session.username)
+      .then((res) => {
+        if (!cancelled && res?.settings) {
+          setUserSettings({
+            account_order: res.settings.account_order || [],
+            daily_update_order: res.settings.daily_update_order || [],
+            pinned_balances: res.settings.pinned_balances || [],
+          });
+        }
+      })
+      .catch(() => {
+        // Settings load failure handled gracefully
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isSubscriber, session.token, session.username]);
+
+  const handlePatchSettings = (patch: PatchUserSettingsRequest) => {
+    if (!isSubscriber) return;
+    setUserSettings((prev) => ({
+      account_order: patch.account_order ?? prev.account_order,
+      daily_update_order: patch.daily_update_order ?? prev.daily_update_order,
+      pinned_balances: patch.pinned_balances ?? prev.pinned_balances,
+    }));
+    patchUserSettings(session.token, session.username, patch)
+      .then((res) => {
+        if (res?.settings) {
+          setUserSettings({
+            account_order: res.settings.account_order || [],
+            daily_update_order: res.settings.daily_update_order || [],
+            pinned_balances: res.settings.pinned_balances || [],
+          });
+        }
+      })
+      .catch(() => {
+        // Keep optimistic UI state on transient error
+      });
+  };
+
+  const handleTogglePin = (ref: PinnedBalanceRef) => {
+    const nextPinned = togglePinnedBalance(userSettings.pinned_balances, ref);
+    handlePatchSettings({ pinned_balances: nextPinned });
+  };
+
   useEffect(() => {
     if (openUserTrigger > 0) {
       setView({ kind: 'user' });
@@ -185,10 +276,10 @@ export function Dashboard({ session, onUserDeleted, openUserTrigger = 0 }: Dashb
   }, [openUserTrigger]);
 
   useEffect(() => {
-    if (view.kind === 'home' && accountsLoaded && accounts.length > 0) {
-      setView({ kind: 'account', accountId: accounts[0].id });
+    if (view.kind === 'home' && accountsLoaded && orderedAccounts.length > 0) {
+      setView({ kind: 'account', accountId: orderedAccounts[0].id });
     }
-  }, [view.kind, accountsLoaded, accounts]);
+  }, [view.kind, accountsLoaded, orderedAccounts]);
 
   useEffect(() => {
     if (typeof window !== 'undefined' && window.scrollY > 0) {
@@ -371,7 +462,7 @@ export function Dashboard({ session, onUserDeleted, openUserTrigger = 0 }: Dashb
   return (
     <div className="dashboard-layout">
       <AccountsPane
-        accounts={accounts}
+        accounts={orderedAccounts}
         selectedId={selectedId}
         onSelectAccount={(acc) => setView({ kind: 'account', accountId: acc.id })}
         onNewAccountClick={() => setView({ kind: 'new-account' })}
@@ -389,10 +480,24 @@ export function Dashboard({ session, onUserDeleted, openUserTrigger = 0 }: Dashb
         incomesCount={incomes.length}
         onSelectIncomes={() => setView({ kind: 'incomes' })}
         onAddIncomesClick={handleActivateIncomes}
-        dailyUpdatesCount={isSubscriber ? dailyUpdateItems.length : 0}
+        dailyUpdatesCount={isSubscriber ? orderedDailyUpdateItems.length : 0}
         onDailyUpdatesClick={() => setDailyUpdatesOpen(true)}
+        canReorderAccounts={isSubscriber}
+        onReorderAccounts={(nextAccountOrder) => handlePatchSettings({ account_order: nextAccountOrder })}
       />
       <main className="dashboard-content">
+        {isSubscriber && (
+          <PinnedBalancesBar
+            token={session.token}
+            pinnedBalances={userSettings.pinned_balances}
+            accounts={accounts}
+            perspectives={perspectives}
+            refreshVersion={dailyUpdatesRefreshVersion}
+            onSelectAccount={(accountId) => setView({ kind: 'account', accountId })}
+            onSelectPerspective={(perspectiveId) => setView({ kind: 'perspective', perspectiveId })}
+            onUnpin={handleTogglePin}
+          />
+        )}
         {reminderError && <div className="alert-error">{reminderError}</div>}
         <BillReminderBanners
           transactions={recurringTransactions}
@@ -449,6 +554,9 @@ export function Dashboard({ session, onUserDeleted, openUserTrigger = 0 }: Dashb
                 handleCancelCreate();
               }
             }}
+            showPinToggle={isSubscriber}
+            isPinned={isPinnedBalance(userSettings.pinned_balances, 'perspective', view.perspectiveId)}
+            onTogglePin={() => handleTogglePin({ kind: 'perspective', id: view.perspectiveId })}
           />
         )}
         {view.kind === 'bills' && (
@@ -489,6 +597,9 @@ export function Dashboard({ session, onUserDeleted, openUserTrigger = 0 }: Dashb
             }
             onGoHome={() => setView({ kind: 'home' })}
             accountRefreshVersion={(accountRefreshVersions[view.accountId] || 0) + dailyUpdatesRefreshVersion}
+            showPinToggle={isSubscriber}
+            isPinned={isPinnedBalance(userSettings.pinned_balances, 'account', view.accountId)}
+            onTogglePin={() => handleTogglePin({ kind: 'account', id: view.accountId })}
           />
         )}
       </main>
@@ -497,7 +608,9 @@ export function Dashboard({ session, onUserDeleted, openUserTrigger = 0 }: Dashb
         onClose={() => setDailyUpdatesOpen(false)}
         token={session.token}
         todayIso={getLocalTodayIso()}
-        items={dailyUpdateItems}
+        items={orderedDailyUpdateItems}
+        canReorder={isSubscriber}
+        onReorder={(nextDailyOrder) => handlePatchSettings({ daily_update_order: nextDailyOrder })}
         onSaved={() => {
           setDailyUpdatesRefreshVersion((v) => v + 1);
         }}

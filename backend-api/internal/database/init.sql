@@ -332,6 +332,17 @@ DROP INDEX IF EXISTS idx_incomes_account_id;
 DROP INDEX IF EXISTS idx_incomes_user_id;
 DROP TABLE IF EXISTS incomes CASCADE;
 
+CREATE TABLE IF NOT EXISTS user_settings (
+    id UUID PRIMARY KEY,
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    settings JSONB NOT NULL DEFAULT '{}'::jsonb,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT uq_user_settings_user UNIQUE (user_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_user_settings_user_id ON user_settings(user_id);
+
 
 
 

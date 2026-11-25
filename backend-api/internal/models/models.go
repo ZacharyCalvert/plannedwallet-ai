@@ -775,4 +775,33 @@ type RotateRecoveryKeyResponse struct {
 	CreatedAt       time.Time `json:"created_at"`
 }
 
+// PinnedBalanceRef identifies an account or perspective pinned to the top balance strip.
+type PinnedBalanceRef struct {
+	Kind string `json:"kind"`
+	ID   string `json:"id"`
+}
+
+// UserSettingsPayload stores premium user viewing preferences.
+type UserSettingsPayload struct {
+	AccountOrder     []string           `json:"account_order"`
+	DailyUpdateOrder []string           `json:"daily_update_order"`
+	PinnedBalances   []PinnedBalanceRef `json:"pinned_balances"`
+}
+
+// UserSettings represents the persisted per-user settings record.
+type UserSettings struct {
+	ID        string              `json:"id"`
+	UserID    string              `json:"user_id"`
+	Settings  UserSettingsPayload `json:"settings"`
+	CreatedAt time.Time           `json:"created_at"`
+	UpdatedAt time.Time           `json:"updated_at"`
+}
+
+// PatchUserSettingsRequest supports partial updates to premium user viewing preferences.
+type PatchUserSettingsRequest struct {
+	AccountOrder     *[]string           `json:"account_order,omitempty"`
+	DailyUpdateOrder *[]string           `json:"daily_update_order,omitempty"`
+	PinnedBalances   *[]PinnedBalanceRef `json:"pinned_balances,omitempty"`
+}
+
 

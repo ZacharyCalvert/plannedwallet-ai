@@ -17,6 +17,9 @@ interface AccountHeaderInfoProps {
   badgeClassName?: string;
   onAccountUpdated?: (updated: Account) => void;
   onDeleteClick: () => void;
+  showPinToggle?: boolean;
+  isPinned?: boolean;
+  onTogglePin?: () => void;
 }
 
 export function AccountHeaderInfo({
@@ -25,6 +28,9 @@ export function AccountHeaderInfo({
   badgeClassName,
   onAccountUpdated,
   onDeleteClick,
+  showPinToggle = false,
+  isPinned = false,
+  onTogglePin,
 }: AccountHeaderInfoProps) {
   const [editingField, setEditingField] = useState<EditableField | null>(null);
   const [draftValue, setDraftValue] = useState('');
@@ -168,6 +174,16 @@ export function AccountHeaderInfo({
         >
           Delete Account
         </button>
+        {showPinToggle && onTogglePin && (
+          <label className="pin-balance-toggle ml-2" title="Pin expected balance to top bar">
+            <input
+              type="checkbox"
+              checked={isPinned}
+              onChange={onTogglePin}
+            />
+            <span>Pin to top</span>
+          </label>
+        )}
       </div>
 
       {editingField === 'description' ? (
