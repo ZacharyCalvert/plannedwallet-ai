@@ -113,6 +113,7 @@ export function PerspectiveDetail({
   const [accountRecords, setAccountRecords] = useState<AccountRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [actionError, setActionError] = useState('');
   const [activeTab, setActiveTab] = useState<PerspectiveTab>('trend');
   const [rangeFilter, setRangeFilter] = useState<BalanceRange>('all');
   const [rollupPeriod, setRollupPeriod] = useState<RollupPeriod>('daily');
@@ -130,9 +131,11 @@ export function PerspectiveDetail({
   const [savingSettings, setSavingSettings] = useState(false);
   const [settingsMsg, setSettingsMsg] = useState('');
 
-  const loadView = async () => {
-    setLoading(true);
-    setError('');
+  const loadView = async (silent = false) => {
+    if (!silent) {
+      setLoading(true);
+      setError('');
+    }
     try {
       const data = await fetchPerspectiveView(token, perspectiveId);
       setView(data);
@@ -245,28 +248,30 @@ export function PerspectiveDetail({
   };
 
   const handleToggleAccountLink = async (accId: string) => {
+    setActionError('');
     try {
       if (linkedAccountIds.has(accId)) {
         await unlinkPerspectiveAccount(token, perspectiveId, accId);
       } else {
         await linkPerspectiveAccount(token, perspectiveId, accId);
       }
-      await loadView();
+      await loadView(true);
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Failed to update account link');
+      setActionError(err instanceof Error ? err.message : 'Failed to update account link');
     }
   };
 
   const handleToggleRecurringLink = async (recId: string) => {
+    setActionError('');
     try {
       if (linkedRecurringIds.has(recId)) {
         await unlinkPerspectiveRecurringTransaction(token, perspectiveId, recId);
       } else {
         await linkPerspectiveRecurringTransaction(token, perspectiveId, recId);
       }
-      await loadView();
+      await loadView(true);
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Failed to update recurring link');
+      setActionError(err instanceof Error ? err.message : 'Failed to update recurring link');
     }
   };
 
@@ -302,7 +307,7 @@ export function PerspectiveDetail({
       });
       onPerspectiveUpdated(updated);
       setSettingsMsg('Perspective settings saved.');
-      await loadView();
+      await loadView(true);
     } catch (err: unknown) {
       setSettingsMsg(err instanceof Error ? err.message : 'Failed to save settings.');
     } finally {
@@ -571,6 +576,12 @@ export function PerspectiveDetail({
           </div>
         </div>
       </div>
+
+      {actionError && (
+        <div className="alert-error mb-3" role="alert">
+          {actionError}
+        </div>
+      )}
 
       <div className="snapshot-tabs-bar">
         <button
