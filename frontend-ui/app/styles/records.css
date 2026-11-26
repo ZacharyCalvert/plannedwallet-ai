@@ -1231,6 +1231,16 @@
   font-size: 0.875rem;
 }
 
+.perspective-checkbox-name {
+  flex: 1;
+  min-width: 0;
+}
+
+.perspective-checkbox-item .badge-account-type {
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
 .perspective-settings-checks {
   display: flex;
   flex-direction: column;

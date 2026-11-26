@@ -818,17 +818,23 @@ export function PerspectiveDetail({
                 <span className="records-count-badge">{view.accounts.length}</span>
               </div>
               <div className="perspective-checkbox-grid">
-                {allAccounts.map((acc) => (
-                  <label key={acc.id} className="perspective-checkbox-item">
-                    <input
-                      type="checkbox"
-                      checked={linkedAccountIds.has(acc.id)}
-                      onChange={() => handleToggleAccountLink(acc.id)}
-                    />
-                    <span>{acc.name}</span>
-                    <span className="text-muted text-sm">({acc.type})</span>
-                  </label>
-                ))}
+                {allAccounts.map((acc) => {
+                  const typeSlug = (acc.type || '').toLowerCase().replace(/\s+/g, '-');
+                  return (
+                    <label
+                      key={acc.id}
+                      className={`perspective-checkbox-item account-card-${typeSlug}`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={linkedAccountIds.has(acc.id)}
+                        onChange={() => handleToggleAccountLink(acc.id)}
+                      />
+                      <span className="perspective-checkbox-name">{acc.name}</span>
+                      <span className={`badge-account-type badge-${typeSlug}`}>{acc.type}</span>
+                    </label>
+                  );
+                })}
               </div>
             </section>
 

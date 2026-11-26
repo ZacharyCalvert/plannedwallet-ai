@@ -124,17 +124,23 @@ export function NewPerspectiveForm({
             <p className="text-muted text-sm">No accounts created yet.</p>
           ) : (
             <div className="perspective-checkbox-grid">
-              {accounts.map((acc) => (
-                <label key={acc.id} className="perspective-checkbox-item">
-                  <input
-                    type="checkbox"
-                    checked={Boolean(selectedAccounts[acc.id])}
-                    onChange={() => toggleAccount(acc.id)}
-                  />
-                  <span>{acc.name}</span>
-                  <span className="text-muted text-sm">({acc.type})</span>
-                </label>
-              ))}
+              {accounts.map((acc) => {
+                const typeSlug = (acc.type || '').toLowerCase().replace(/\s+/g, '-');
+                return (
+                  <label
+                    key={acc.id}
+                    className={`perspective-checkbox-item account-card-${typeSlug}`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={Boolean(selectedAccounts[acc.id])}
+                      onChange={() => toggleAccount(acc.id)}
+                    />
+                    <span className="perspective-checkbox-name">{acc.name}</span>
+                    <span className={`badge-account-type badge-${typeSlug}`}>{acc.type}</span>
+                  </label>
+                );
+              })}
             </div>
           )}
         </div>
