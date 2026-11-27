@@ -5,6 +5,7 @@ import { Account, RotateRecoveryKeyResponse, UserProfile, UserSession } from '..
 import { deleteUserAccount, fetchUserProfile, rotateRecoveryKey } from '../lib/api';
 import { clampPasswordToMaxBytes, MAX_PASSWORD_BYTES } from '../lib/passwordLimit';
 import { downloadAllAccountsZip } from '../lib/exportData';
+import { ChangePasswordModal } from './ChangePasswordModal';
 import { RecoveryPhraseSetup } from './RecoveryPhraseSetup';
 
 interface UserDetailsPaneProps {
@@ -32,6 +33,8 @@ export function UserDetailsPane({
   const [rotating, setRotating] = useState(false);
   const [rotateError, setRotateError] = useState('');
   const [rotatedResult, setRotatedResult] = useState<RotateRecoveryKeyResponse | null>(null);
+  const [passwordOpen, setPasswordOpen] = useState(false);
+  const [passwordSuccess, setPasswordSuccess] = useState('');
   const [downloadingAll, setDownloadingAll] = useState(false);
   const [downloadAllError, setDownloadAllError] = useState('');
 
@@ -128,6 +131,7 @@ export function UserDetailsPane({
       </div>
 
       {error && <div className="alert-error mt-3">{error}</div>}
+      {passwordSuccess && <div className="alert-success mt-3" role="status">{passwordSuccess}</div>}
 
       {loading ? (
         <p className="text-muted mt-3">Loading user details...</p>
@@ -147,6 +151,25 @@ export function UserDetailsPane({
               <dd>{profile?.recovery_key_hint ? `12-word phrase (${profile.recovery_key_hint})` : 'Active'}</dd>
             </div>
           </dl>
+
+          <div className="user-security-zone">
+            <div>
+              <h3>Change Password</h3>
+              <p className="text-muted font-sm">
+                Update your account password using your current password, MFA authenticator code, and CAPTCHA.
+              </p>
+            </div>
+            <button
+              type="button"
+              className="btn-secondary btn-sm"
+              onClick={() => {
+                setPasswordSuccess('');
+                setPasswordOpen(true);
+              }}
+            >
+              Change Password
+            </button>
+          </div>
 
           <div className="user-security-zone">
             <div>
@@ -357,6 +380,18 @@ export function UserDetailsPane({
             </div>
           </div>
         </div>
+      )}
+
+      {passwordOpen && (
+        <ChangePasswordModal
+          token={session.token}
+          username={profile?.username || session.username}
+          onClose={() => setPasswordOpen(false)}
+          onSuccess={(message) => {
+            setPasswordOpen(false);
+            setPasswordSuccess(message);
+          }}
+        />
       )}
     </div>
   );

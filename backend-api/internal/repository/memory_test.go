@@ -920,5 +920,38 @@ func TestMemoryRepo_UserSettings(t *testing.T) {
 	}
 }
 
+func TestMemoryRepo_UpdateUserPassword(t *testing.T) {
+	repo := repository.NewMemoryRepository()
+	ctx := context.Background()
+
+	user := &models.User{
+		ID:           "user-pw-1",
+		Username:     "pw_alice",
+		Email:        "pw_alice@example.com",
+		PasswordHash: "old-hash",
+		TOTPSecret:   "SECRET",
+		CreatedAt:    time.Now(),
+	}
+	if err := repo.CreateUser(ctx, user); err != nil {
+		t.Fatalf("CreateUser failed: %v", err)
+	}
+
+	if err := repo.UpdateUserPassword(ctx, user.ID, "new-hash"); err != nil {
+		t.Fatalf("UpdateUserPassword failed: %v", err)
+	}
+
+	got, err := repo.GetUserByID(ctx, user.ID)
+	if err != nil {
+		t.Fatalf("GetUserByID failed: %v", err)
+	}
+	if got.PasswordHash != "new-hash" {
+		t.Fatalf("expected PasswordHash new-hash, got %s", got.PasswordHash)
+	}
+
+	if err := repo.UpdateUserPassword(ctx, "nonexistent-user", "x"); err != repository.ErrNotFound {
+		t.Fatalf("expected ErrNotFound for unknown user, got %v", err)
+	}
+}
+
 
 

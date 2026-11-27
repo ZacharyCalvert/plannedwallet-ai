@@ -804,4 +804,20 @@ type PatchUserSettingsRequest struct {
 	PinnedBalances   *[]PinnedBalanceRef `json:"pinned_balances,omitempty"`
 }
 
+// ChangePasswordRequest authenticates the signed-in user via old password, TOTP, and CAPTCHA to change password.
+type ChangePasswordRequest struct {
+	OldPassword        string `json:"old_password" binding:"required"`
+	NewPassword        string `json:"new_password" binding:"required"`
+	NewPasswordConfirm string `json:"new_password_confirm" binding:"required"`
+	TOTPCode           string `json:"totp_code" binding:"required"`
+	CaptchaID          string `json:"captcha_id,omitempty"`
+	CaptchaSolution    string `json:"captcha_solution,omitempty"`
+}
+
+// ChangePasswordResponse confirms a successful password change.
+type ChangePasswordResponse struct {
+	Message   string    `json:"message"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
 

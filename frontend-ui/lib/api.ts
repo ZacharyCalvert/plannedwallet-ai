@@ -1432,3 +1432,26 @@ export async function patchUserSettings(
   }
   return res.json();
 }
+
+export async function changePassword(
+  token: string,
+  username: string,
+  data: import('./types').ChangePasswordRequest
+): Promise<import('./types').ChangePasswordResponse> {
+  const res = await tracedFetch(
+    `/api/v1/users/${encodeURIComponent(username)}/password`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(data),
+    }
+  );
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || 'Failed to change password');
+  }
+  return res.json();
+}

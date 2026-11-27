@@ -672,3 +672,138 @@ def test_password_over_72_bytes_returns_400_invalid_password(api_context: APIReq
     res = api_context.post("/api/v1/users", data=too_long_user)
     assert res.status == 400, f"Expected 400 for 73-byte password, got {res.status}: {res.text()}"
     assert res.json().get("error") == "INVALID_PASSWORD"
+
+
+def test_password_change_success_invalidates_old_password(api_context: APIRequestContext):
+    """Verify valid JWT + old password + matching new password + valid TOTP updates password."""
+    user = generate_user_data(prefix="pw_ok")
+    reg_res = api_context.post("/api/v1/users", data=user)
+    assert reg_res.status == 201, f"Registration failed: {reg_res.text()}"
+    totp_secret = reg_res.json()["totp_secret"]
+
+    tok_res = api_context.post(
+        f"/api/v1/users/{user['username']}/token",
+        data={"password": user["password"], "totp_code": compute_totp_code(totp_secret)},
+    )
+    assert tok_res.status == 200
+    hdr = {"Authorization": f"Bearer {tok_res.json()['access_token']}"}
+
+    new_password = "UpdatedComplexPassword456!"
+    change_res = api_context.post(
+        f"/api/v1/users/{user['username']}/password",
+        headers=hdr,
+        data={
+            "old_password": user["password"],
+            "new_password": new_password,
+            "new_password_confirm": new_password,
+            "totp_code": compute_totp_code(totp_secret),
+        },
+    )
+    assert change_res.status == 200, f"Expected 200 on password change, got {change_res.status}: {change_res.text()}"
+    body = change_res.json()
+    assert body.get("message")
+    assert body.get("updated_at")
+
+    # Old password no longer works
+    old_login = api_context.post(
+        f"/api/v1/users/{user['username']}/token",
+        data={"password": user["password"], "totp_code": compute_totp_code(totp_secret)},
+    )
+    assert old_login.status == 401, f"Expected old password rejected with 401, got {old_login.status}"
+
+    # New password works for login and cleanup
+    new_login = api_context.post(
+        f"/api/v1/users/{user['username']}/token",
+        data={"password": new_password, "totp_code": compute_totp_code(totp_secret)},
+    )
+    assert new_login.status == 200, f"Expected new password accepted, got {new_login.text()}"
+    new_hdr = {"Authorization": f"Bearer {new_login.json()['access_token']}"}
+    assert api_context.delete(f"/api/v1/users/{user['username']}", headers=new_hdr).status == 204
+
+
+def test_password_change_negative_cases_preserve_password(api_context: APIRequestContext):
+    """Verify invalid JWT, wrong old password, mismatched confirmation, and failed TOTP leave password unchanged."""
+    user = generate_user_data(prefix="pw_neg")
+    reg_res = api_context.post("/api/v1/users", data=user)
+    assert reg_res.status == 201, f"Registration failed: {reg_res.text()}"
+    totp_secret = reg_res.json()["totp_secret"]
+
+    valid_code = compute_totp_code(totp_secret)
+    tok_res = api_context.post(
+        f"/api/v1/users/{user['username']}/token",
+        data={"password": user["password"], "totp_code": valid_code},
+    )
+    assert tok_res.status == 200
+    hdr = {"Authorization": f"Bearer {tok_res.json()['access_token']}"}
+
+    candidate_new_password = "ShouldNotApplyPassword789!"
+
+    # 1. Invalid JWT yields failure
+    bad_jwt_res = api_context.post(
+        f"/api/v1/users/{user['username']}/password",
+        headers={"Authorization": "Bearer invalid.jwt.token"},
+        data={
+            "old_password": user["password"],
+            "new_password": candidate_new_password,
+            "new_password_confirm": candidate_new_password,
+            "totp_code": compute_totp_code(totp_secret),
+        },
+    )
+    assert bad_jwt_res.status == 401, f"Expected 401 for invalid JWT, got {bad_jwt_res.status}: {bad_jwt_res.text()}"
+
+    # 2. Old password not matching fails
+    wrong_old_res = api_context.post(
+        f"/api/v1/users/{user['username']}/password",
+        headers=hdr,
+        data={
+            "old_password": "WrongOldPassword123!",
+            "new_password": candidate_new_password,
+            "new_password_confirm": candidate_new_password,
+            "totp_code": compute_totp_code(totp_secret),
+        },
+    )
+    assert wrong_old_res.status == 401, f"Expected 401 for wrong old password, got {wrong_old_res.status}: {wrong_old_res.text()}"
+
+    # 3. New password and confirmation mismatch triggers failure
+    mismatch_res = api_context.post(
+        f"/api/v1/users/{user['username']}/password",
+        headers=hdr,
+        data={
+            "old_password": user["password"],
+            "new_password": candidate_new_password,
+            "new_password_confirm": "DifferentConfirmation999!",
+            "totp_code": compute_totp_code(totp_secret),
+        },
+    )
+    assert mismatch_res.status == 400, f"Expected 400 for password mismatch, got {mismatch_res.status}: {mismatch_res.text()}"
+    assert mismatch_res.json().get("error") == "PASSWORD_MISMATCH"
+
+    # 4. Failed MFA TOTP challenge yields no password change
+    current_code = compute_totp_code(totp_secret)
+    wrong_totp = "000000" if current_code != "000000" else "999999"
+    bad_totp_res = api_context.post(
+        f"/api/v1/users/{user['username']}/password",
+        headers=hdr,
+        data={
+            "old_password": user["password"],
+            "new_password": candidate_new_password,
+            "new_password_confirm": candidate_new_password,
+            "totp_code": wrong_totp,
+        },
+    )
+    assert bad_totp_res.status == 401, f"Expected 401 for invalid TOTP, got {bad_totp_res.status}: {bad_totp_res.text()}"
+
+    # Candidate password must not work; original password must remain active
+    rejected_login = api_context.post(
+        f"/api/v1/users/{user['username']}/token",
+        data={"password": candidate_new_password, "totp_code": compute_totp_code(totp_secret)},
+    )
+    assert rejected_login.status == 401, f"Candidate password should not have been applied, got {rejected_login.status}"
+
+    orig_login = api_context.post(
+        f"/api/v1/users/{user['username']}/token",
+        data={"password": user["password"], "totp_code": compute_totp_code(totp_secret)},
+    )
+    assert orig_login.status == 200, f"Original password should remain valid, got {orig_login.text()}"
+    cleanup_hdr = {"Authorization": f"Bearer {orig_login.json()['access_token']}"}
+    assert api_context.delete(f"/api/v1/users/{user['username']}", headers=cleanup_hdr).status == 204

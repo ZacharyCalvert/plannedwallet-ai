@@ -557,6 +557,7 @@ func (h *Handler) RegisterRoutes(r *gin.Engine) {
 	protected.POST("/users/:username/policy-agreements", h.RecordPolicyAgreement)
 	protected.GET("/users/:username/policy-agreements", h.ListPolicyAgreements)
 	protected.POST("/users/:username/recovery-key/rotate", h.RotateRecoveryKey)
+	protected.POST("/users/:username/password", h.ChangePassword)
 	protected.DELETE("/users/:username", h.DeleteUser)
 	h.registerAccountRoutes(protected)
 	h.registerStoreAndSnapshotRoutes(protected)

@@ -1721,3 +1721,18 @@ func (p *PostgresRepository) UpsertUserSettings(ctx context.Context, settings *m
 		Scan(&settings.ID, &settings.CreatedAt, &settings.UpdatedAt)
 }
 
+func (p *PostgresRepository) UpdateUserPassword(ctx context.Context, userID, newPasswordHash string) error {
+	res, err := p.db.ExecContext(ctx, `UPDATE users SET password_hash = $1 WHERE id = $2`, newPasswordHash, userID)
+	if err != nil {
+		return err
+	}
+	cnt, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if cnt == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+

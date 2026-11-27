@@ -1884,3 +1884,15 @@ func (m *MemoryRepository) UpsertUserSettings(_ context.Context, settings *model
 	return nil
 }
 
+func (m *MemoryRepository) UpdateUserPassword(_ context.Context, userID, newPasswordHash string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	user, ok := m.users[userID]
+	if !ok {
+		return ErrNotFound
+	}
+	user.PasswordHash = newPasswordHash
+	return nil
+}
+

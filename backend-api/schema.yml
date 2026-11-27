@@ -714,6 +714,55 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
+  /api/v1/users/{username}/password:
+    parameters:
+      - $ref: '#/components/parameters/XClientId'
+      - name: username
+        in: path
+        required: true
+        schema:
+          type: string
+    post:
+      summary: Change authenticated user's password
+      description: >
+        Verifies the authenticated Bearer JWT target user, optional or required visual CAPTCHA
+        (per server `REQUIRE_CAPTCHA` / `PRODUCTION_ENV` setting), matching new password confirmation,
+        password strength rules, current password, and 6-digit MFA TOTP code before updating `password_hash`.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChangePasswordRequest'
+      responses:
+        '200':
+          summary: Password updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChangePasswordResponse'
+        '400':
+          summary: Bad request, weak password, confirmation mismatch, or CAPTCHA failure
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          summary: Unauthorized or invalid current password/TOTP
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          summary: Forbidden
+          description: Authenticated user attempted to change another user's password.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
   /api/v1/users/{username}/settings:
     parameters:
       - $ref: '#/components/parameters/XClientId'
@@ -4611,6 +4660,49 @@ components:
         recovery_key_hint:
           type: string
         created_at:
+          type: string
+          format: date-time
+
+    ChangePasswordRequest:
+      type: object
+      required:
+        - old_password
+        - new_password
+        - new_password_confirm
+        - totp_code
+      properties:
+        old_password:
+          type: string
+          format: password
+        new_password:
+          type: string
+          format: password
+          minLength: 10
+          maxLength: 72
+          description: New account password (10-72 bytes) satisfying complexity rules.
+        new_password_confirm:
+          type: string
+          format: password
+          minLength: 10
+          maxLength: 72
+          description: Must match `new_password`.
+        totp_code:
+          type: string
+          pattern: '^[0-9]{6}$'
+        captcha_id:
+          type: string
+        captcha_solution:
+          type: string
+
+    ChangePasswordResponse:
+      type: object
+      required:
+        - message
+        - updated_at
+      properties:
+        message:
+          type: string
+        updated_at:
           type: string
           format: date-time
 

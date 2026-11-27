@@ -452,3 +452,17 @@ export interface PatchUserSettingsRequest {
   daily_update_order?: string[];
   pinned_balances?: PinnedBalanceRef[];
 }
+
+export interface ChangePasswordRequest {
+  old_password: string;
+  new_password: string;
+  new_password_confirm: string;
+  totp_code: string;
+  captcha_id?: string;
+  captcha_solution?: string;
+}
+
+export interface ChangePasswordResponse {
+  message: string;
+  updated_at: string;
+}
