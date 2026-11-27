@@ -18,9 +18,10 @@ Top priority:
 - [x] git statCreate JWT secret and mount as required field for JWT issuance / signing
 
 Medium priority:
+- Mobile CSS and viewing (iphone)
+- Native app, with mobile exchange for publishing new account records
 - [x] Password changes
-- itest account enumeration (401 vs 403 vs 404)
-- Account lock / require reset using recovery codes after X number of failed password attempts
+- [x] itest account enumeration (401 vs 403 vs 404)
 - [x] Add dependabot monitoring of npm, docker images, golang dependencies
 - [x] branch protections, code owners, etc.
 - [x] Captcha on account creation - creation only
@@ -55,19 +56,18 @@ Medium priority:
 - [x] Add support of looping updates (daily)
 earmark support (monthly?)
 - [x] Support collapse of accounts, perspectives, bills, income
-Enable retention of sorted views of accounts, perspectives, bills, income
-Enable retention of starting window
+- [x] Enable retention of sorted views of accounts, perspectives, bills, income
 Allow trending against an asset (CPI, price of gas, etc)
 one time use bill (future schedule, 1 time use)
-Allow sorting of accounts (user settings)
+- [x] Allow sorting of accounts (user settings)
 - [x] add income category
-create batch job for data grabs (indexes/prices, captcha cleanup)
 - [x] Monthly bill additions / automation
 - [x] cleanup UI
 - [x] full reconcile of records (monthly capture?)
 - [x] WAF geospacial lock-down
-- [x] Aggregate grouping, such as credit card debt, retirement funds, liquid assets, crypto
-Auto ingestion / scraping of data from remote services (gas trends, silver, gold, etc)
+- [x] Aggregate grouping, such as credit card debt, 
+- [x]retirement funds, liquid assets, crypto
+
 - [x] postgres auto vaccuuming - schedule, auto trigger
 logging - log ingestion, formatting, context
 
@@ -132,11 +132,8 @@ record deletion
 asset deletion
 support sale / revenue tracking on snapshot accounts and asset accounts (win/loss)
 
-Follow up:
-scale postgres / review native eventual consistency models
-
-
-Completed:
 - [x] W3C Trace Context (traceparent, tracestate) across backend, frontend, gateway, and logs
 - [x] X-Client-ID header
 
+Future (data broker, legal questions):
+- Auto ingestion / scraping of data from remote services (gas trends, silver, gold, etc)
