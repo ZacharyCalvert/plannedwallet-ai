@@ -27,6 +27,8 @@ interface AccountsPaneProps {
   onDailyUpdatesClick?: () => void;
   canReorderAccounts?: boolean;
   onReorderAccounts?: (nextAccountOrder: string[]) => void;
+  mobileOpen?: boolean;
+  onMobileClose?: () => void;
 }
 
 export function AccountsPane({
@@ -52,8 +54,11 @@ export function AccountsPane({
   onDailyUpdatesClick,
   canReorderAccounts = false,
   onReorderAccounts,
+  mobileOpen = false,
+  onMobileClose,
 }: AccountsPaneProps) {
   const [collapsed, setCollapsed] = useState(false);
+  const isCollapsed = collapsed && !mobileOpen;
   const [accountsCollapsed, setAccountsCollapsed] = useState(false);
   const [recurringCollapsed, setRecurringCollapsed] = useState(false);
   const [perspectivesCollapsed, setPerspectivesCollapsed] = useState(false);
@@ -96,6 +101,17 @@ export function AccountsPane({
       document.removeEventListener('keydown', handleKeyDown);
     };
   }, [addMenuOpen]);
+
+  useEffect(() => {
+    if (!mobileOpen || !onMobileClose) return;
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onMobileClose();
+      }
+    };
+    document.addEventListener('keydown', handleEscape);
+    return () => document.removeEventListener('keydown', handleEscape);
+  }, [mobileOpen, onMobileClose]);
 
   const handlePlusClick = () => {
     if (hasMenuChoices) {
@@ -177,61 +193,83 @@ export function AccountsPane({
     ) : null;
 
   return (
-    <aside className={`accounts-pane ${collapsed ? 'accounts-pane-collapsed' : ''}`}>
-      <div className="accounts-pane-header">
-        {!collapsed && <h2 className="pane-title">Finances</h2>}
-        <div className="accounts-pane-actions">
-          <button
-            type="button"
-            className="btn-pane-toggle"
-            onClick={() => setCollapsed((prev) => !prev)}
-            title={collapsed ? 'Expand finances list' : 'Collapse finances list'}
-            aria-label={collapsed ? 'Expand finances list' : 'Collapse finances list'}
-            aria-expanded={!collapsed}
-          >
-            <svg
-              width="16"
-              height="16"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden="true"
+    <>
+      {mobileOpen && (
+        <div
+          className="mobile-drawer-backdrop"
+          onClick={onMobileClose}
+          aria-hidden="true"
+        />
+      )}
+      <aside
+        className={`accounts-pane ${isCollapsed ? 'accounts-pane-collapsed' : ''} ${
+          mobileOpen ? 'accounts-pane-mobile-open' : ''
+        }`}
+      >
+        <div className="accounts-pane-header">
+          {!isCollapsed && <h2 className="pane-title">Finances</h2>}
+          <div className="accounts-pane-actions">
+            <button
+              type="button"
+              className="btn-pane-toggle"
+              onClick={() => setCollapsed((prev) => !prev)}
+              title={isCollapsed ? 'Expand finances list' : 'Collapse finances list'}
+              aria-label={isCollapsed ? 'Expand finances list' : 'Collapse finances list'}
+              aria-expanded={!isCollapsed}
             >
-              {collapsed ? (
-                <polyline points="13 17 18 12 13 7" />
-              ) : (
-                <polyline points="11 17 6 12 11 7" />
-              )}
-              {collapsed ? (
-                <polyline points="6 17 11 12 6 7" />
-              ) : (
-                <polyline points="18 17 13 12 18 7" />
-              )}
-            </svg>
-          </button>
-          {!collapsed && (
-            <div className="plus-menu-anchor" ref={expandedMenuRef}>
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                {isCollapsed ? (
+                  <polyline points="13 17 18 12 13 7" />
+                ) : (
+                  <polyline points="11 17 6 12 11 7" />
+                )}
+                {isCollapsed ? (
+                  <polyline points="6 17 11 12 6 7" />
+                ) : (
+                  <polyline points="18 17 13 12 18 7" />
+                )}
+              </svg>
+            </button>
+            {!isCollapsed && (
+              <div className="plus-menu-anchor" ref={expandedMenuRef}>
+                <button
+                  type="button"
+                  className="btn-plus"
+                  onClick={handlePlusClick}
+                  title={plusTitle}
+                  aria-label={plusTitle}
+                  aria-haspopup={hasMenuChoices ? 'menu' : undefined}
+                  aria-expanded={hasMenuChoices ? addMenuOpen : undefined}
+                >
+                  +
+                </button>
+                {renderAddPopup(false)}
+              </div>
+            )}
+            {onMobileClose && (
               <button
                 type="button"
-                className="btn-plus"
-                onClick={handlePlusClick}
-                title={plusTitle}
-                aria-label={plusTitle}
-                aria-haspopup={hasMenuChoices ? 'menu' : undefined}
-                aria-expanded={hasMenuChoices ? addMenuOpen : undefined}
+                className="btn-mobile-drawer-close"
+                onClick={onMobileClose}
+                aria-label="Close finances menu"
               >
-                +
+                ×
               </button>
-              {renderAddPopup(false)}
-            </div>
-          )}
+            )}
+          </div>
         </div>
-      </div>
 
-      {!collapsed && dailyUpdatesCount > 0 && onDailyUpdatesClick && (
+      {!isCollapsed && dailyUpdatesCount > 0 && onDailyUpdatesClick && (
         <div className="daily-updates-banner">
           <button
             type="button"
@@ -244,7 +282,7 @@ export function AccountsPane({
         </div>
       )}
 
-      {collapsed ? (
+      {isCollapsed ? (
         <div className="accounts-collapsed-rail">
           <div className="plus-menu-anchor" ref={railMenuRef}>
             <button
@@ -428,6 +466,7 @@ export function AccountsPane({
           )}
         </div>
       )}
-    </aside>
+      </aside>
+    </>
   );
 }

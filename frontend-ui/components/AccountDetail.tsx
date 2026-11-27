@@ -852,7 +852,7 @@ export function AccountDetail({
           <div className="records-loading">Loading records...</div>
         ) : (
           <div className="records-table-container">
-            <table className="records-table">
+            <table className="records-table checking-records-table">
               <thead>
                 <tr>
                   <th className="th-balance">Balance</th>

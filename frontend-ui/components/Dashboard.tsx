@@ -29,6 +29,7 @@ import { DailyUpdateItem, sortDailyUpdateItems } from '../lib/dailyUpdates';
 import { loadPendingDailyUpdates } from '../lib/dailyUpdatesApi';
 import { isJwtSubscriber } from '../lib/tokenRefresh';
 import { applyAccountOrder, isPinnedBalance, togglePinnedBalance } from '../lib/userSettings';
+import { getMobileHeaderTitle, MOBILE_MEDIA_QUERY } from '../lib/mobileLayout';
 import { AccountsPane } from './AccountsPane';
 import { DailyUpdatesModal } from './DailyUpdatesModal';
 import { PinnedBalancesBar } from './PinnedBalancesBar';
@@ -194,6 +195,7 @@ export function Dashboard({ session, onUserDeleted, openUserTrigger = 0 }: Dashb
     pinned_balances: [],
   });
   const [view, setView] = useState<DashboardView>({ kind: 'home' });
+  const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
 
   const selectedId = view.kind === 'account' ? view.accountId : null;
   const selectedPerspectiveId = view.kind === 'perspective' ? view.perspectiveId : null;
@@ -286,6 +288,27 @@ export function Dashboard({ session, onUserDeleted, openUserTrigger = 0 }: Dashb
       window.scrollTo({ top: 0, behavior: 'auto' });
     }
   }, [view.kind, selectedId, selectedPerspectiveId]);
+
+  useEffect(() => {
+    setMobileDrawerOpen(false);
+  }, [view, dailyUpdatesOpen, openUserTrigger]);
+
+  useEffect(() => {
+    if (!mobileDrawerOpen) return;
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const mq = typeof window !== 'undefined' && window.matchMedia ? window.matchMedia(MOBILE_MEDIA_QUERY) : null;
+    const handleViewportChange = (e: MediaQueryListEvent) => {
+      if (!e.matches) {
+        setMobileDrawerOpen(false);
+      }
+    };
+    mq?.addEventListener('change', handleViewportChange);
+    return () => {
+      document.body.style.overflow = prevOverflow;
+      mq?.removeEventListener('change', handleViewportChange);
+    };
+  }, [mobileDrawerOpen]);
 
   useEffect(() => {
     let cancelled = false;
@@ -489,8 +512,40 @@ export function Dashboard({ session, onUserDeleted, openUserTrigger = 0 }: Dashb
     }
   };
 
+  const mobileHeaderTitle = getMobileHeaderTitle(view, accounts, perspectives);
+
   return (
     <div className="dashboard-layout">
+      <div className="mobile-nav-bar">
+        <button
+          type="button"
+          className="btn-mobile-menu"
+          onClick={() => setMobileDrawerOpen(true)}
+          aria-label="Open finances menu"
+          aria-expanded={mobileDrawerOpen}
+        >
+          <svg
+            width="18"
+            height="18"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
+            <line x1="3" y1="6" x2="21" y2="6" />
+            <line x1="3" y1="12" x2="21" y2="12" />
+            <line x1="3" y1="18" x2="21" y2="18" />
+          </svg>
+          <span>Finances</span>
+          {isSubscriber && orderedDailyUpdateItems.length > 0 && (
+            <span className="daily-updates-count">{orderedDailyUpdateItems.length}</span>
+          )}
+        </button>
+        <span className="mobile-nav-title">{mobileHeaderTitle}</span>
+      </div>
       <AccountsPane
         accounts={orderedAccounts}
         selectedId={selectedId}
@@ -514,6 +569,8 @@ export function Dashboard({ session, onUserDeleted, openUserTrigger = 0 }: Dashb
         onDailyUpdatesClick={() => setDailyUpdatesOpen(true)}
         canReorderAccounts={isSubscriber}
         onReorderAccounts={(nextAccountOrder) => handlePatchSettings({ account_order: nextAccountOrder })}
+        mobileOpen={mobileDrawerOpen}
+        onMobileClose={() => setMobileDrawerOpen(false)}
       />
       <main className="dashboard-content">
         {isSubscriber && (
