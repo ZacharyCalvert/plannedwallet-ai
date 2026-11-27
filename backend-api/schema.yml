@@ -813,6 +813,138 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
+  /api/v1/mobile/token:
+    parameters:
+      - $ref: '#/components/parameters/XClientId'
+      - $ref: '#/components/parameters/XMobileIdentifier'
+    post:
+      tags:
+        - Mobile
+      summary: Exchange a standard user session for a 6-month device-bound mobile widget token
+      description: |
+        Exchanges a standard authenticated user JWT (non-limited scope) and `X-Mobile-Identifier`
+        device identifier header for a 6-month (180-day) JWT containing `limitation: "mobile"` and
+        the SHA-256 `device_hash` claim.
+      security:
+        - BearerAuth: []
+      responses:
+        '201':
+          summary: Mobile widget token issued
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MobileTokenResponse'
+        '400':
+          summary: Missing or invalid X-Mobile-Identifier header
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          summary: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          summary: Forbidden (standard non-limited JWT required)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/mobile/accounts:
+    parameters:
+      - $ref: '#/components/parameters/XClientId'
+      - $ref: '#/components/parameters/XMobileIdentifier'
+    get:
+      tags:
+        - Mobile
+      summary: List editable transactional accounts and categories for mobile widget entry
+      description: |
+        Requires a valid `limitation: "mobile"` JWT matching the SHA-256 hash of `X-Mobile-Identifier`.
+        Returns only writable `checking`, `savings`, and `credit card` account labels/types and categories
+        without exposing balances, account descriptions, or historical transactions.
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          summary: Editable account targets and categories
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MobileTargetsResponse'
+        '401':
+          summary: Invalid, revoked, or device-mismatched mobile token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          summary: Mobile token required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/mobile/accounts/{accountId}/records:
+    parameters:
+      - $ref: '#/components/parameters/XClientId'
+      - $ref: '#/components/parameters/XMobileIdentifier'
+      - name: accountId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    post:
+      tags:
+        - Mobile
+      summary: Add a transaction record from a mobile widget
+      description: |
+        Requires a valid `limitation: "mobile"` JWT matching `X-Mobile-Identifier` and `edit` or `admin`
+        access on a `checking`, `savings`, or `credit card` account. Returns only minimal confirmation metadata
+        without exposing running balances.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MobileRecordCreateRequest'
+      responses:
+        '201':
+          summary: Record created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MobileRecordCreateResponse'
+        '400':
+          summary: Invalid payload or unsupported account type
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          summary: Invalid, revoked, or device-mismatched mobile token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          summary: Forbidden or read-only access
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          summary: Account not found or inaccessible
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
   /api/v1/accounts:
     parameters:
       - $ref: '#/components/parameters/XClientId'
@@ -4479,6 +4611,15 @@ components:
         type: string
         example: "nextjs-static"
 
+    XMobileIdentifier:
+      name: X-Mobile-Identifier
+      in: header
+      required: true
+      description: Unique per-device installation identifier hashed with SHA-256 and verified against the mobile JWT `device_hash` claim.
+      schema:
+        type: string
+        example: "6f8c2a1b-94d0-4a7e-8c12-3f9b1e2a7d44"
+
   schemas:
     AccountType:
       type: string
@@ -4696,6 +4837,112 @@ components:
         message:
           type: string
         updated_at:
+          type: string
+          format: date-time
+
+    MobileTokenResponse:
+      type: object
+      required:
+        - access_token
+        - token_type
+        - expires_in
+        - expires_at
+        - limitation
+      properties:
+        access_token:
+          type: string
+        token_type:
+          type: string
+          example: "Bearer"
+        expires_in:
+          type: integer
+          example: 15552000
+        expires_at:
+          type: string
+          format: date-time
+        limitation:
+          type: string
+          enum: [mobile]
+
+    MobileAccountSummary:
+      type: object
+      required:
+        - id
+        - name
+        - type
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        type:
+          type: string
+          enum: [checking, savings, credit card]
+
+    MobileCategorySummary:
+      type: object
+      required:
+        - id
+        - name
+        - is_default
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        is_default:
+          type: boolean
+
+    MobileTargetsResponse:
+      type: object
+      required:
+        - accounts
+        - categories
+      properties:
+        accounts:
+          type: array
+          items:
+            $ref: '#/components/schemas/MobileAccountSummary'
+        categories:
+          type: array
+          items:
+            $ref: '#/components/schemas/MobileCategorySummary'
+
+    MobileRecordCreateRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - value
+        - date_sent
+        - entity
+      properties:
+        value:
+          type: number
+        date_sent:
+          type: string
+          format: date
+        entity:
+          type: string
+        category_id:
+          type: string
+          format: uuid
+
+    MobileRecordCreateResponse:
+      type: object
+      required:
+        - id
+        - account_id
+        - created_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        account_id:
+          type: string
+          format: uuid
+        created_at:
           type: string
           format: date-time
 

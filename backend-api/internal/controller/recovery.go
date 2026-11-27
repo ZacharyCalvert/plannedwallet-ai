@@ -89,6 +89,7 @@ func (c *Controller) applyRecoveryReset(ctx context.Context, user *models.User, 
 		}
 		return nil, NewAppError(http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to complete account recovery.")
 	}
+	_ = c.repo.RevokeMobileTokensByUserID(ctx, user.ID, now)
 	trace.LogInfo(ctx, "Account recovery completed and recovery phrase rotated for user: %s", user.Username)
 	return &models.AccountRecoveryResponse{
 		Username:        user.Username,

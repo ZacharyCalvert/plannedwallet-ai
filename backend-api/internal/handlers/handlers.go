@@ -559,12 +559,20 @@ func (h *Handler) RegisterRoutes(r *gin.Engine) {
 	protected.POST("/users/:username/recovery-key/rotate", h.RotateRecoveryKey)
 	protected.POST("/users/:username/password", h.ChangePassword)
 	protected.DELETE("/users/:username", h.DeleteUser)
+	protected.POST("/mobile/token", h.IssueMobileToken)
 	h.registerAccountRoutes(protected)
 	h.registerStoreAndSnapshotRoutes(protected)
 	h.registerAssetRoutes(protected)
 	h.registerCategoryRoutes(protected)
 	h.registerPerspectiveRoutes(protected)
 	h.registerRecurringTransactionRoutes(protected)
+
+	mobile := api.Group("/mobile")
+	mobile.Use(h.auth.MobileMiddleware())
+	mobile.Use(h.MobileTokenValidationMiddleware())
+	mobile.Use(h.PolicyEnforcementMiddleware())
+	mobile.GET("/accounts", h.ListMobileTargets)
+	mobile.POST("/accounts/:accountId/records", h.CreateMobileRecord)
 }
 
 func (h *Handler) registerPublicRoutes(api *gin.RouterGroup) {

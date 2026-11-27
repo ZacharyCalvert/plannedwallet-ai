@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/gin-gonic/gin"
@@ -98,6 +99,9 @@ func TestPreflight_AllowedDefaultDomains(t *testing.T) {
 		}
 		if w.Header().Get("Access-Control-Allow-Origin") == "" {
 			t.Errorf("domain %s: expected Access-Control-Allow-Origin header", domain)
+		}
+		if allowHdrs := w.Header().Get("Access-Control-Allow-Headers"); !strings.Contains(allowHdrs, "X-Mobile-Identifier") {
+			t.Errorf("domain %s: expected X-Mobile-Identifier in Access-Control-Allow-Headers, got %q", domain, allowHdrs)
 		}
 	}
 }

@@ -953,5 +953,74 @@ func TestMemoryRepo_UpdateUserPassword(t *testing.T) {
 	}
 }
 
+func TestMemoryRepo_MobileTokensAndRevocation(t *testing.T) {
+	repo := repository.NewMemoryRepository()
+	ctx := context.Background()
+	now := time.Now().UTC()
+
+	user := &models.User{
+		ID: "user-mob-1", Username: "mob_alice", Email: "mob_alice@example.com", PasswordHash: "h", TOTPSecret: "s", CreatedAt: now,
+	}
+	if err := repo.CreateUser(ctx, user); err != nil {
+		t.Fatalf("CreateUser failed: %v", err)
+	}
+
+	tok := &models.MobileToken{
+		ID:         "mob-jti-1",
+		UserID:     user.ID,
+		DeviceHash: "abc123hash",
+		ExpiresAt:  now.Add(180 * 24 * time.Hour),
+		CreatedAt:  now,
+	}
+	if err := repo.CreateMobileToken(ctx, tok); err != nil {
+		t.Fatalf("CreateMobileToken failed: %v", err)
+	}
+	if err := repo.CreateMobileToken(ctx, tok); err != repository.ErrConflict {
+		t.Fatalf("expected ErrConflict on duplicate token ID, got %v", err)
+	}
+
+	got, err := repo.GetMobileTokenByID(ctx, tok.ID)
+	if err != nil {
+		t.Fatalf("GetMobileTokenByID failed: %v", err)
+	}
+	if got.DeviceHash != tok.DeviceHash || got.RevokedAt != nil {
+		t.Fatalf("unexpected token: %+v", got)
+	}
+
+	if err := repo.RevokeMobileTokensByUserID(ctx, user.ID, now); err != nil {
+		t.Fatalf("RevokeMobileTokensByUserID failed: %v", err)
+	}
+	revoked, _ := repo.GetMobileTokenByID(ctx, tok.ID)
+	if revoked.RevokedAt == nil {
+		t.Fatal("expected RevokedAt to be set")
+	}
+
+	if err := repo.DeleteUser(ctx, user.ID); err != nil {
+		t.Fatalf("DeleteUser failed: %v", err)
+	}
+	if _, err := repo.GetMobileTokenByID(ctx, tok.ID); err != repository.ErrNotFound {
+		t.Fatalf("expected ErrNotFound after DeleteUser cascade, got %v", err)
+	}
+
+	// Verify expired token cleanup removes expired tokens/revocations while retaining active/unexpired ones
+	expiredRevoked := now.Add(-1 * time.Hour)
+	_ = repo.CreateMobileToken(ctx, &models.MobileToken{
+		ID: "mob-exp-1", UserID: user.ID, DeviceHash: "h1", ExpiresAt: now.Add(-time.Minute), RevokedAt: &expiredRevoked, CreatedAt: now.Add(-181 * 24 * time.Hour),
+	})
+	_ = repo.CreateMobileToken(ctx, &models.MobileToken{
+		ID: "mob-unexp-revoked", UserID: user.ID, DeviceHash: "h2", ExpiresAt: now.Add(24 * time.Hour), RevokedAt: &expiredRevoked, CreatedAt: now,
+	})
+	deleted, err := repo.DeleteExpiredMobileTokens(ctx, now)
+	if err != nil || deleted != 1 {
+		t.Fatalf("expected 1 expired mobile token deleted, got %d (err=%v)", deleted, err)
+	}
+	if _, err := repo.GetMobileTokenByID(ctx, "mob-exp-1"); err != repository.ErrNotFound {
+		t.Fatalf("expected expired mobile token to be deleted, got %v", err)
+	}
+	if _, err := repo.GetMobileTokenByID(ctx, "mob-unexp-revoked"); err != nil {
+		t.Fatalf("expected unexpired revoked token to remain until JWT expiration, got %v", err)
+	}
+}
+
 
 

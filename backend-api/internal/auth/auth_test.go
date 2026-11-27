@@ -128,3 +128,79 @@ func TestValidateToken_RejectsForgeryAndAlgorithmConfusion(t *testing.T) {
 		t.Fatal("expected token signed with wrong secret to be rejected")
 	}
 }
+
+func TestMobileToken_LimitationScopeAndDeviceBindingMiddleware(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	svc := auth.NewService("test-secret-with-32-bytes-minimum!!", 900)
+	deviceID := "device-install-uuid-1234"
+	deviceHash := auth.HashMobileIdentifier(deviceID)
+
+	stdTok, err := svc.GenerateToken("user-1", "alice", false, true)
+	if err != nil {
+		t.Fatalf("GenerateToken failed: %v", err)
+	}
+	mobTok, exp, err := svc.GenerateMobileToken("tok-mob-1", "user-1", "alice", false, true, deviceHash)
+	if err != nil {
+		t.Fatalf("GenerateMobileToken failed: %v", err)
+	}
+	claims, err := svc.ValidateToken(mobTok)
+	if err != nil {
+		t.Fatalf("ValidateToken mobile failed: %v", err)
+	}
+	if claims.Limitation != auth.LimitationMobile || claims.DeviceHash != deviceHash {
+		t.Fatalf("unexpected mobile claims: %+v", claims)
+	}
+	if ttl := exp.Sub(claims.IssuedAt.Time); ttl < 179*24*time.Hour || ttl > 181*24*time.Hour {
+		t.Fatalf("expected ~180 day TTL, got %v", ttl)
+	}
+
+	r := gin.New()
+	r.GET("/standard", svc.Middleware(), func(c *gin.Context) { c.Status(http.StatusOK) })
+	r.GET("/mobile", svc.MobileMiddleware(), func(c *gin.Context) {
+		tid, _ := c.Get("tokenID")
+		c.JSON(http.StatusOK, gin.H{"tokenID": tid})
+	})
+
+	// Mobile token must be blocked on standard routes
+	reqStd := httptest.NewRequest(http.MethodGet, "/standard", nil)
+	reqStd.Header.Set("Authorization", "Bearer "+mobTok)
+	wStd := httptest.NewRecorder()
+	r.ServeHTTP(wStd, reqStd)
+	if wStd.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 for mobile token on standard route, got %d", wStd.Code)
+	}
+
+	// Standard token must be blocked on mobile routes
+	reqMobWithStd := httptest.NewRequest(http.MethodGet, "/mobile", nil)
+	reqMobWithStd.Header.Set("Authorization", "Bearer "+stdTok)
+	reqMobWithStd.Header.Set("X-Mobile-Identifier", deviceID)
+	wMobStd := httptest.NewRecorder()
+	r.ServeHTTP(wMobStd, reqMobWithStd)
+	if wMobStd.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 for standard token on mobile route, got %d", wMobStd.Code)
+	}
+
+	// Missing or mismatched X-Mobile-Identifier rejected with 401
+	for _, hdr := range []string{"", "wrong-device-id"} {
+		req := httptest.NewRequest(http.MethodGet, "/mobile", nil)
+		req.Header.Set("Authorization", "Bearer "+mobTok)
+		if hdr != "" {
+			req.Header.Set("X-Mobile-Identifier", hdr)
+		}
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+		if w.Code != http.StatusUnauthorized {
+			t.Fatalf("expected 401 for mobile identifier %q, got %d", hdr, w.Code)
+		}
+	}
+
+	// Matching device identifier succeeds
+	reqOK := httptest.NewRequest(http.MethodGet, "/mobile", nil)
+	reqOK.Header.Set("Authorization", "Bearer "+mobTok)
+	reqOK.Header.Set("X-Mobile-Identifier", deviceID)
+	wOK := httptest.NewRecorder()
+	r.ServeHTTP(wOK, reqOK)
+	if wOK.Code != http.StatusOK || !strings.Contains(wOK.Body.String(), "tok-mob-1") {
+		t.Fatalf("expected 200 with tokenID, got %d: %s", wOK.Code, wOK.Body.String())
+	}
+}

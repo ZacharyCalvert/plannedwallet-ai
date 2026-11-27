@@ -228,6 +228,17 @@ Single-use ledger storing Argon2id-hashed 12-word recovery phrases and rotation/
 - `used_ip` (VARCHAR(64), Not Null, Default `''`) - Client IP resolved via `resolveClientIP` at recovery time
 - **Indexes**: `idx_user_recovery_keys_user_active (user_id, active)`, `idx_user_recovery_keys_user_created (user_id, created_at DESC)`
 
+### 1.19 `mobile_tokens`
+Persists 6-month device-bound widget JWT identifiers (`jti`) for validation and revocation on password change, recovery, or deletion.
+- `id` (UUID, Primary Key) - JWT `jti`
+- `user_id` (UUID, Not Null, FK -> `users(id)` ON DELETE CASCADE)
+- `device_hash` (VARCHAR(64), Not Null) - Lowercase SHA-256 hex digest of `X-Mobile-Identifier`
+- `expires_at` (TIMESTAMPTZ, Not Null)
+- `revoked_at` (TIMESTAMPTZ, Nullable)
+- `created_at` (TIMESTAMPTZ, Not Null, Default NOW())
+- `last_used_at` (TIMESTAMPTZ, Nullable)
+- **Indexes**: `idx_mobile_tokens_user_id`, `idx_mobile_tokens_user_active (user_id) WHERE revoked_at IS NULL`, `idx_mobile_tokens_expires_at (expires_at)` (used at server startup to purge expired 6-month token/revocation records)
+
 ---
 
 ## 2. Account Types & Behavior
@@ -358,6 +369,12 @@ All HTTP requests require the `X-Client-ID` header. Protected endpoints require 
 - `PUT /api/v1/recurring-transactions/{recurringId}`: Update a recurring transaction.
 - `DELETE /api/v1/recurring-transactions/{recurringId}`: Delete a recurring transaction.
 - `POST /api/v1/recurring-transactions/{recurringId}/apply`: Creates a transaction record in the target checking/savings/credit card account and updates `recurring_transactions.last_date_applied`.
+
+### 3.12 Mobile Widget (`/api/v1/mobile/*`)
+- Requires `X-Mobile-Identifier` header bound via SHA-256 (`device_hash` claim) on a 6-month JWT carrying `limitation: "mobile"`. Mobile-limited JWTs are rejected (`403 TOKEN_SCOPE_LIMITED`) on standard `/api/v1/*` routes, and password changes or account recovery automatically revoke active mobile tokens.
+- `POST /api/v1/mobile/token`: Exchange a standard user Bearer JWT and `X-Mobile-Identifier` header for a 6-month device-bound mobile widget token.
+- `GET /api/v1/mobile/accounts`: Return editable transactional accounts (`checking`, `savings`, `credit card`; `id`, `name`, `type` only, without balances or history) and categories.
+- `POST /api/v1/mobile/accounts/{accountId}/records`: Add a minimal transaction record (`value`, `date_sent`, `entity`, optional `category_id`) on an editable `checking`, `savings`, or `credit card` account, returning only `{ id, account_id, created_at }`.
 
 
 

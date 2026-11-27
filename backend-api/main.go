@@ -270,6 +270,17 @@ func cleanupStartupCaptchas(repo repository.Repository) {
 	}
 }
 
+func cleanupStartupMobileTokens(repo repository.Repository) {
+	deleted, err := repo.DeleteExpiredMobileTokens(context.Background(), time.Now().UTC())
+	if err != nil {
+		log.Printf("Warning: Startup mobile token cleanup failed: %v", err)
+		return
+	}
+	if deleted > 0 {
+		log.Printf("Startup cleanup removed %d expired mobile token(s).", deleted)
+	}
+}
+
 func runGracefulServer(srv *http.Server) {
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
@@ -314,6 +325,7 @@ func main() {
 	authService := initJWTService(isProd)
 	repo := initDatabase(isProd)
 	cleanupStartupCaptchas(repo)
+	cleanupStartupMobileTokens(repo)
 
 	r := setupGinEngine(repo, authService, isProd, expectedOriginSecret)
 	srv := &http.Server{

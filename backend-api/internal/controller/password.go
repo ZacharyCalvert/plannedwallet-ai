@@ -46,6 +46,7 @@ func (c *Controller) ChangePassword(ctx context.Context, userID, targetUsername 
 	if err := c.repo.UpdateUserPassword(ctx, user.ID, newHash); err != nil {
 		return nil, NewAppError(http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to update password.")
 	}
+	_ = c.repo.RevokeMobileTokensByUserID(ctx, user.ID, time.Now().UTC())
 	trace.LogInfo(ctx, "Password updated successfully for user: %s", user.Username)
 	return &models.ChangePasswordResponse{
 		Message:   "Password updated successfully.",

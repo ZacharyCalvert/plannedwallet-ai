@@ -1736,3 +1736,42 @@ func (p *PostgresRepository) UpdateUserPassword(ctx context.Context, userID, new
 	return nil
 }
 
+func (p *PostgresRepository) CreateMobileToken(ctx context.Context, token *models.MobileToken) error {
+	query := `INSERT INTO mobile_tokens (id, user_id, device_hash, expires_at, revoked_at, created_at, last_used_at)
+	          VALUES ($1, $2, $3, $4, $5, $6, $7)`
+	_, err := p.db.ExecContext(ctx, query, token.ID, token.UserID, token.DeviceHash, token.ExpiresAt, token.RevokedAt, token.CreatedAt, token.LastUsedAt)
+	if isUniqueViolation(err) {
+		return ErrConflict
+	}
+	return err
+}
+
+func (p *PostgresRepository) GetMobileTokenByID(ctx context.Context, tokenID string) (*models.MobileToken, error) {
+	query := `SELECT id, user_id, device_hash, expires_at, revoked_at, created_at, last_used_at
+	          FROM mobile_tokens WHERE id = $1`
+	var mt models.MobileToken
+	err := p.db.QueryRowContext(ctx, query, tokenID).Scan(
+		&mt.ID, &mt.UserID, &mt.DeviceHash, &mt.ExpiresAt, &mt.RevokedAt, &mt.CreatedAt, &mt.LastUsedAt,
+	)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, ErrNotFound
+		}
+		return nil, err
+	}
+	return &mt, nil
+}
+
+func (p *PostgresRepository) RevokeMobileTokensByUserID(ctx context.Context, userID string, revokedAt time.Time) error {
+	_, err := p.db.ExecContext(ctx, `UPDATE mobile_tokens SET revoked_at = $1 WHERE user_id = $2 AND revoked_at IS NULL`, revokedAt, userID)
+	return err
+}
+
+func (p *PostgresRepository) DeleteExpiredMobileTokens(ctx context.Context, now time.Time) (int64, error) {
+	res, err := p.db.ExecContext(ctx, `DELETE FROM mobile_tokens WHERE expires_at <= $1`, now)
+	if err != nil {
+		return 0, err
+	}
+	return res.RowsAffected()
+}
+

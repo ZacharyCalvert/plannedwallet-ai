@@ -192,3 +192,21 @@ func TestInitSQLEmbedded_UserRecoveryKeys(t *testing.T) {
 		}
 	}
 }
+
+func TestInitSQLEmbedded_MobileTokens(t *testing.T) {
+	expectedSnippets := []string{
+		"CREATE TABLE IF NOT EXISTS mobile_tokens",
+		"user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE",
+		"device_hash VARCHAR(64) NOT NULL",
+		"expires_at TIMESTAMPTZ NOT NULL",
+		"revoked_at TIMESTAMPTZ",
+		"idx_mobile_tokens_user_id",
+		"idx_mobile_tokens_user_active",
+		"idx_mobile_tokens_expires_at",
+	}
+	for _, snippet := range expectedSnippets {
+		if !strings.Contains(initSQL, snippet) {
+			t.Errorf("expected initSQL to contain %q", snippet)
+		}
+	}
+}

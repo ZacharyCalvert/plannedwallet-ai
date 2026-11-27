@@ -1,14 +1,17 @@
 package main
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/plannedwallet/internal/auth"
+	"github.com/plannedwallet/internal/models"
 	"github.com/plannedwallet/internal/repository"
 )
 
@@ -351,5 +354,28 @@ func TestSubscriberEnvConfig(t *testing.T) {
 	}
 	if got := parseSubscriberFreeDays(" 30 "); got != 30 {
 		t.Fatalf("expected 30 for \" 30 \", got %d", got)
+	}
+}
+
+func TestCleanupStartupMobileTokens(t *testing.T) {
+	repo := repository.NewMemoryRepository()
+	ctx := context.Background()
+	now := time.Now().UTC()
+	revoked := now.Add(-24 * time.Hour)
+
+	_ = repo.CreateMobileToken(ctx, &models.MobileToken{
+		ID: "exp-revoked", UserID: "u-1", DeviceHash: "h1", ExpiresAt: now.Add(-time.Second), RevokedAt: &revoked, CreatedAt: now.Add(-181 * 24 * time.Hour),
+	})
+	_ = repo.CreateMobileToken(ctx, &models.MobileToken{
+		ID: "active-revoked", UserID: "u-1", DeviceHash: "h2", ExpiresAt: now.Add(30 * 24 * time.Hour), RevokedAt: &revoked, CreatedAt: now,
+	})
+
+	cleanupStartupMobileTokens(repo)
+
+	if _, err := repo.GetMobileTokenByID(ctx, "exp-revoked"); err != repository.ErrNotFound {
+		t.Fatalf("expected expired mobile revocation removed on startup, got %v", err)
+	}
+	if _, err := repo.GetMobileTokenByID(ctx, "active-revoked"); err != nil {
+		t.Fatalf("expected unexpired mobile revocation preserved until JWT expiration, got %v", err)
 	}
 }

@@ -37,6 +37,7 @@ type MemoryRepository struct {
 	policyAgreements      map[string]*models.PolicyAgreement
 	recoveryKeys          map[string]*models.UserRecoveryKey
 	userSettings          map[string]*models.UserSettings // userID -> UserSettings
+	mobileTokens          map[string]*models.MobileToken  // tokenID -> MobileToken
 }
 
 type memoryCaptcha struct {
@@ -99,6 +100,7 @@ func NewMemoryRepository() *MemoryRepository {
 		policyAgreements:      make(map[string]*models.PolicyAgreement),
 		recoveryKeys:          make(map[string]*models.UserRecoveryKey),
 		userSettings:          make(map[string]*models.UserSettings),
+		mobileTokens:          make(map[string]*models.MobileToken),
 	}
 }
 
@@ -310,6 +312,11 @@ func (m *MemoryRepository) DeleteUser(_ context.Context, id string) error {
 	m.deleteUserOwnedPerspectives(id)
 	m.deleteUserAccessAndRecords(id)
 	delete(m.userSettings, id)
+	for tokenID, mt := range m.mobileTokens {
+		if mt.UserID == id {
+			delete(m.mobileTokens, tokenID)
+		}
+	}
 	return nil
 }
 
@@ -1894,5 +1901,67 @@ func (m *MemoryRepository) UpdateUserPassword(_ context.Context, userID, newPass
 	}
 	user.PasswordHash = newPasswordHash
 	return nil
+}
+
+func cloneMobileToken(mt *models.MobileToken) *models.MobileToken {
+	cp := *mt
+	if mt.RevokedAt != nil {
+		t := *mt.RevokedAt
+		cp.RevokedAt = &t
+	}
+	if mt.LastUsedAt != nil {
+		t := *mt.LastUsedAt
+		cp.LastUsedAt = &t
+	}
+	return &cp
+}
+
+func (m *MemoryRepository) CreateMobileToken(_ context.Context, token *models.MobileToken) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if _, exists := m.mobileTokens[token.ID]; exists {
+		return ErrConflict
+	}
+	m.mobileTokens[token.ID] = cloneMobileToken(token)
+	return nil
+}
+
+func (m *MemoryRepository) GetMobileTokenByID(_ context.Context, tokenID string) (*models.MobileToken, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	mt, ok := m.mobileTokens[tokenID]
+	if !ok {
+		return nil, ErrNotFound
+	}
+	return cloneMobileToken(mt), nil
+}
+
+func (m *MemoryRepository) RevokeMobileTokensByUserID(_ context.Context, userID string, revokedAt time.Time) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	for _, mt := range m.mobileTokens {
+		if mt.UserID == userID && mt.RevokedAt == nil {
+			t := revokedAt
+			mt.RevokedAt = &t
+		}
+	}
+	return nil
+}
+
+func (m *MemoryRepository) DeleteExpiredMobileTokens(_ context.Context, now time.Time) (int64, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	var deleted int64
+	for id, mt := range m.mobileTokens {
+		if !mt.ExpiresAt.After(now) {
+			delete(m.mobileTokens, id)
+			deleted++
+		}
+	}
+	return deleted, nil
 }
 

@@ -165,4 +165,10 @@ type Repository interface {
 	// User Settings operations
 	GetUserSettings(ctx context.Context, userID string) (*models.UserSettings, error)
 	UpsertUserSettings(ctx context.Context, settings *models.UserSettings) error
+
+	// Mobile Token operations
+	CreateMobileToken(ctx context.Context, token *models.MobileToken) error
+	GetMobileTokenByID(ctx context.Context, tokenID string) (*models.MobileToken, error)
+	RevokeMobileTokensByUserID(ctx context.Context, userID string, revokedAt time.Time) error
+	DeleteExpiredMobileTokens(ctx context.Context, now time.Time) (int64, error)
 }

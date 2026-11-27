@@ -820,4 +820,59 @@ type ChangePasswordResponse struct {
 	UpdatedAt time.Time `json:"updated_at"`
 }
 
+// MobileToken stores an active or revoked long-lived mobile widget token bound to a device hash.
+type MobileToken struct {
+	ID         string     `json:"id"`
+	UserID     string     `json:"user_id"`
+	DeviceHash string     `json:"device_hash"`
+	ExpiresAt  time.Time  `json:"expires_at"`
+	RevokedAt  *time.Time `json:"revoked_at,omitempty"`
+	CreatedAt  time.Time  `json:"created_at"`
+	LastUsedAt *time.Time `json:"last_used_at,omitempty"`
+}
+
+// MobileTokenResponse represents a newly minted 6-month device-bound mobile JWT.
+type MobileTokenResponse struct {
+	AccessToken string    `json:"access_token"`
+	TokenType   string    `json:"token_type"`
+	ExpiresIn   int       `json:"expires_in"`
+	ExpiresAt   time.Time `json:"expires_at"`
+	Limitation  string    `json:"limitation"`
+}
+
+// MobileAccountSummary exposes only the write-target account identifier, label, and type for mobile widgets.
+type MobileAccountSummary struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+	Type string `json:"type"`
+}
+
+// MobileCategorySummary exposes category identifiers and labels for mobile widgets.
+type MobileCategorySummary struct {
+	ID        string `json:"id"`
+	Name      string `json:"name"`
+	IsDefault bool   `json:"is_default"`
+}
+
+// MobileTargetsResponse returns the eligible record accounts and categories without balances or history.
+type MobileTargetsResponse struct {
+	Accounts   []MobileAccountSummary  `json:"accounts"`
+	Categories []MobileCategorySummary `json:"categories"`
+}
+
+// MobileRecordCreateRequest captures minimal transaction inputs from a native mobile widget.
+type MobileRecordCreateRequest struct {
+	Value      *float64 `json:"value" binding:"required"`
+	DateSent   string   `json:"date_sent" binding:"required"`
+	Entity     string   `json:"entity" binding:"required"`
+	CategoryID *string  `json:"category_id,omitempty"`
+}
+
+// MobileRecordCreateResponse confirms record creation without returning running balances.
+type MobileRecordCreateResponse struct {
+	ID        string    `json:"id"`
+	AccountID string    `json:"account_id"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
 
