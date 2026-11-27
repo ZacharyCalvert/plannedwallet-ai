@@ -18,7 +18,7 @@ Top priority:
 - [x] git statCreate JWT secret and mount as required field for JWT issuance / signing
 
 Medium priority:
-- Mobile CSS and viewing (iphone)
+- [x] Mobile CSS and viewing (iphone)
 - Native app, with mobile exchange for publishing new account records
 - [x] Password changes
 - [x] itest account enumeration (401 vs 403 vs 404)
