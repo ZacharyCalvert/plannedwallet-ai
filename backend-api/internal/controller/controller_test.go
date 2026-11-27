@@ -930,6 +930,66 @@ func testPerspectiveFlow(t *testing.T, ctx context.Context, ctrl *controller.Con
 	}
 }
 
+func TestPerspectiveController_TrendIncludesAssetAccounts(t *testing.T) {
+	ctrl, _ := setupController()
+	ctx := context.Background()
+
+	u, _ := ctrl.RegisterUser(ctx, models.UserRegistrationRequest{
+		Username: "persp_asset_u", Email: "persp_asset@test.com", Password: "ValidPass123!",
+	})
+	chk, _ := ctrl.CreateAccount(ctx, u.ID, models.AccountCreationRequest{
+		Name: "Everyday Checking", Type: "checking", Description: "Checking",
+	})
+	snp, _ := ctrl.CreateAccount(ctx, u.ID, models.AccountCreationRequest{
+		Name: "Retirement Snapshot", Type: "snapshot", Description: "Snapshot",
+	})
+	ast, _ := ctrl.CreateAccount(ctx, u.ID, models.AccountCreationRequest{
+		Name: "Investment Holdings", Type: "asset", Description: "Asset portfolio",
+	})
+
+	dep, exp, snapVal := 2000.0, -500.0, 5000.0
+	_, _ = ctrl.CreateCheckingRecord(ctx, u.ID, chk.ID, models.CheckingRecordCreateRequest{Value: &dep, DateSent: "2026-01-01", Entity: "Payroll"})
+	_, _ = ctrl.CreateCheckingRecord(ctx, u.ID, chk.ID, models.CheckingRecordCreateRequest{Value: &exp, DateSent: "2026-01-15", Entity: "Utilities"})
+	_, _ = ctrl.CreateAccountSnapshot(ctx, u.ID, snp.ID, models.AccountSnapshotCreateRequest{Value: &snapVal, SnapshotDate: "2026-01-05"})
+
+	assetDef, _ := ctrl.CreateAsset(ctx, u.ID, models.AssetCreateRequest{Label: "IDX", Description: "Index Shares"})
+	p1, p2 := 100.0, 125.0
+	_, _ = ctrl.CreateAssetValue(ctx, u.ID, assetDef.ID, models.AssetValueCreateRequest{Value: &p1, ValueDate: "2026-01-01"})
+	_, _ = ctrl.CreateAssetValue(ctx, u.ID, assetDef.ID, models.AssetValueCreateRequest{Value: &p2, ValueDate: "2026-01-20"})
+	store, _ := ctrl.CreateAssetStore(ctx, u.ID, ast.ID, models.CreateAssetStoreRequest{AssetID: assetDef.ID, Label: "Taxable Vault", Description: "Primary vault"})
+	q1, q2 := 10.0, 12.0
+	_, _ = ctrl.CreateAssetStoreRecord(ctx, u.ID, ast.ID, store.ID, models.CreateStoreRecordRequest{Quantity: &q1, RecordDate: "2026-01-01"})
+	_, _ = ctrl.CreateAssetStoreRecord(ctx, u.ID, ast.ID, store.ID, models.CreateStoreRecordRequest{Quantity: &q2, RecordDate: "2026-01-10"})
+
+	trendTrue := true
+	pRes, err := ctrl.CreatePerspective(ctx, u.ID, models.PerspectiveCreateRequest{
+		Name: "Net Worth With Assets", Description: "All accounts",
+		AccountIDs: []string{chk.ID, snp.ID, ast.ID},
+		Settings:   &models.PerspectiveSettingsInput{ShowFinancialTrend: &trendTrue},
+	})
+	if err != nil {
+		t.Fatalf("CreatePerspective failed: %v", err)
+	}
+	view, err := ctrl.GetPerspectiveView(ctx, u.ID, pRes.ID)
+	if err != nil {
+		t.Fatalf("GetPerspectiveView failed: %v", err)
+	}
+	// Expected total: checking (2000 - 500 = 1500) + snapshot (5000) + asset (12 * 125 = 1500) = 8000.0
+	if view.CurrentTotalValue != 8000.0 {
+		t.Fatalf("expected CurrentTotalValue 8000.0, got %.2f", view.CurrentTotalValue)
+	}
+	if len(view.Trend) != 5 {
+		t.Fatalf("expected 5 trend dates, got %d: %+v", len(view.Trend), view.Trend)
+	}
+	last := view.Trend[len(view.Trend)-1]
+	if last.TotalValue != view.CurrentTotalValue {
+		t.Fatalf("expected final trend TotalValue (%.2f) to match CurrentTotalValue (%.2f)", last.TotalValue, view.CurrentTotalValue)
+	}
+	if view.Trend[0].TotalValue != 3000.0 { // 2026-01-01: 2000 checking + 1000 asset
+		t.Fatalf("expected 2026-01-01 total 3000.0, got %.2f", view.Trend[0].TotalValue)
+	}
+}
+
 func registerTestAccountParticipants(t *testing.T, ctx context.Context, ctrl *controller.Controller) (ownerID, readerID, editorID, outsiderID, accID string) {
 	t.Helper()
 	owner, _ := ctrl.RegisterUser(ctx, models.UserRegistrationRequest{Username: "acc_owner", Email: "acc_owner@test.com", Password: "ValidPass123!"})

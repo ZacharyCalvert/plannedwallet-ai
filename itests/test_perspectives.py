@@ -350,3 +350,107 @@ def test_perspective_sharing_and_access_control(api_context: APIRequestContext):
     # User B gets 404 again
     res_b_after = api_context.get(f"/api/v1/perspectives/{p_id}", headers=headers_b)
     assert res_b_after.status == 404
+
+
+def test_perspective_trend_includes_asset_account_values(api_context: APIRequestContext):
+    """Ensure asset account store valuations are included in perspective trend points and reconcile with current_total_value."""
+    user, token = create_authenticated_user(api_context)
+    headers = {"Authorization": f"Bearer {token}"}
+
+    chk_id = api_context.post(
+        "/api/v1/accounts",
+        data={"name": "Household Checking", "type": "checking", "description": "Liquid cash"},
+        headers=headers,
+    ).json()["id"]
+    snp_id = api_context.post(
+        "/api/v1/accounts",
+        data={"name": "Retirement Account", "type": "snapshot", "description": "Long-term plan"},
+        headers=headers,
+    ).json()["id"]
+    ast_id = api_context.post(
+        "/api/v1/accounts",
+        data={"name": "Commodity Reserve", "type": "asset", "description": "Asset holdings"},
+        headers=headers,
+    ).json()["id"]
+
+    # Checking: +2000 on 2026-01-01, -500 on 2026-01-15 -> 1500
+    assert api_context.post(
+        f"/api/v1/accounts/{chk_id}/records",
+        data={"value": 2000.0, "date_sent": "2026-01-01", "entity": "Employer Payroll"},
+        headers=headers,
+    ).status == 201
+    assert api_context.post(
+        f"/api/v1/accounts/{chk_id}/records",
+        data={"value": -500.0, "date_sent": "2026-01-15", "entity": "Corner Grocery"},
+        headers=headers,
+    ).status == 201
+
+    # Snapshot: 5000 on 2026-01-05 -> 5000
+    assert api_context.post(
+        f"/api/v1/accounts/{snp_id}/snapshots",
+        data={"value": 5000.0, "snapshot_date": "2026-01-05"},
+        headers=headers,
+    ).status == 201
+
+    # Asset store: qty 10 @ 100 on 2026-01-01 -> 1000; qty 12 on 2026-01-10 -> 1200; price 125 on 2026-01-20 -> 1500
+    asset_def_id = api_context.post(
+        "/api/v1/assets",
+        data={"label": f"commodity_{user['username'][:6]}", "description": "Index Basket"},
+        headers=headers,
+    ).json()["id"]
+    assert api_context.post(
+        f"/api/v1/assets/{asset_def_id}/values",
+        data={"value": 100.0, "value_date": "2026-01-01"},
+        headers=headers,
+    ).status == 201
+    assert api_context.post(
+        f"/api/v1/assets/{asset_def_id}/values",
+        data={"value": 125.0, "value_date": "2026-01-20"},
+        headers=headers,
+    ).status == 201
+    store_id = api_context.post(
+        f"/api/v1/accounts/{ast_id}/stores",
+        data={"asset_id": asset_def_id, "label": "Primary Vault", "description": "Stored holdings"},
+        headers=headers,
+    ).json()["id"]
+    assert api_context.post(
+        f"/api/v1/accounts/{ast_id}/stores/{store_id}/records",
+        data={"quantity": 10.0, "record_date": "2026-01-01"},
+        headers=headers,
+    ).status == 201
+    assert api_context.post(
+        f"/api/v1/accounts/{ast_id}/stores/{store_id}/records",
+        data={"quantity": 12.0, "record_date": "2026-01-10"},
+        headers=headers,
+    ).status == 201
+
+    persp_res = api_context.post(
+        "/api/v1/perspectives",
+        data={
+            "name": "Total Net Worth",
+            "description": "Combined checking, snapshot, and asset portfolio",
+            "account_ids": [chk_id, snp_id, ast_id],
+            "settings": {"show_financial_trend": True},
+        },
+        headers=headers,
+    )
+    assert persp_res.status == 201
+    persp_id = persp_res.json()["id"]
+
+    view_res = api_context.get(f"/api/v1/perspectives/{persp_id}/view", headers=headers)
+    assert view_res.status == 200
+    view = view_res.json()
+
+    # Aggregate = 1500 checking + 5000 snapshot + 1500 asset = 8000.0
+    assert view["current_total_value"] == 8000.0
+    trend = view["trend"]
+    assert [pt["date"] for pt in trend] == [
+        "2026-01-01",
+        "2026-01-05",
+        "2026-01-10",
+        "2026-01-15",
+        "2026-01-20",
+    ]
+    assert [pt["total_value"] for pt in trend] == [3000.0, 8000.0, 8200.0, 7700.0, 8000.0]
+    assert trend[-1]["total_value"] == view["current_total_value"]
+    assert api_context.delete(f"/api/v1/users/{user['username']}", headers=headers).status == 204

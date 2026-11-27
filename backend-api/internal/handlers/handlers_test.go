@@ -1466,4 +1466,65 @@ func TestBulkCreateCheckingRecordsHandler(t *testing.T) {
 	}
 }
 
+func TestPerspectivesAPI_ViewIncludesAssetTrend(t *testing.T) {
+	r, _ := setupTestRouter()
+	tok := registerAndGetToken(t, r, "persp_asset_h", "persp_asset_h@example.com", "Password123!")
+
+	wChk := doAuthedJSON(t, r, http.MethodPost, "/api/v1/accounts", tok, models.AccountCreationRequest{
+		Name: "Checking Account", Type: "checking", Description: "Liquid",
+	})
+	var chk models.AccountResponse
+	_ = json.Unmarshal(wChk.Body.Bytes(), &chk)
+	valChk := 1000.0
+	_ = doAuthedJSON(t, r, http.MethodPost, "/api/v1/accounts/"+chk.ID+"/records", tok, models.CheckingRecordCreateRequest{
+		Value: &valChk, DateSent: "2026-01-01", Entity: "Payroll",
+	})
+
+	wAst := doAuthedJSON(t, r, http.MethodPost, "/api/v1/accounts", tok, models.AccountCreationRequest{
+		Name: "Metals Reserve", Type: "asset", Description: "Holdings",
+	})
+	var ast models.AccountResponse
+	_ = json.Unmarshal(wAst.Body.Bytes(), &ast)
+
+	wDef := doAuthedJSON(t, r, http.MethodPost, "/api/v1/assets", tok, models.AssetCreateRequest{
+		Label: "INDEX", Description: "Index Basket",
+	})
+	var def models.AssetResponse
+	_ = json.Unmarshal(wDef.Body.Bytes(), &def)
+	price := 250.0
+	_ = doAuthedJSON(t, r, http.MethodPost, "/api/v1/assets/"+def.ID+"/values", tok, models.AssetValueCreateRequest{
+		Value: &price, ValueDate: "2026-01-01",
+	})
+	wStore := doAuthedJSON(t, r, http.MethodPost, "/api/v1/accounts/"+ast.ID+"/stores", tok, models.CreateAssetStoreRequest{
+		AssetID: def.ID, Label: "Primary Vault", Description: "Vault",
+	})
+	var store models.AssetStoreDetail
+	_ = json.Unmarshal(wStore.Body.Bytes(), &store)
+	qty := 4.0
+	_ = doAuthedJSON(t, r, http.MethodPost, "/api/v1/accounts/"+ast.ID+"/stores/"+store.ID+"/records", tok, models.CreateStoreRecordRequest{
+		Quantity: &qty, RecordDate: "2026-01-10",
+	})
+
+	trendTrue := true
+	wPersp := doAuthedJSON(t, r, http.MethodPost, "/api/v1/perspectives", tok, models.PerspectiveCreateRequest{
+		Name: "Combined View", Description: "Checking plus asset", AccountIDs: []string{chk.ID, ast.ID},
+		Settings: &models.PerspectiveSettingsInput{ShowFinancialTrend: &trendTrue},
+	})
+	var p models.PerspectiveResponse
+	_ = json.Unmarshal(wPersp.Body.Bytes(), &p)
+
+	reqView := newTestRequest(http.MethodGet, "/api/v1/perspectives/"+p.ID+"/view", nil)
+	reqView.Header.Set("Authorization", "Bearer "+tok)
+	wView := httptest.NewRecorder()
+	r.ServeHTTP(wView, reqView)
+	if wView.Code != http.StatusOK {
+		t.Fatalf("expected 200 on perspective view, got %d: %s", wView.Code, wView.Body.String())
+	}
+	var view models.PerspectiveViewResponse
+	_ = json.Unmarshal(wView.Body.Bytes(), &view)
+	if view.CurrentTotalValue != 2000.0 || len(view.Trend) != 2 || view.Trend[1].TotalValue != 2000.0 {
+		t.Fatalf("expected CurrentTotalValue 2000 and matching final trend point, got total=%.2f trend=%+v", view.CurrentTotalValue, view.Trend)
+	}
+}
+
 

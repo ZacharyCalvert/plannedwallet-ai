@@ -38,29 +38,62 @@ func (c *Controller) calculateAccountCurrentValue(ctx context.Context, acc *mode
 	return 0.0
 }
 
-func (c *Controller) collectAccountDailyValues(ctx context.Context, acc *models.Account) map[string]float64 {
+func (c *Controller) collectSnapshotDailyValues(ctx context.Context, accountID string) map[string]float64 {
 	points := make(map[string]float64)
-	if acc.Type == "snapshot" {
-		snaps, err := c.repo.ListAccountSnapshots(ctx, acc.ID, nil, nil)
-		if err == nil {
-			for _, s := range snaps {
-				points[s.SnapshotDate] = s.Value
-			}
-		}
-		return points
-	}
-	if acc.Type == "checking" || acc.Type == "savings" || acc.Type == "credit card" {
-		recs, err := c.repo.ListCheckingRecords(ctx, acc.ID, nil, nil, nil)
-		if err == nil && len(recs) > 0 {
-			sort.Slice(recs, func(i, j int) bool { return recs[i].DateSent < recs[j].DateSent })
-			var running float64
-			for _, r := range recs {
-				running += r.Value
-				points[r.DateSent] = running
-			}
+	snaps, err := c.repo.ListAccountSnapshots(ctx, accountID, nil, nil)
+	if err == nil {
+		for _, s := range snaps {
+			points[s.SnapshotDate] = s.Value
 		}
 	}
 	return points
+}
+
+func (c *Controller) collectCheckingDailyValues(ctx context.Context, accountID string) map[string]float64 {
+	points := make(map[string]float64)
+	recs, err := c.repo.ListCheckingRecords(ctx, accountID, nil, nil, nil)
+	if err != nil || len(recs) == 0 {
+		return points
+	}
+	sort.Slice(recs, func(i, j int) bool { return recs[i].DateSent < recs[j].DateSent })
+	var running float64
+	for _, r := range recs {
+		running += r.Value
+		points[r.DateSent] = running
+	}
+	return points
+}
+
+func (c *Controller) collectAssetDailyValues(ctx context.Context, accountID string) map[string]float64 {
+	points := make(map[string]float64)
+	stores, _ := c.repo.ListAssetStores(ctx, accountID)
+	var trend []*models.AssetAccountTrendPoint
+	var err error
+	if len(stores) > 0 {
+		trend, err = c.computeStoresAccountTrend(ctx, accountID, stores, nil, nil)
+	} else {
+		trend, err = c.computeLegacyAccountTrend(ctx, accountID, nil, nil)
+	}
+	if err != nil {
+		return points
+	}
+	for _, pt := range trend {
+		points[pt.Date] = pt.TotalValue
+	}
+	return points
+}
+
+func (c *Controller) collectAccountDailyValues(ctx context.Context, acc *models.Account) map[string]float64 {
+	switch acc.Type {
+	case "snapshot":
+		return c.collectSnapshotDailyValues(ctx, acc.ID)
+	case "checking", "savings", "credit card", "credit_card":
+		return c.collectCheckingDailyValues(ctx, acc.ID)
+	case "asset", "assets":
+		return c.collectAssetDailyValues(ctx, acc.ID)
+	default:
+		return make(map[string]float64)
+	}
 }
 
 func collectDistinctDates(maps []map[string]float64) []string {
@@ -191,7 +224,7 @@ func (c *Controller) GetPerspectiveView(ctx context.Context, userID, perspective
 	accounts, accIDs, currentTotal := c.loadPerspectiveAccountsSummary(ctx, perspectiveID)
 	recurringTxs, _ := c.ListPerspectiveRecurringTransactions(ctx, userID, perspectiveID)
 	recIDs, _ := c.repo.ListPerspectiveRecurringTransactionIDs(ctx, perspectiveID)
-	trend := c.computePerspectiveTrend(ctx, settings.ShowFinancialTrend, accIDs, accounts)
+	trend := c.computePerspectiveTrend(ctx, settings.ShowFinancialTrend, accounts)
 	avgSpend, ruinedDate, daysRuined := c.computePerspectiveAnalytics(ctx, settings, accIDs, currentTotal)
 
 	return &models.PerspectiveViewResponse{
@@ -240,16 +273,18 @@ func (c *Controller) loadPerspectiveAccountsSummary(ctx context.Context, pID str
 	return accounts, accIDs, currentTotal
 }
 
-func (c *Controller) computePerspectiveTrend(ctx context.Context, showTrend bool, accIDs []string, accounts []*models.AccountResponse) []models.PerspectiveTrendPoint {
-	if !showTrend || len(accIDs) == 0 {
+func (c *Controller) computePerspectiveTrend(ctx context.Context, showTrend bool, accounts []*models.AccountResponse) []models.PerspectiveTrendPoint {
+	if !showTrend || len(accounts) == 0 {
 		return nil
 	}
-	var accTrends []map[string]float64
+	accIDs := make([]string, 0, len(accounts))
+	accTrends := make([]map[string]float64, 0, len(accounts))
 	for _, accResp := range accounts {
-		acc, err := c.repo.GetAccountByID(ctx, accResp.ID)
-		if err == nil {
-			accTrends = append(accTrends, c.collectAccountDailyValues(ctx, acc))
-		}
+		accIDs = append(accIDs, accResp.ID)
+		accTrends = append(accTrends, c.collectAccountDailyValues(ctx, &models.Account{
+			ID:   accResp.ID,
+			Type: accResp.Type,
+		}))
 	}
 	return buildPerspectiveTrend(accIDs, accTrends)
 }
