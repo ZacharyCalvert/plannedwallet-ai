@@ -18,7 +18,7 @@ Top priority:
 - [x] git statCreate JWT secret and mount as required field for JWT issuance / signing
 
 Medium priority:
-- Password changes
+- [x] Password changes
 - itest account enumeration (401 vs 403 vs 404)
 - Account lock / require reset using recovery codes after X number of failed password attempts
 - [x] Add dependabot monitoring of npm, docker images, golang dependencies

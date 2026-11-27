@@ -423,14 +423,7 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
         '401':
           summary: Unauthorized
-          description: Invalid username or password.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        '404':
-          summary: User not found
-          description: No user found matching the provided username.
+          description: Invalid username, password, or two-factor authentication code.
           content:
             application/json:
               schema:

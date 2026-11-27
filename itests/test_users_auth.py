@@ -182,17 +182,36 @@ def test_new_account_jwt_subscriber_is_false(api_context: APIRequestContext):
     assert payload.get("username") == user_data["username"]
 
 def test_login_invalid_totp_fails(api_context: APIRequestContext):
-    """Test: Attempting login with invalid TOTP code returns 401."""
+    """Test: Attempting login with unknown username, wrong password, or invalid TOTP returns identical 401 responses."""
     user_data = generate_user_data()
     create_res = api_context.post("/api/v1/users", data=user_data)
     assert create_res.status == 201
+    totp_secret = create_res.json()["totp_secret"]
+    valid_totp = compute_totp_code(totp_secret)
+    wrong_totp = "000000" if valid_totp != "000000" else "999999"
 
-    login_res = api_context.post(
-        f"/api/v1/users/{user_data['username']}/token",
-        data={"password": user_data["password"], "totp_code": "000000"},
+    unknown_user_res = api_context.post(
+        f"/api/v1/users/unknown_{uuid.uuid4().hex[:8]}/token",
+        data={"password": user_data["password"], "totp_code": valid_totp},
     )
-    assert login_res.status == 401
-    assert login_res.json().get("error") == "INVALID_TOTP"
+    wrong_pw_res = api_context.post(
+        f"/api/v1/users/{user_data['username']}/token",
+        data={"password": "WrongPassword123!", "totp_code": valid_totp},
+    )
+    wrong_totp_res = api_context.post(
+        f"/api/v1/users/{user_data['username']}/token",
+        data={"password": user_data["password"], "totp_code": wrong_totp},
+    )
+
+    for res in (unknown_user_res, wrong_pw_res, wrong_totp_res):
+        assert res.status == 401
+        assert res.json().get("error") == "INVALID_CREDENTIALS"
+
+    assert (
+        unknown_user_res.json().get("message")
+        == wrong_pw_res.json().get("message")
+        == wrong_totp_res.json().get("message")
+    )
 
 def test_create_duplicate_username_fails(api_context: APIRequestContext):
     """Test 3: Attempt to create same username with different email and verify 409 conflict."""
@@ -319,14 +338,16 @@ def test_delete_signed_in_user_cascades_all_records(api_context: APIRequestConte
     del_res = api_context.delete(f"/api/v1/users/{user_a['username']}", headers=hdr_a)
     assert del_res.status == 204, f"Expected 204 deleting own user, got {del_res.status}: {del_res.text()}"
 
-    # Old JWT cannot get/refresh/delete again, and login fails with 404
+    # Old JWT cannot get/refresh/delete again, and login returns uniform 401
     assert api_context.get(f"/api/v1/users/{user_a['username']}", headers=hdr_a).status == 404
     assert api_context.post(f"/api/v1/users/{user_a['username']}/token/refresh", headers=hdr_a).status == 404
     assert api_context.delete(f"/api/v1/users/{user_a['username']}", headers=hdr_a).status == 404
-    assert api_context.post(
+    login_after_del = api_context.post(
         f"/api/v1/users/{user_a['username']}/token",
         data={"password": user_a["password"], "totp_code": compute_totp_code(secret_a)},
-    ).status == 404
+    )
+    assert login_after_del.status == 401
+    assert login_after_del.json().get("error") == "INVALID_CREDENTIALS"
 
     # User B's account & records remain intact
     b_recs = api_context.get(f"/api/v1/accounts/{acc_b}/records", headers=hdr_b)

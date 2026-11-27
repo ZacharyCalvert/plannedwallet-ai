@@ -17,7 +17,11 @@ import (
 const DefaultExpirationSeconds = 900
 
 var (
-	ErrInvalidToken = errors.New("invalid or expired token")
+	ErrInvalidToken   = errors.New("invalid or expired token")
+	dummyPasswordHash = func() []byte {
+		h, _ := bcrypt.GenerateFromPassword([]byte("constant-time-login-pad"), bcrypt.DefaultCost)
+		return h
+	}()
 )
 
 type Claims struct {
@@ -58,6 +62,11 @@ func (s *Service) HashPassword(password string) (string, error) {
 func (s *Service) CheckPassword(hash, password string) bool {
 	err := bcrypt.CompareHashAndPassword([]byte(hash), []byte(password))
 	return err == nil
+}
+
+// DummyCheckPassword runs bcrypt comparison against a dummy hash to equalize timing for unknown usernames.
+func (s *Service) DummyCheckPassword(password string) {
+	_ = bcrypt.CompareHashAndPassword(dummyPasswordHash, []byte(password))
 }
 
 func (s *Service) GenerateToken(userID, username string, isSubscriber, termsApproved bool) (string, error) {

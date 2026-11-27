@@ -117,4 +117,33 @@ func TestPasswordChangeHandler_ValidationAndSuccess(t *testing.T) {
 	if newTokRec.Code != http.StatusOK {
 		t.Fatalf("expected 200 with new password, got %d: %s", newTokRec.Code, newTokRec.Body.String())
 	}
+
+	// Unknown user, bad password, and bad TOTP on /token return identical 401 status, error code, and message
+	var unknownRec, badPwRec, badTotpRec *httptest.ResponseRecorder
+	for _, tc := range []struct {
+		target **httptest.ResponseRecorder
+		user   string
+		body   string
+	}{
+		{&unknownRec, "nonexistent_user", `{"password":"NewPassword456!","totp_code":"` + validCode + `"}`},
+		{&badPwRec, userResp.Username, `{"password":"WrongPassword456!","totp_code":"` + validCode + `"}`},
+		{&badTotpRec, userResp.Username, `{"password":"NewPassword456!","totp_code":"` + wrongCode + `"}`},
+	} {
+		req := newTestRequest(http.MethodPost, "/api/v1/users/"+tc.user+"/token", bytes.NewBufferString(tc.body))
+		req.Header.Set("Content-Type", "application/json")
+		rec := httptest.NewRecorder()
+		r.ServeHTTP(rec, req)
+		*tc.target = rec
+		if rec.Code != http.StatusUnauthorized {
+			t.Fatalf("expected 401 on failed login for %s, got %d", tc.user, rec.Code)
+		}
+	}
+	var errUnknown, errBadPw, errBadTotp models.ErrorResponse
+	_ = json.Unmarshal(unknownRec.Body.Bytes(), &errUnknown)
+	_ = json.Unmarshal(badPwRec.Body.Bytes(), &errBadPw)
+	_ = json.Unmarshal(badTotpRec.Body.Bytes(), &errBadTotp)
+	if errUnknown.Error != errBadPw.Error || errUnknown.Error != errBadTotp.Error ||
+		errUnknown.Message != errBadPw.Message || errUnknown.Message != errBadTotp.Message {
+		t.Fatalf("expected identical login error responses, got unknown=%+v badPw=%+v badTotp=%+v", errUnknown, errBadPw, errBadTotp)
+	}
 }

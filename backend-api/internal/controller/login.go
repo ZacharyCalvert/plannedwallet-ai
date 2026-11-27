@@ -13,7 +13,7 @@ import (
 	"github.com/plannedwallet/internal/trace"
 )
 
-// authenticateUser verifies username, password, and TOTP code.
+// authenticateUser verifies username, password, and TOTP code with uniform responses to prevent enumeration.
 func (c *Controller) authenticateUser(ctx context.Context, username, password, totpCode string) (*models.User, error) {
 	username = strings.TrimSpace(username)
 	if username == "" {
@@ -22,18 +22,17 @@ func (c *Controller) authenticateUser(ctx context.Context, username, password, t
 	user, err := c.repo.GetUserByUsername(ctx, username)
 	if err != nil {
 		if errors.Is(err, repository.ErrNotFound) {
-			trace.LogError(ctx, err, "User not found for login: %s", username)
-			return nil, ErrUserNotFound
+			c.auth.DummyCheckPassword(password)
+			trace.LogError(ctx, err, "Authentication failed for unknown user: %s", username)
+			return nil, ErrInvalidLogin
 		}
 		return nil, NewAppError(http.StatusInternalServerError, "INTERNAL_ERROR", "Error retrieving user.")
 	}
-	if !c.auth.CheckPassword(user.PasswordHash, password) {
-		trace.LogError(ctx, nil, "Invalid password for user: %s", username)
-		return nil, ErrInvalidCredentials
-	}
-	if !auth.ValidateCode(user.TOTPSecret, strings.TrimSpace(totpCode), time.Now()) {
-		trace.LogError(ctx, nil, "Invalid TOTP code for user: %s", username)
-		return nil, ErrInvalidTOTP
+	pwOK := c.auth.CheckPassword(user.PasswordHash, password)
+	totpOK := auth.ValidateCode(user.TOTPSecret, strings.TrimSpace(totpCode), time.Now())
+	if !pwOK || !totpOK {
+		trace.LogError(ctx, nil, "Authentication failed for user: %s", username)
+		return nil, ErrInvalidLogin
 	}
 	return user, nil
 }

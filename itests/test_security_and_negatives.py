@@ -583,3 +583,101 @@ def test_sql_injection_protects_accounts_logins_recovery_and_ledgers(
         headers={"Authorization": f"Bearer {post_rec_tok.json()['access_token']}"},
     ).status == 204
     assert api_context.delete(f"/api/v1/users/{attacker['username']}", headers=hdr_b).status == 204
+
+
+def test_login_and_user_endpoint_enumeration_consistency(api_context: APIRequestContext):
+    """
+    Verify /token, /recover, and protected :username endpoints return uniform error payloads
+    regardless of whether a target username exists or which credential factor failed.
+    """
+    target_user = generate_user_data(prefix="enum_target")
+    target_reg = api_context.post("/api/v1/users", data=target_user)
+    assert target_reg.status == 201
+    target_secret = target_reg.json()["totp_secret"]
+    target_totp = compute_totp_code(target_secret)
+    wrong_totp = "000000" if target_totp != "000000" else "999999"
+
+    probe_user, probe_token = create_authenticated_user(api_context)
+    probe_hdr = {"Authorization": f"Bearer {probe_token}"}
+    missing_username = f"missing_{uuid.uuid4().hex[:10]}"
+
+    # 1. Login (/token): unknown user, wrong password, wrong TOTP, and both wrong must match identically
+    login_attempts = [
+        api_context.post(
+            f"/api/v1/users/{missing_username}/token",
+            data={"password": target_user["password"], "totp_code": target_totp},
+        ),
+        api_context.post(
+            f"/api/v1/users/{target_user['username']}/token",
+            data={"password": "WrongPassword123!", "totp_code": target_totp},
+        ),
+        api_context.post(
+            f"/api/v1/users/{target_user['username']}/token",
+            data={"password": target_user["password"], "totp_code": wrong_totp},
+        ),
+        api_context.post(
+            f"/api/v1/users/{target_user['username']}/token",
+            data={"password": "WrongPassword123!", "totp_code": wrong_totp},
+        ),
+    ]
+    login_bodies = []
+    for res in login_attempts:
+        assert res.status == 401
+        body = res.json()
+        assert body.get("error") == "INVALID_CREDENTIALS"
+        login_bodies.append((set(body.keys()), body.get("error"), body.get("message")))
+    assert len(set((tuple(sorted(k)), e, m) for k, e, m in login_bodies)) == 1
+
+    # 2. Recovery (/recover): unknown user and bad recovery phrase match identically
+    bad_phrase = " ".join(["abandon"] * 12)
+    rec_missing = api_context.post(
+        f"/api/v1/users/{missing_username}/recover",
+        data={"recovery_phrase": bad_phrase, "new_password": "CandidateNewPassword1!"},
+    )
+    rec_wrong = api_context.post(
+        f"/api/v1/users/{target_user['username']}/recover",
+        data={"recovery_phrase": bad_phrase, "new_password": "CandidateNewPassword1!"},
+    )
+    assert rec_missing.status == rec_wrong.status == 401
+    assert rec_missing.json().get("error") == rec_wrong.json().get("error") == "INVALID_RECOVERY_CREDENTIAL"
+    assert rec_missing.json().get("message") == rec_wrong.json().get("message")
+
+    # 3. Protected :username endpoints (including password change): existing vs missing target both return 403 FORBIDDEN
+    for method, suffix, payload in (
+        ("GET", "", None),
+        (
+            "POST",
+            "/password",
+            {
+                "old_password": target_user["password"],
+                "new_password": "CandidateNewPassword1!",
+                "new_password_confirm": "CandidateNewPassword1!",
+                "totp_code": target_totp,
+            },
+        ),
+    ):
+        if method == "GET":
+            res_existing = api_context.get(f"/api/v1/users/{target_user['username']}{suffix}", headers=probe_hdr)
+            res_missing = api_context.get(f"/api/v1/users/{missing_username}{suffix}", headers=probe_hdr)
+        else:
+            res_existing = api_context.post(
+                f"/api/v1/users/{target_user['username']}{suffix}", headers=probe_hdr, data=payload
+            )
+            res_missing = api_context.post(
+                f"/api/v1/users/{missing_username}{suffix}", headers=probe_hdr, data=payload
+            )
+        assert res_existing.status == res_missing.status == 403
+        assert res_existing.json().get("error") == res_missing.json().get("error") == "FORBIDDEN"
+        assert res_existing.json().get("message") == res_missing.json().get("message")
+
+    # Cleanup
+    target_tok = api_context.post(
+        f"/api/v1/users/{target_user['username']}/token",
+        data={"password": target_user["password"], "totp_code": compute_totp_code(target_secret)},
+    )
+    assert target_tok.status == 200
+    assert api_context.delete(
+        f"/api/v1/users/{target_user['username']}",
+        headers={"Authorization": f"Bearer {target_tok.json()['access_token']}"},
+    ).status == 204
+    assert api_context.delete(f"/api/v1/users/{probe_user['username']}", headers=probe_hdr).status == 204

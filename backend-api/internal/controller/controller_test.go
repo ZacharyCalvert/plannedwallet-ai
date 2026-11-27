@@ -174,6 +174,19 @@ func TestExchangePasswordForToken_TOTP(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error with invalid TOTP code")
 	}
+
+	// Verify unknown user, wrong password, and wrong TOTP return identical 401 enumeration-safe errors
+	_, errUnknown := ctrl.ExchangePasswordForToken(ctx, "no_such_user", "ValidPassword123!", validCode)
+	_, errBadPass := ctrl.ExchangePasswordForToken(ctx, "totp_user", "WrongPassword123!", validCode)
+	_, errBadTOTP := ctrl.ExchangePasswordForToken(ctx, "totp_user", "ValidPassword123!", "000000")
+	var appUnknown, appBadPass, appBadTOTP *controller.AppError
+	if !errors.As(errUnknown, &appUnknown) || !errors.As(errBadPass, &appBadPass) || !errors.As(errBadTOTP, &appBadTOTP) {
+		t.Fatalf("expected AppError for all login failure modes, got %v / %v / %v", errUnknown, errBadPass, errBadTOTP)
+	}
+	if appUnknown.Status != http.StatusUnauthorized || appUnknown.Code != appBadPass.Code || appUnknown.Code != appBadTOTP.Code ||
+		appUnknown.Message != appBadPass.Message || appUnknown.Message != appBadTOTP.Message {
+		t.Fatalf("expected uniform 401 login errors, got unknown=%+v badPass=%+v badTOTP=%+v", appUnknown, appBadPass, appBadTOTP)
+	}
 }
 
 func TestExchangePasswordForToken_SubscriberClaim(t *testing.T) {

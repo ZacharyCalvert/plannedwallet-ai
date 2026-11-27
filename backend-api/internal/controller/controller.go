@@ -37,6 +37,7 @@ var (
 	ErrUserAlreadyExists  = NewAppError(http.StatusConflict, "USER_CONFLICT", "Username or email is already registered.")
 	ErrUserNotFound       = NewAppError(http.StatusNotFound, "USER_NOT_FOUND", "No user found matching the provided username.")
 	ErrInvalidCredentials = NewAppError(http.StatusUnauthorized, "INVALID_CREDENTIALS", "Invalid username or password.")
+	ErrInvalidLogin       = NewAppError(http.StatusUnauthorized, "INVALID_CREDENTIALS", "Invalid username, password, or two-factor authentication code.")
 	ErrInvalidTOTP        = NewAppError(http.StatusUnauthorized, "INVALID_TOTP", "Invalid or expired two-factor authentication code.")
 	ErrAccountNotFound    = NewAppError(http.StatusNotFound, "ACCOUNT_NOT_FOUND", "No checking account found matching the provided accountId.")
 	ErrRecordNotFound     = NewAppError(http.StatusNotFound, "RECORD_NOT_FOUND", "Checking record not found.")
